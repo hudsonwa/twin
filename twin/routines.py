@@ -37,7 +37,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from . import fleet, fleet_io as fio, fleet_profiles as fp, hermes_side as hs, routines_jobs as rj, safe, store
+from . import fleet, fleet_io as fio, fleet_profiles as fp, h2g, hermes_side as hs, routines_jobs as rj, safe, store
 from .engine import EngineError
 from .model import REF_RE, ago, iso, now_dt, now_iso, parse_iso, plural
 
@@ -401,13 +401,19 @@ def _pause_own(st: dict, it: dict, reason: str, seen: Optional[dict] = None) -> 
 
 HOME_PAUSED = "Paused where it ran before it came back to this computer; resume it in Hermes to run it."
 HERE_PAUSED = "Paused when it moved to this computer; resume it in Hermes here to run it."
+IN_GROK_PAUSED = f"{rj.MARK}runs in Grok (Hermes to Grok moved it there)"
 
 
 def _resume_own(st: dict, it: dict, seen: Optional[dict] = None) -> None:
     """A routine is this computer's to run again: its job is switched on, if it was this plugin that paused it.
-    One the owner had paused where it ran comes back paused, as the owner's own pause."""
+    One the owner had paused where it ran comes back paused, as the owner's own pause. One that Hermes to Grok
+    runs in Grok stays paused, saying so (h2g.runs_in_grok, asked before Hermes' lock is taken)."""
     home, job, _readable = _own_job(st, it, seen)
     if home is None or job is None or not rj.ours(job):
+        return
+    t = (st["share"]["list"].get("twins") or {}).get(it.get("twin")) or {}
+    in_grok = bool(h2g.runs_in_grok(t.get("profile"), job.get("name")))
+    if in_grok and job.get("paused_reason") == IN_GROK_PAUSED:
         return
     on = bool(it.get("on"))
     if seen is not None:
@@ -417,6 +423,11 @@ def _resume_own(st: dict, it: dict, seen: Optional[dict] = None) -> None:
         j = rj.find(jobs, it.get("job"))
         if j is None or not rj.ours(j):
             return False, None
+        if in_grok:
+            if rj.runnable(j) or j.get("paused_reason") == IN_GROK_PAUSED:
+                return False, None
+            j["paused_reason"] = IN_GROK_PAUSED
+            return True, None
         if on:
             return rj.set_running(j), None
         j["paused_reason"] = HOME_PAUSED

@@ -94,6 +94,22 @@ def _enabled(j: dict) -> bool:
     return bool(j.get("enabled", True)) and j.get("state") != "paused"
 
 
+def _runs_elsewhere(pid: str, rkey: str) -> bool:
+    """Routines between computers (routines.json, read only) has this twin's routine held by, or set to run on,
+    another computer. A routines file that cannot be read counts as yes: never on in two places."""
+    from . import fleet, routines
+    from .model import pair_ref
+    R = routines.load()
+    if R.get("unreadable"):
+        return True
+    items = (R["src"] or {}).get("items") or {}
+    if not items:
+        return False
+    me, tid = fleet.this_machine(fleet.load())["id"], pair_ref(pid)
+    return any(isinstance(it, dict) and it.get("twin") == tid and h2g.routine_key(str(it.get("name") or "")) == rkey
+               and (it.get("holder") != me or it.get("runs_on") != me) for it in items.values())
+
+
 class H2GMixin:
     """TwinService methods for Hermes -> Grok. Errors are EngineErrors (code + owner words)."""
 
@@ -236,7 +252,8 @@ class H2GMixin:
             pass
         return h2g.H2G(self.central, self._h2g_writer(pid), hermes=self._h2g_hermes, bot=self._h2g_bot,
                        wanted=wanted, pause_hermes=lambda p, k: self._h2g_switch(p, k, False),
-                       resume_hermes=lambda p, k: self._h2g_switch(p, k, True), mark_synced=mark)
+                       resume_hermes=lambda p, k: self._h2g_switch(p, k, True), mark_synced=mark,
+                       runs_elsewhere=_runs_elsewhere)
 
     def _h2g_owner_only(self, own_page: bool = False) -> None:
         owner_only(own_page)

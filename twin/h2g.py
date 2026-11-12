@@ -109,6 +109,8 @@ IN_GROK = ("The routine \"{name}\" runs in Grok now (Hermes to Grok moved it the
            "copy as well: move it back first (hermes twin to-grok runner {key} hermes).")
 MOVING = ("The routine \"{name}\" is being moved between Grok and Hermes, so Hermes does not switch on its copy now: "
           "wait until the move is finished (hermes twin to-grok shows it).")
+RUNS_ELSEWHERE = ("This routine runs on another of your computers (Routines), so it is not switched on in Grok as "
+                  "well: bring it back to this computer first.")
 MOVED = "This twin's routines changed while Hermes was being switched: nothing was switched on. Choose again."
 DISALLOWED = "You stopped Hermes to Grok for this twin, so this change is not made."
 NOT_PUBLISHED = ("Hermes could not update the list in skill sync's shared folder that tells the Mirror which bots it "
@@ -450,14 +452,17 @@ class H2G:
         (the twin's Hermes side now) ; `bot(pid)` -> the Grok bot id of the twin, "" when unknown ;
     `wanted(pid, item)` -> the owner's direction for that item (sync_panel.wanted), or None without the panel ;
     `pause_hermes(pid, rkey)` / `resume_hermes(pid, rkey)` -> True when the twin's Hermes job for that routine is
-        paused / switched on after the call (single-runner rule) ; `mark_synced(pid, item)` tells the panel.
+        paused / switched on after the call (single-runner rule) ; `mark_synced(pid, item)` tells the panel ;
+    `runs_elsewhere(pid, rkey)` -> True when routines between computers has that routine on another computer (read
+        only; the service wires it, so this file never imports routines.py).
     """
 
     def __init__(self, central: Path, writer: GrokWriter, hermes: Callable[[str], dict], bot: Callable[[str], str],
                  wanted: Optional[Callable[[str, str], Optional[str]]] = None,
                  pause_hermes: Optional[Callable[[str, str], bool]] = None,
                  resume_hermes: Optional[Callable[[str, str], bool]] = None,
-                 mark_synced: Optional[Callable[[str, str], None]] = None):
+                 mark_synced: Optional[Callable[[str, str], None]] = None,
+                 runs_elsewhere: Optional[Callable[[str, str], bool]] = None):
         self.central = Path(central)
         self.writer = writer
         self._hermes = hermes
@@ -466,6 +471,7 @@ class H2G:
         self._pause = pause_hermes or (lambda pid, k: False)
         self._resume = resume_hermes or (lambda pid, k: False)
         self._mark = mark_synced or (lambda pid, item: None)
+        self._elsewhere = runs_elsewhere or (lambda pid, k: False)
 
     # -- state file
     def _path(self) -> Path:
@@ -1031,14 +1037,14 @@ class H2G:
         if to not in RUNNERS or not isinstance(rkey, str) or not RKEY_RE.match(rkey):
             raise H2GError("bad_input", "Say which routine, and grok or hermes.")
         with store.locked():
-            seen = self._move_check(pid, rkey)
+            seen = self._move_check(pid, rkey, to)
             if self.runner(pid, rkey) == to:
                 return {"state": "done", "runner": to, "sentence": f"It already runs in {to.capitalize()}."}
         if to == "grok" and not self._pause(pid, rkey):  # step 1: Hermes stops first, or nothing happens
             raise H2GError("hermes_not_paused", "Hermes could not pause its copy of this routine, so it is not "
                                                 "switched on in Grok.")
         with store.locked():
-            if self._move_check(pid, rkey) != seen:
+            if self._move_check(pid, rkey, to) != seen:
                 raise H2GError("moved", MOVED)
             bot, base = seen[1], clean_side(seen[2])
             if to == "grok":
@@ -1062,9 +1068,10 @@ class H2G:
                 return out
         return self._complete_move(pid, rkey, to, out)
 
-    def _move_check(self, pid: str, rkey: str) -> tuple:
+    def _move_check(self, pid: str, rkey: str, to: str) -> tuple:
         """Under the lock: refuse a move now (not allowed, a change or move of this twin still waiting, the routine not
-        in Grok), else what the move depends on: the same answer twice means nothing changed in between."""
+        in Grok, or to Grok while another computer has it), else what the move depends on: the same answer twice
+        means nothing changed in between."""
         if "routines" not in self.allowed(pid):
             raise H2GError("not_allowed", ITEM_NOT_ALLOWED.format(item="routines"))
         d = self._read()
@@ -1075,6 +1082,8 @@ class H2G:
         base = (d["base"].get(pid) or {}).get("side")
         if rkey not in clean_side(base)["routines"]:
             raise H2GError("not_in_grok", "This routine is not in Grok yet: send it to Grok first (it arrives paused).")
+        if to == "grok" and self._elsewhere(pid, rkey):  # pausing Hermes here would not stop it there
+            raise H2GError("runs_elsewhere", RUNS_ELSEWHERE)
         return (r, (d["allow"].get(pid) or {}).get("bot") or self._bot(pid), base,
                 [x["id"] for x in d["changes"] if x.get("pid") == pid])
 
