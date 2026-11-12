@@ -23,9 +23,7 @@ times, message lengths (rounded up to 64 bytes), and which messages share a word
 the same for the same word), never the words themselves.
 
 Opt-in per twin (`switch`). Off: nothing is read, nothing is kept, the search tool answers that it is off.
-"Forget" deletes everything kept for a twin. Grok direction: what the Hermes twin said is never offered to the
-Grok side (`for_grok`) unless the owner switches "send to Grok" on for that twin; it is off by default and its
-switch is separate from the archive's.
+"Forget" deletes everything kept for a twin. A local archive only: nothing kept here is ever given to Grok.
 
 Export: `export_json` writes the twin's archive, decrypted, as JSON (the owner's own copy). `import_to_hermes`
 makes Grok-side conversations into ordinary Hermes sessions of the twin, through Hermes' own importer
@@ -84,16 +82,12 @@ CONV_RE = re.compile(r"^c-[0-9a-f]{16}\Z")
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 # hidden reasoning some models write into the reply itself: never kept
 _REASONING_RE = re.compile(r"<(think|thinking|reasoning)>.*?(</\1>|\Z)", re.S | re.I)
-# the only platforms whose chats count as held on this computer (slash.LOCAL_PLATFORMS without the empty name):
-# a chat whose source is missing or unknown is never offered to Grok
-LOCAL_SOURCES = frozenset({"local", "cli", "tui", "desktop"})
 
 SENTENCE = ("Full transcripts stay on this computer, encrypted, and are off until you switch them on for a twin. "
-            "What your Hermes twin says is never sent to Grok unless you also switch that on.")
+            "Nothing kept here is sent to Grok.")
 
 MESSAGES = {
     "off": "Full transcripts are off for this twin. Switch them on with `hermes twin transcripts on TWIN` or in its What syncs panel.",
-    "to_grok_off": "Sending Hermes transcripts to Grok is off for this twin.",
     "bad_twin": "No twin by that name; `hermes twin` lists them.",
     "bad_input": "That transcript file could not be read: it is not a Grok export with conversations.",
     "no_key": "The transcript archive's key is missing, so what was kept cannot be read. Forget and start again.",
@@ -102,7 +96,6 @@ MESSAGES = {
     "nothing": "No Grok conversations kept for this twin yet.",
     "exists": "A file is already there; name a new file for the export.",
     "too_big": "That file is too big to be a Grok export this archive takes (64 MB at most).",
-    "needs_mirror": "Giving this twin's Hermes conversations to Grok needs the Mirror; it is not connected here.",
 }
 
 
@@ -146,7 +139,7 @@ def _check_pid(pid: Any) -> str:
 
 # ---- settings (per twin) ---------------------------------------------------------------------------------------------
 def _blank() -> dict:
-    return {"on": False, "to_grok": False, "since": None, "hermes_seen": {}, "imported": {}}
+    return {"on": False, "since": None, "hermes_seen": {}, "imported": {}}
 
 
 def _settings() -> dict:
@@ -157,7 +150,7 @@ def _settings() -> dict:
             if isinstance(pid, str) and PID_RE.match(pid) and isinstance(t, dict):
                 rec = _blank()
                 rec["on"] = t.get("on") is True
-                rec["to_grok"] = t.get("to_grok") is True and rec["on"]
+                # (a 0.3.5 file's "to_grok" is not read: nothing here goes to Grok any more)
                 rec["since"] = t.get("since") if isinstance(t.get("since"), str) else None
                 for k in ("hermes_seen", "imported"):
                     v = t.get(k)
@@ -356,10 +349,6 @@ def _db():
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA secure_delete = ON")  # forgotten rows are overwritten, not left in free pages
         conn.executescript(_SCHEMA)
-        if "local" not in {r[1] for r in conn.execute("PRAGMA table_info(conversations)")}:
-            # 1 = a Hermes chat held on this computer (terminal, terminal window, Desktop); archives made before have
-            # none until the next refresh, and only a 1 is ever offered to Grok (for_grok)
-            conn.execute("ALTER TABLE conversations ADD COLUMN local INTEGER")
         conn.execute("INSERT OR IGNORE INTO meta (k, v) VALUES ('format', ?)", (f"{FORMAT} {FORMAT_V}",))
         yield conn
         conn.commit()
@@ -466,8 +455,7 @@ def _title_of(title: Any, msgs: list) -> str:
 
 # ---- switching ---------------------------------------------------------------------------------------------------------
 def switch(pid: str, on: bool) -> dict:
-    """Switch the archive on or off for one twin. Off keeps what was kept (forget() deletes it); "send to Grok"
-    always goes off with it."""
+    """Switch the archive on or off for one twin. Off keeps what was kept (forget() deletes it)."""
     pid = _check_pid(pid)
     with _LOCK:
         st = _settings()
@@ -479,20 +467,6 @@ def switch(pid: str, on: bool) -> dict:
             rec["on"] = True
         else:
             rec["on"] = False
-            rec["to_grok"] = False
-        _save_settings(st)
-        return view(pid)
-
-
-def switch_to_grok(pid: str, on: bool) -> dict:
-    """The separate, default-off switch that lets what the Hermes twin said be offered to the Grok side."""
-    pid = _check_pid(pid)
-    with _LOCK:
-        st = _settings()
-        rec = st["twins"].setdefault(pid, _blank())
-        if on is True and not rec["on"]:
-            raise TranscriptsError("off")
-        rec["to_grok"] = on is True
         _save_settings(st)
         return view(pid)
 
@@ -658,10 +632,8 @@ def ingest_grok_file(pid: str, path: Path) -> dict:
 
 
 _SESSIONS_SQL = {
-    (True, True): "SELECT id, title, source FROM sessions ORDER BY rowid DESC LIMIT ?",
-    (True, False): "SELECT id, title, NULL AS source FROM sessions ORDER BY rowid DESC LIMIT ?",
-    (False, True): "SELECT id, NULL AS title, source FROM sessions ORDER BY rowid DESC LIMIT ?",
-    (False, False): "SELECT id, NULL AS title, NULL AS source FROM sessions ORDER BY rowid DESC LIMIT ?",
+    True: "SELECT id, title FROM sessions ORDER BY rowid DESC LIMIT ?",
+    False: "SELECT id, NULL AS title FROM sessions ORDER BY rowid DESC LIMIT ?",
 }
 _MESSAGES_SQL = {
     True: "SELECT role, content, timestamp FROM messages WHERE session_id = ? AND active = 1 "
@@ -684,23 +656,16 @@ def _hermes_sessions(home: Path) -> Iterable[tuple]:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(sessions)")}
         mcols = {r[1] for r in conn.execute("PRAGMA table_info(messages)")}
         # only these fixed statements are ever run (no name read from the file goes into SQL)
-        sessions = conn.execute(_SESSIONS_SQL[("title" in cols, "source" in cols)], (MAX_CONVS,)).fetchall()
+        sessions = conn.execute(_SESSIONS_SQL["title" in cols], (MAX_CONVS,)).fetchall()
         msql = _MESSAGES_SQL["active" in mcols]
         out = []
         for s in sessions:
             rows = conn.execute(msql, (s["id"], MAX_MSGS)).fetchall()
             out.append((str(s["id"]), s["title"], [{"role": r["role"], "text": r["content"], "at": r["timestamp"]}
-                                                    for r in rows], s["source"]))
+                                                    for r in rows]))
         return out
     finally:
         conn.close()
-
-
-def _local_source(source: Any) -> bool:
-    """A chat on this computer, by the source Hermes recorded for it: not one that came through a messaging app, a
-    webhook or the API server, which holds other people's words or words the owner never typed here. Fails closed:
-    a missing, empty or unknown source (or a session database without a source column) is not local."""
-    return isinstance(source, str) and source.strip().lower() in LOCAL_SOURCES
 
 
 def ingest_hermes(pid: str, home: Path) -> dict:
@@ -714,7 +679,7 @@ def ingest_hermes(pid: str, home: Path) -> dict:
         return {"pid": pid, "side": "hermes", "new": 0, "updated": 0, "note": "The twin's sessions could not be read."}
     added = changed = 0
     with _LOCK, _db() as conn:
-        for sid, title, raw, *src in sessions:
+        for sid, title, raw in sessions:
             if sid in imported or (isinstance(title, str) and title.startswith(IMPORT_TITLE)):
                 continue
             msgs = _norm_messages(raw)
@@ -726,8 +691,6 @@ def ingest_hermes(pid: str, home: Path) -> dict:
             if _store_conversation(conn, key, pid, "hermes", origin, _title_of(title, msgs), msgs):
                 changed += 1
                 added += 0 if existed else 1
-            conn.execute("UPDATE conversations SET local = ? WHERE id = ?",
-                         (1 if _local_source(src[0] if src else None) else 0, _conv_id(pid, "hermes", origin)))
     return {"pid": pid, "side": "hermes", "new": added, "updated": changed - added}
 
 
@@ -768,7 +731,7 @@ def view(pid: str) -> dict:
         with _db() as conn:
             for side, n in conn.execute("SELECT side, COUNT(*) FROM conversations WHERE pid = ? GROUP BY side", (pid,)):
                 counts[side] = n
-    return {"pid": pid, "on": rec["on"], "to_grok": rec["to_grok"], "since": rec["since"],
+    return {"pid": pid, "on": rec["on"], "since": rec["since"],
             "conversations": counts, "sentence": SENTENCE}
 
 
@@ -820,7 +783,7 @@ HELD_LINE = "[line held back: {}]"
 
 
 def guarded(text: str) -> str:
-    """A kept message on its way out of the archive (to the twin's model, or to Grok): anything shaped like a key
+    """A kept message on its way out of the archive (to the twin's model): anything shaped like a key
     masked, and a line that looks like it states a password, PIN, code or card number, or reads like an instruction
     to a bot (or one of the plugin's own notes, or is too long or odd to check), held back whole: the same checks as
     the memory layers (mem_layers.mask_secrets, xs_memory.why_held)."""
@@ -863,7 +826,7 @@ def conversation(pid: str, cid: str) -> dict:
     return convs[0]
 
 
-# ---- out: JSON for the owner, Hermes sessions, and the Grok side ------------------------------------------------------
+# ---- out: JSON for the owner and Hermes sessions ---------------------------------------------------------------------
 def export_data(pid: str, side: Optional[str] = None) -> dict:
     pid, _rec, key = _need_on(pid)
     with _db() as conn:
@@ -893,24 +856,6 @@ def export_json(pid: str, dest: Optional[Path] = None, side: Optional[str] = Non
             os.unlink(dest)  # exactly the file made above
         raise
     return {"path": str(dest), "conversations": len(data["conversations"])}
-
-
-def for_grok(pid: str) -> list:
-    """What the Grok side may be given: the Hermes twin's conversations, ONLY when "send to Grok" is on for this
-    twin. Every code path that sends transcripts towards Grok goes through here, so the text it returns has already
-    been through guarded() (keys masked, lines held back line by line, as briefs and memory notes)."""
-    pid, rec, key = _need_on(pid)
-    if not rec["to_grok"]:
-        raise TranscriptsError("to_grok_off")
-    imported = set(rec["imported"].values())
-    with _db() as conn:
-        local = {r[0] for r in conn.execute("SELECT id FROM conversations WHERE pid = ? AND side = 'hermes' "
-                                            "AND local = 1", (pid,))}
-        local -= {_conv_id(pid, "hermes", _origin(key, sid)) for sid in imported}
-        convs = [c for c in _conversations(conn, key, pid, side="hermes") if c["id"] in local
-                 and not c["title"].startswith(IMPORT_TITLE)]
-    return [{**c, "title": guarded(c["title"]),
-             "messages": [{**m, "text": guarded(m["text"])} for m in c["messages"]]} for c in convs]
 
 
 def claude_jsonl(conv: dict) -> str:
@@ -992,74 +937,23 @@ def import_to_hermes(pid: str, profile: str, ids: Optional[list] = None) -> dict
     return {"pid": pid, "imported": done, "skipped": skipped, "failed": failed}
 
 
-# ---- the Grok side's transport (the memory layers' GrokTransport: read_transcripts / write_transcript) ----------------------
-def pull(pid: str, transport: Any) -> dict:
-    """Keep what the Grok side's transport can read now (once the Mirror can read from Grok)."""
-    _need_on(pid)
-    got = transport.read_transcripts() if transport is not None else None
-    if not isinstance(got, list):
-        return {"pid": pid, "side": "grok", "new": 0, "updated": 0, "note": "Grok's conversations cannot be read now."}
-    return ingest_grok(pid, {"conversations": got})
-
-
-def push(pid: str, transport: Any) -> dict:
-    """Give the Grok side the Hermes twin's conversations: only through for_grok(), so only with "send to Grok" on.
-    Only chats held on this computer; a line that looks like it holds a password, PIN, code or card number, or reads
-    like an instruction to a bot, is held back before it leaves (guarded)."""
-    from . import mem_layers
-    if transport is None or isinstance(transport, mem_layers.StubTransport) or not mem_layers.mirror_ready():
-        # nothing to Grok without the Mirror; the stand-in would only keep the text in clear in the plugin folder
-        return {"pid": pid, "sent": 0, "note": "needs_mirror"}
-    convs = for_grok(pid)  # already guarded line by line
-    sent = 0
-    for c in convs:
-        out = {"id": c["id"], "title": c["title"], "started": _iso(c["started"]),
-               "messages": [{"role": m["role"], "content": m["text"], "time": _iso(m["at"])}
-                            for m in c["messages"]]}
-        if transport.write_transcript(out):
-            sent += 1
-    return {"pid": pid, "sent": sent}
-
-
 # ---- the What syncs panel (the panel's sync_panel; a no-op on a branch without it) -----------------------------------
-_PANEL_DIRECTIONS = {"off": (False, False), "grok_to_hermes": (True, False), "hermes_to_grok": (True, True),
-                     "both": (True, True)}
-
-
-def _mirror_ready() -> bool:
-    try:
-        from . import mem_layers
-        return mem_layers.mirror_ready()
-    except Exception:
-        return False
-
-
 def _panel_change(ctx: Any, direction: str) -> None:
-    on, to_grok = _PANEL_DIRECTIONS.get(direction, (False, False))
-    if to_grok and not _mirror_ready():  # (the panel refuses first; never "send to Grok" on without the Mirror)
-        from .engine import EngineError
-        raise EngineError("not_available", MESSAGES["needs_mirror"])
-    switch(ctx.pair_id, on)
-    if on:  # both ways: "send to Grok" goes off again when the row moves back to Grok -> Hermes only
-        switch_to_grok(ctx.pair_id, to_grok)
+    switch(ctx.pair_id, direction == "grok_to_hermes")
 
 
 def _panel_directions(ctx: Any) -> dict:
-    # keeping (and searching) both sides here works now; giving Hermes' side to Grok needs the Mirror's transport
-    grok = "ok" if _mirror_ready() else "needs_mirror"
-    return {"off": "ok", "grok_to_hermes": "ok", "hermes_to_grok": grok, "both": grok}
+    # a local archive: kept (and searched) here, or off; nothing goes to Grok
+    return {"off": "ok", "grok_to_hermes": "ok"}
 
 
 def _panel_default(ctx: Any) -> str:
-    rec = twin_settings(ctx.pair_id)
-    return "both" if rec["to_grok"] else ("grok_to_hermes" if rec["on"] else "off")
+    return "grok_to_hermes" if twin_settings(ctx.pair_id)["on"] else "off"
 
 
 PANEL_SENTENCES = {
     "grok_to_hermes": "This twin's conversations, from Grok and Hermes, are kept here, encrypted and searchable by the "
                       "twin; none go to Grok. Grok's come in from an export: hermes twin transcripts add-grok.",
-    "hermes_to_grok": "Kept here as above, and this twin's Hermes conversations are also given to Grok by the Mirror.",
-    "both": "Kept here as above, and this twin's Hermes conversations are also given to Grok by the Mirror.",
 }
 
 

@@ -274,9 +274,8 @@ hermes twin transcripts to-hermes "Test Scout"           # Grok conversations be
 hermes twin transcripts forget "Test Scout" --yes        # delete everything kept for that twin
 ```
 
-What the Hermes twin said is never given to Grok unless you also switch that on (`to-grok-on`; off by default, off
-again whenever the archive goes off). The What syncs panel's "Conversations (full)" row is the same switch. The
-encryption protects copies of the archive (a backup, a synced folder); someone who can already read your files can
+Full transcripts are a local archive: nothing kept is ever given to Grok. The What syncs panel's "Conversations
+(full)" row is the same switch (Grok → Hermes keeps them, Off stops). The encryption protects copies of the archive (a backup, a synced folder); someone who can already read your files can
 read the key too. Details: [DISCLOSURE.md](DISCLOSURE.md).
 
 ## How fast is it?

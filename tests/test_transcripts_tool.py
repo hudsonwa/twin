@@ -179,92 +179,23 @@ def test_bad_arguments_to_the_tool_give_a_plain_error(as_twin):
         assert "error" in out
 
 
-@pytest.fixture
-def mirror():
-    """A real Grok transport plugged in (as the Mirror does): only then may anything go towards Grok."""
-    from hermes_plugins.grok_bot_twin.twin import mem_layers
-    mem_layers.set_transport_factory(lambda profile: object())
-    try:
-        yield
-    finally:
-        mem_layers.set_transport_factory(None)
-
-
-def test_send_to_grok_is_off_by_default_and_push_sends_nothing_until_it_is_switched_on(home, mirror):  # noqa: F811
-    class Transport:
-        def __init__(self):
-            self.sent = []
-
-        def read_transcripts(self):
-            return EXPORT["conversations"]
-
-        def write_transcript(self, conv):
-            self.sent.append(conv)
-            return True
-
-    t = Transport()
-    tr.switch("test-scout", True)
-    assert tr.pull("test-scout", t)["new"] == 2
-    with pytest.raises(tr.TranscriptsError) as e:
-        tr.push("test-scout", t)
-    assert e.value.code == "to_grok_off" and t.sent == []
-    import sqlite3
-    db = home / "scout-home"
-    db.mkdir()
-    c = sqlite3.connect(str(db / "state.db"))
-    c.executescript("CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, source TEXT);"
-                    "CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, "
-                    "content TEXT, timestamp REAL, active INTEGER DEFAULT 1);")
-    c.execute("INSERT INTO sessions VALUES ('20000101_000000_aaaa', 'Herb pots', 'desktop')")
-    c.execute("INSERT INTO messages (session_id, role, content, timestamp) VALUES "
-              "('20000101_000000_aaaa', 'user', 'Basil or mint by the window? my code is ' || ?, 946684800)",
-              (FAKE_KEY,))
-    c.commit()
-    c.close()
-    assert tr.ingest_hermes("test-scout", db)["new"] == 1
-    tr.switch_to_grok("test-scout", True)
-    assert tr.push("test-scout", t)["sent"] == 1
-    assert len(t.sent) == 1 and "Basil" in json.dumps(t.sent) and FAKE_KEY not in json.dumps(t.sent)
-    assert "Sourdough" not in json.dumps(t.sent)  # the Grok side's own conversations never go back
-    tr.switch("test-scout", False)
-    with pytest.raises(tr.TranscriptsError):
-        tr.push("test-scout", t)
-
-
-def test_without_the_mirror_the_panel_never_switches_send_to_grok_on(home):  # noqa: F811
+def test_ARCH_1_the_panel_row_is_keep_here_or_off(home):  # noqa: F811
+    """Full transcripts are a local archive: the row offers Off and Grok -> Hermes only, and nothing ever switches
+    sending to Grok on."""
     from hermes_plugins.grok_bot_twin.twin.engine import EngineError
 
     class Ctx:
         pair_id = "test-scout"
 
-    d = tr._panel_directions(Ctx)
-    assert d["off"] == d["grok_to_hermes"] == "ok" and d["hermes_to_grok"] == d["both"] == "needs_mirror"
-    for direction in ("hermes_to_grok", "both"):  # even if the panel's own check were skipped
-        with pytest.raises(EngineError) as e:
-            tr._panel_change(Ctx, direction)
-        assert e.value.code == "not_available"
-    assert tr.view("test-scout")["on"] is False and tr.view("test-scout")["to_grok"] is False
-
-
-def test_the_panel_hook_maps_directions_to_the_two_switches(home, mirror):  # noqa: F811
-    class Ctx:
-        pair_id = "test-scout"
-
     assert tr._panel_default(Ctx) == "off"
-    d = tr._panel_directions(Ctx)
-    assert d["off"] == d["grok_to_hermes"] == d["hermes_to_grok"] == d["both"] == "ok"
+    assert tr._panel_directions(Ctx) == {"off": "ok", "grok_to_hermes": "ok"}
     tr._panel_change(Ctx, "grok_to_hermes")
-    assert tr.view("test-scout")["on"] and not tr.view("test-scout")["to_grok"]
-    assert tr._panel_default(Ctx) == "grok_to_hermes"
-    tr._panel_change(Ctx, "both")
-    assert tr.view("test-scout")["on"] and tr.view("test-scout")["to_grok"] and tr._panel_default(Ctx) == "both"
-    tr._panel_change(Ctx, "grok_to_hermes")  # back to one way: "send to Grok" goes off again
-    assert tr.view("test-scout")["on"] and not tr.view("test-scout")["to_grok"]
-    assert tr._panel_default(Ctx) == "grok_to_hermes"
-    tr._panel_change(Ctx, "hermes_to_grok")
-    assert tr.view("test-scout")["to_grok"]
+    assert tr.view("test-scout")["on"] and tr._panel_default(Ctx) == "grok_to_hermes"
+    assert "to_grok" not in tr.view("test-scout")
     tr._panel_change(Ctx, "off")
-    assert not tr.view("test-scout")["on"] and not tr.view("test-scout")["to_grok"]
+    assert not tr.view("test-scout")["on"] and tr._panel_default(Ctx) == "off"
+    with pytest.raises(SystemExit):
+        cli.main(["transcripts", "to-grok-on"])
 
 
 def _cli(monkeypatch, capsys, *argv) -> tuple:
@@ -293,8 +224,6 @@ def test_the_command_switches_on_takes_a_grok_export_searches_exports_and_forget
     dest = tmp_path / "mine.json"
     rc, out = _cli(monkeypatch, capsys, "export", "--file", str(dest))
     assert rc == 0 and json.loads(dest.read_text())["format"] == tr.FORMAT
-    rc, out = _cli(monkeypatch, capsys, "to-grok-on")
-    assert "Sending to Grok is on" in out and tr.view("test-scout")["to_grok"]
     rc, out = _cli(monkeypatch, capsys, "forget")
     assert "--yes" in out and tr.view("test-scout")["conversations"]["grok"] == 2
     rc, out = _cli(monkeypatch, capsys, "forget", "--yes")
@@ -323,13 +252,13 @@ def test_a_request_from_another_computer_cannot_change_or_take_out_full_transcri
     monkeypatch.setattr(tasks, "asked_turn", lambda *a, **k: True)
     tr.ingest_grok("test-scout", {"conversations": [{"id": "g9", "title": "Bank notes", "messages": [
         {"role": "user", "text": f"piggybank my bank PIN is 4821\npiggybank token {FAKE_KEY}\npiggybank savings plan"}]}]})
-    for argv in (("on",), ("off",), ("to-grok-on",), ("to-grok-off",), ("forget", "--yes"), ("to-hermes",),
+    for argv in (("on",), ("off",), ("forget", "--yes"), ("to-hermes",),
                  ("refresh",), ("export",), ("search", "-q", "piggybank"), ("search", "-q", "piggybank", "--json")):
         with pytest.raises(EngineError) as e:
             _cli(monkeypatch, capsys, *argv)
         assert e.value.code == "refused" and "cannot read or change full transcripts" in e.value.message, argv
         assert "piggybank" not in capsys.readouterr().out
-    assert tr.view("test-scout")["on"] and not tr.view("test-scout")["to_grok"]
+    assert tr.view("test-scout")["on"]
     rc, out = _cli(monkeypatch, capsys)  # looking at the switches and counts is fine: no text
     assert rc == 0 and "Full transcripts: on" in out and "piggybank" not in out and "savings" not in out
     monkeypatch.setattr(tasks, "asked_turn", lambda *a, **k: False)
@@ -389,10 +318,3 @@ def test_without_a_per_task_bot_the_search_uses_the_processs_own_home_never_the_
                         _constants(lambda: None, lambda: root / "profiles" / "test-scout"))
     assert [h["excerpt"] for h in _search(query="sourdough")["hits"]] == ["Sourdough needs a lively starter."]
     tr._reset_for_tests()
-
-
-def test_the_transport_factory_takes_only_a_callable(home):  # noqa: F811
-    from hermes_plugins.grok_bot_twin.twin import mem_layers
-    with pytest.raises(TypeError):
-        mem_layers.set_transport_factory("not a factory")
-    assert not mem_layers.mirror_ready()

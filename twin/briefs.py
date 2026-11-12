@@ -25,8 +25,7 @@ Hermes side (this module):
   `for_prompt(...)` gives the twin the latest briefs from Grok as a delimited data block, never as instructions.
 
 Transport (`Transport`): how a brief gets to the Grok bot and back is not this module's business. `set_transport()`
-plugs one in (the Mirror, once it can write to Grok); without one, `LayersTransport` over the memory layers'
-mem_layers (or `NullTransport` in a build without it) says "needs_mirror" until the Mirror is ready.
+plugs one in (the Mirror, once it can write to Grok); without one, `NullTransport` says "needs_mirror".
 `FolderTransport` is the file route the Mirror already uses for setup exports:
 `<shared folder>/briefs/to-grok/<bot id>/b-*.md` out and `<shared folder>/briefs/from-grok/<bot id>/*.md` in (read
 only; never moved or deleted).
@@ -733,42 +732,19 @@ class FolderTransport:
         return out
 
 
-_TRANSPORT: list = [None]  # None: the default one (below)
-_DEFAULT: list = []
+_TRANSPORT: list = [None]  # None: NullTransport
 
 
 def set_transport(t: Optional[Transport]) -> None:
-    """Plug a transport in (the Mirror, a test); None goes back to the default."""
+    """Plug a transport in (the Mirror, a test); None goes back to NullTransport. The one plug-in point."""
     _TRANSPORT[0] = t
 
 
 def transport() -> Transport:
-    """The transport set, else the default: the memory layers' LayersTransport when mem_layers is in this build (it says
-    "ok" only once the Mirror is plugged in there), else NullTransport. The same one wherever it is asked (the
-    panel's row, the CLI, the timer), so a row can be turned on as soon as the Mirror is ready."""
+    """The transport set, else NullTransport ("needs_mirror"). The same one wherever it is asked (the panel's row,
+    the CLI, the timer), so a row can be turned on as soon as one is set."""
     t = _TRANSPORT[0]
-    return t if t is not None else _default_transport()
-
-
-def _default_transport() -> Transport:
-    if not _DEFAULT:
-        try:
-            from . import mem_layers  # type: ignore[attr-defined]
-        except Exception:
-            _DEFAULT.append(NullTransport())
-        else:
-            _DEFAULT.append(LayersTransport(mem_layers, _profile_of))
-    return _DEFAULT[0]
-
-
-def _profile_of(pid: str) -> Optional[str]:
-    """The twin's Hermes profile, from the service's cached status (only asked once the Mirror is ready)."""
-    try:
-        from .service import get_service
-        twins = get_service()._briefs_twins()
-    except Exception:
-        return None
-    return next((x["profile"] for x in twins if x["pair_id"] == pid), None)
+    return t if t is not None else NullTransport()
 
 
 # ---- what the Grok bot is asked to do (pasted once into its chat, or set up by the Mirror) -------------------------
@@ -1070,44 +1046,6 @@ def _round(twin: str, twin_name: str, rec: dict, result: dict, t: Transport, con
     for k in ("done", "sent", "seen"):
         if len(rec[k]) > 2000:
             rec[k] = dict(list(rec[k].items())[-2000:])
-
-
-# ---- the memory layers' Grok transport: one object per twin for every memory layer --------
-class LayersTransport:
-    """Adapts `mem_layers.transport(profile)` (methods read_briefs / write_brief, the names the Mirror implements
-    for all three memory layers) to this module's Transport. Used when mem_layers is in the build and no other
-    transport was set. `profile_of(pair id)` names the twin's Hermes profile."""
-    name = "mem_layers"
-
-    def __init__(self, layers: Any, profile_of: Callable[[str], Optional[str]]):
-        self._ml = layers
-        self._profile_of = profile_of
-
-    def _t(self, twin: str) -> Any:
-        profile = self._profile_of(twin)
-        return self._ml.transport(profile) if profile else None
-
-    def state(self, twin: str) -> str:
-        try:
-            return "ok" if self._ml.mirror_ready() and self._t(twin) is not None else "needs_mirror"
-        except Exception:
-            return "needs_mirror"
-
-    def send(self, twin: str, brief_id: str, markdown: str) -> None:
-        if self.state(twin) != "ok":
-            raise TransportUnavailable()
-        title = next((l[2:] for l in markdown.splitlines()[:3] if l.startswith("# ")), "")
-        if not self._t(twin).write_brief({"id": brief_id, "title": title, "markdown": markdown, "time": now_iso()}):
-            raise TransportUnavailable("The Mirror did not take the brief; it is offered again next round.")
-
-    def fetch(self, twin: str) -> list:
-        if self.state(twin) != "ok":
-            return []
-        out = []
-        for item in (self._t(twin).read_briefs() or [])[:FETCH_MAX]:
-            if isinstance(item, dict) and isinstance(item.get("markdown"), str):
-                out.append((str(item.get("id") or "")[:80], item["markdown"]))
-        return out
 
 
 # ---- the "What syncs" panel row, when this build has the panel ----------------------------------------

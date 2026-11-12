@@ -86,7 +86,7 @@ def test_the_rows_say_what_this_version_does(bp):
     assert [i["key"] for i in t["items"]] == KEYS
     assert [i["label"] for i in t["items"]][-1] == "Conversations (full)"
     for it in t["items"]:
-        assert [c["direction"] for c in it["choices"]] == list(sp.DIRECTIONS)
+        assert [c["direction"] for c in it["choices"]] == list(sp.WAYS.get(it["key"], sp.DIRECTIONS))
         assert it["sentence"] and all(c["sentence"] for c in it["choices"])
         assert all(("why" in c) == (c["state"] != "ok") for c in it["choices"])
         assert it["private"] is (it["key"] in ("session_briefs", "transcripts"))
@@ -321,6 +321,25 @@ def test_the_transcripts_row_shows_the_real_switch_whichever_way_they_disagree(b
     said = sp.choose(bp, pid, "transcripts", "grok_to_hermes")["said"]["sentence"]
     assert "Nothing changed" not in said and tr.view(pid)["on"] is True
     assert "Nothing changed" in sp.choose(bp, pid, "transcripts", "grok_to_hermes")["said"]["sentence"]
+
+
+def test_ARCH_1_the_transcripts_row_never_goes_to_grok_and_a_saved_both_reads_as_kept_here(bp):
+    """Full transcripts are a local archive: the row offers Grok -> Hermes and Off only, a way to Grok is refused,
+    and a 0.3.5 choice that also sent them to Grok ("both", "hermes_to_grok") reads as kept here, nothing to Grok."""
+    from hermes_plugins.grok_bot_twin.twin import transcripts as tr
+    assert tr.plug_into_panel()
+    pid = _twin(sp.view(bp))["id"]
+    row = _item(_twin(sp.view(bp)), "transcripts")
+    assert [c["direction"] for c in row["choices"]] == ["grok_to_hermes", "off"]
+    assert all(c["state"] == "ok" for c in row["choices"]) and row["state"] == "ok"
+    for way in ("both", "hermes_to_grok"):
+        with pytest.raises(EngineError) as e:
+            sp.choose(bp, pid, "transcripts", way)
+        assert e.value.code == "not_available" and tr.view(pid)["on"] is False
+        with sp.edit() as f:
+            f["twins"].setdefault(pid, {})["transcripts"] = {"direction": way, "at": "2000-01-01T09:00:00Z"}
+        assert sp.wanted(pid, "transcripts") == "grok_to_hermes"
+        assert sp.wanted(pid, "session_briefs") is None
 
 
 def test_stop_twinning_deletes_the_twins_full_transcripts(bp):

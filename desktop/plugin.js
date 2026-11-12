@@ -2587,6 +2587,8 @@ const SYNC_ITEMS = [
   ['transcripts', 'Conversations (full)']
 ]
 const SYNC_WAYS = { grok_to_hermes: 'Grok → Hermes', hermes_to_grok: 'Hermes → Grok', both: 'Both ways', off: 'Off' }
+// a row with fewer ways than the four: full transcripts are a local archive, kept (Grok → Hermes) or off
+const SYNC_ROW_WAYS = { transcripts: ['grok_to_hermes', 'off'] }
 const SYNC_ROW_STATES = ['ok', 'needs_mirror', 'not_yet', 'error']
 const SYNC_MIRROR_STATES = ['ready', 'not_set_up', 'no_permission', 'unknown']
 const SYNC_NEEDS_MIRROR = 'Needs the Mirror'
@@ -2619,8 +2621,10 @@ function syncPanelOf(raw) {
 
         const state = SYNC_ROW_STATES.includes(i.state) ? i.state : 'error'
         const offered = listOf(i.choices).filter(c => c && typeof c === 'object').slice(0, 8)
-        // the four ways, always in this order; a way the backend did not offer as it should cannot be chosen
-        const choices = Object.keys(SYNC_WAYS).map(direction => {
+        // the row's ways (the four, unless the row has fewer), always in this order; a way the backend did not offer
+        // as it should cannot be chosen
+        const ways = SYNC_ROW_WAYS[key] ?? Object.keys(SYNC_WAYS)
+        const choices = ways.map(direction => {
           const c = offered.find(o => o.direction === direction)
           const can = ['ok', 'needs_mirror', 'not_yet'].includes(c?.state) ? c.state : 'not_yet'
 
@@ -2631,7 +2635,8 @@ function syncPanelOf(raw) {
         return [
           {
             choices,
-            direction: way(i.direction),
+            // (an older answer's transcripts way that also sent to Grok: kept here, nothing to Grok)
+            direction: ways.includes(i.direction) ? i.direction : way(i.direction) && ways[0],
             error: state === 'error' ? { code: text(err?.code, 40) || 'error', message: text(err?.message) } : null,
             key,
             label: text(i.label, 40) || label,

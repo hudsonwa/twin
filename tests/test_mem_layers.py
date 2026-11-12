@@ -2,7 +2,7 @@
 
 Switches (off by default, the "What syncs" panel's choice wins when the build has it), the 0.2 sealed box with one
 key per layer between the owner's computers (attack tests: tamper, replay into another layer, wrong link, reading
-the bytes) and the transport hook for the Mirror. Invented data only.
+the bytes). No Grok transport here: briefs own the one transport hook. Invented data only.
 """
 from __future__ import annotations
 
@@ -54,14 +54,14 @@ def test_panel_choice_wins_when_present(home, monkeypatch):
     assert (P, "session_briefs", "grok_to_hermes") in calls
 
 
-def test_mirror_ready_only_with_a_transport_plugged_in(home):
-    assert not ml.mirror_ready()
-    ml.set_transport_factory(lambda prof: ml.StubTransport(prof))
-    try:
-        assert ml.mirror_ready()
-    finally:
-        ml.set_transport_factory(None)
-    assert not ml.mirror_ready()
+def test_ARCH_1_no_grok_transport_in_the_memory_layers(home):
+    """The pretend Grok bot and its factory fed only briefs' adapter and transcripts' to-Grok direction, and were
+    never plugged in outside the tests: gone, with their folder. Briefs keep their one hook (briefs.set_transport)."""
+    from hermes_plugins.grok_bot_twin.twin import briefs, store
+    for name in ("GrokTransport", "StubTransport", "set_transport_factory", "mirror_ready", "transport", "STUB_DIR"):
+        assert not hasattr(ml, name), name
+    assert callable(briefs.set_transport) and not hasattr(briefs, "LayersTransport")
+    assert not (store.central_dir() / "mem-grok-stub").exists()
 
 
 def test_ARCH_1_memory_facts_are_gone(home, capsys):

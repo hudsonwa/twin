@@ -4,8 +4,7 @@ Two layers, each switched per twin and OFF until the owner switches it on:
 - "briefs" (`mem_briefs.py`): each conversation compacted into a short Markdown brief (who, what was decided, open
   threads), passed both ways so "carry on over there" works without the whole conversation.
 - "transcripts" (`mem_archive.py`): whole conversations kept in a local SQLite archive with full-text search and a
-  JSON export that Hermes can import as its own sessions. They are never sent to Grok unless the owner switches
-  that direction on for that twin.
+  JSON export that Hermes can import as its own sessions. They are never sent to Grok.
 
 Directions: "off", "grok_to_hermes", "hermes_to_grok", "both". Everything here starts "off".
 
@@ -17,10 +16,8 @@ on and is counted, never quoted. Briefs and transcripts are filtered line by lin
 Between the owner's computers: the sealed box of the 0.2 memory sync (`xs_memory.seal` / `unseal`: SHAKE-256 keyed
 stream + HMAC-SHA256, encrypt then authenticate) with a key of its own per layer, made from the link's key.
 
-The Grok side: a `GrokTransport`. Until the Mirror can write to Grok, the transport is
-`StubTransport`: a pretend Grok bot kept in files in this plugin's folder (the plugin's own tests and the
-owner's dry run use it), plus an outbox of what would be sent. `set_transport_factory` is the one place that
-plugs the real Mirror in. Nothing in this module talks to Grok or to the network.
+The Grok side is not this module's business: briefs have their own transport hook (`briefs.set_transport`).
+Nothing in this module talks to Grok or to the network.
 
 Standard library only.
 """
@@ -28,11 +25,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import re
 import threading
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol
+from typing import Any, Optional
 
 from . import fleet_io as fio
 from . import secrets as _secrets
@@ -43,15 +39,13 @@ from .model import now_iso
 LAYERS = ("briefs", "transcripts")
 DIRECTIONS = ("off", "grok_to_hermes", "hermes_to_grok", "both")
 SETTINGS_FILE = "mem-layers.json"
-STUB_DIR = "mem-grok-stub"
 PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}\Z")
-OUTBOX_CAP = 500
 
 SENTENCES = {
     "briefs": "Briefs: each conversation summed up in a few lines (who, what was decided, what is still open), so "
               "you can carry on on the other side. Not the whole conversation.",
     "transcripts": "Transcripts: whole conversations kept on this computer in a searchable archive you can export "
-                   "or open in Hermes. Sent to Grok only if you switch that direction on.",
+                   "or open in Hermes. Never sent to Grok.",
 }
 WAY_WORDS = {"off": "off", "grok_to_hermes": "Grok → Hermes", "hermes_to_grok": "Hermes → Grok", "both": "both ways"}
 HELD_WORDS = dict(xs_memory.HELD_WORDS)
@@ -204,121 +198,3 @@ def seal(link_key: bytes, layer: str, way: str, machine_id: str, bind: str, obj:
 
 def unseal(link_key: bytes, layer: str, way: str, machine_id: str, bind: str, sealed: Any) -> Optional[dict]:
     return xs_memory.unseal(layer_key(link_key, layer), way, machine_id, bind, sealed)
-
-
-# ---- the Grok side -----------------------------------------------------------------------------------------------------
-class GrokTransport(Protocol):
-    """What the memory layers need from the Grok side of one twin. The Mirror implements it."""
-
-    name: str
-
-    def read_facts(self) -> Optional[list]:
-        """[{"id", "text", "kind": "memory"|"user", "time"}] of the Grok bot's memories, or None when they cannot
-        be read now (then nothing is changed on either side)."""
-
-    def write_facts(self, adds: list, updates: list, deletes: list) -> bool:
-        """Apply on the Grok bot: adds/updates are [{"id", "text", "kind", "time"}], deletes [id]. Truthy when done:
-        True, or {"ok": True, "ids": {id sent: Grok's own id}} when Grok gives a new fact an id of its own."""
-
-    def read_briefs(self) -> list:
-        """[{"id", "title", "markdown", "time"}] briefs of the Grok bot's conversations."""
-
-    def write_brief(self, brief: dict) -> bool:
-        ...
-
-    def write_transcript(self, conversation: dict) -> bool:
-        ...
-
-    def read_transcripts(self) -> list:
-        """[{"id", "title", "started", "messages": [{"role", "content", "time"}]}] of the Grok bot's conversations."""
-
-
-class StubTransport:
-    """A pretend Grok bot in files (<plugin folder>/mem-grok-stub/<profile>/): `facts.json`, `briefs.json`,
-    `transcripts.json` hold "what the Grok bot has"; every write is also put on `outbox.jsonl`, the list the
-    Mirror will carry out once it can. Never a network call."""
-
-    name = "stub"
-
-    def __init__(self, profile: str) -> None:
-        self.profile = check_profile(profile)
-        self.dir = store.central_dir() / STUB_DIR / profile
-
-    def _get(self, name: str) -> list:
-        raw = fio.read_json(self.dir / name, None)
-        return raw if isinstance(raw, list) else []
-
-    def _put(self, name: str, value: list) -> None:
-        store.ensure_dir(self.dir)
-        fio.write_json(self.dir / name, value)
-
-    def _out(self, op: str, payload: Any) -> None:
-        store.ensure_dir(self.dir)
-        store.append_jsonl(self.dir / "outbox.jsonl", {"at": now_iso(), "op": op, "payload": payload}, cap=OUTBOX_CAP)
-
-    def outbox(self) -> list:
-        return store.read_jsonl(self.dir / "outbox.jsonl")
-
-    # facts
-    def read_facts(self) -> Optional[list]:
-        if (self.dir / "unavailable").exists():
-            return None
-        return [f for f in self._get("facts.json") if isinstance(f, dict)]
-
-    def write_facts(self, adds: list, updates: list, deletes: list) -> bool:
-        facts = {f.get("id"): f for f in self._get("facts.json") if isinstance(f, dict)}
-        for f in list(adds) + list(updates):
-            facts[f["id"]] = {k: f[k] for k in ("id", "text", "kind", "time") if k in f}
-        for fid in deletes:
-            facts.pop(fid, None)
-        self._put("facts.json", list(facts.values()))
-        self._out("facts", {"adds": len(adds), "updates": len(updates), "deletes": len(deletes)})
-        return True
-
-    # briefs
-    def read_briefs(self) -> list:
-        return [b for b in self._get("briefs.json") if isinstance(b, dict)]
-
-    def write_brief(self, brief: dict) -> bool:
-        items = [b for b in self._get("briefs.json") if isinstance(b, dict) and b.get("id") != brief.get("id")]
-        items.append(brief)
-        self._put("briefs.json", items[-200:])
-        self._out("brief", {"id": brief.get("id")})
-        return True
-
-    # transcripts
-    def read_transcripts(self) -> list:
-        return [c for c in self._get("transcripts.json") if isinstance(c, dict)]
-
-    def write_transcript(self, conversation: dict) -> bool:
-        items = [c for c in self._get("transcripts.json")
-                 if isinstance(c, dict) and c.get("id") != conversation.get("id")]
-        items.append(conversation)
-        self._put("transcripts.json", items[-200:])
-        self._out("transcript", {"id": conversation.get("id")})
-        return True
-
-
-_factory: Callable[[str], Any] = StubTransport
-
-
-def set_transport_factory(factory: Optional[Callable[[str], Any]]) -> None:
-    """The Mirror calls this with its own transport; None goes back to the stub."""
-    global _factory
-    if factory is not None and not callable(factory):
-        raise TypeError("transport factory must be callable")
-    with _guard:
-        _factory = factory or StubTransport
-
-
-def mirror_ready() -> bool:
-    """True once a real Grok transport (the Mirror) is plugged in: only then can anything go Hermes -> Grok."""
-    return _factory is not StubTransport
-
-
-def transport(profile: str) -> Any:
-    return _factory(check_profile(profile))
-
-
-def dumps(obj: Any) -> str:
-    return json.dumps(obj, ensure_ascii=False, sort_keys=True)

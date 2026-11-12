@@ -29,22 +29,17 @@ def test_off_until_the_owner_chooses_then_the_panel_is_the_switch(setup, monkeyp
     assert {c["direction"]: c["state"] for c in _row(svc)["choices"]}["both"] == "needs_mirror"
 
 
-def test_the_row_turns_on_by_itself_once_the_mirror_is_ready(setup, monkeypatch):
-    """No set_transport: the default transport (the memory layers) is what the panel row asks, so the row can be
-    turned on as soon as the Mirror is plugged in there, and the round hands the brief over through it."""
-    from hermes_plugins.grok_bot_twin.twin import mem_layers as ml
+def test_the_row_turns_on_by_itself_once_a_transport_is_set(setup, monkeypatch):
+    """No transport set: NullTransport is what the panel row asks ("needs the Mirror"). briefs.set_transport() is the
+    one plug-in point: once one is set the row can be turned on, and the round hands the brief over through it."""
+    from test_briefs import Recorder
     svc, rec, _ = setup
     br.set_transport(None)
     monkeypatch.setattr(br, "_panel", lambda: sp)
     assert br.register_panel()
     assert {c["direction"]: c["state"] for c in _row(svc)["choices"]}["both"] == "needs_mirror"
-    sent = []
-
-    class Mirror(ml.StubTransport):
-        def write_brief(self, brief):
-            sent.append((self.profile, brief["id"]))
-            return True
-    ml.set_transport_factory(Mirror)
+    mirror = Recorder()
+    br.set_transport(mirror)
     try:
         assert {c["direction"]: c["state"] for c in _row(svc)["choices"]}["both"] == "ok"
         with monkeypatch.context() as m:
@@ -52,8 +47,8 @@ def test_the_row_turns_on_by_itself_once_the_mirror_is_ready(setup, monkeypatch)
             sp.choose(svc, PID, "session_briefs", "hermes_to_grok")
         assert _row(svc)["direction"] == "hermes_to_grok" and br.effective(PID) == (True, False)
         res = svc.briefs_now(PID)["results"][0]
-        assert res["made"] == 1 and res["sent"] == 1 and sent and sent[0][0] == "test-scout"
+        assert res["made"] == 1 and res["sent"] == 1 and mirror.sent and mirror.sent[0][0] == PID
     finally:
-        ml.set_transport_factory(None)
+        br.set_transport(None)
     # the Mirror went: the saved choice is shown as Off, and Off it is
     assert _row(svc)["direction"] == "off" and br.effective(PID) == (False, False)

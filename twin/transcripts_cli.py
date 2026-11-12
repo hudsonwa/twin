@@ -8,9 +8,8 @@ from typing import Any
 from . import store
 from . import transcripts as tr
 
-ACTIONS = ("status", "on", "off", "to-grok-on", "to-grok-off", "refresh", "add-grok", "search", "export",
-           "to-hermes", "forget")
-CHANGES = ("on", "off", "to-grok-on", "to-grok-off", "refresh", "add-grok", "export", "to-hermes", "forget")
+ACTIONS = ("status", "on", "off", "refresh", "add-grok", "search", "export", "to-hermes", "forget")
+CHANGES = ("on", "off", "refresh", "add-grok", "export", "to-hermes", "forget")
 # refused in the chat turn of a request from another computer: every change, and every read of what is kept
 # (transcripts stay on this computer; only `status`, which shows counts and switches, answers there)
 REMOTE_REFUSED = CHANGES + ("search",)
@@ -21,7 +20,7 @@ def setup(subs: Any) -> None:
     p = subs.add_parser("transcripts", help="Full transcripts of a twin: kept here, encrypted, searchable "
                                             "(off until you switch them on)")
     p.add_argument("action", choices=ACTIONS, nargs="?", default="status",
-                   help="status | on | off | to-grok-on | to-grok-off | refresh | add-grok --file FILE | "
+                   help="status | on | off | refresh | add-grok --file FILE | "
                         "search -q WORDS | export [--file FILE] | to-hermes | forget")
     _twin_arg(p)
     p.add_argument("--file", help="add-grok: a Grok export with conversations; export: where to write the JSON")
@@ -63,14 +62,6 @@ def cmd_transcripts(a) -> int:
             if not a.json:
                 _out("Full transcripts are off for this twin. What was kept stays here; `forget --yes` deletes it.")
                 return 0
-        elif act == "to-grok-on":
-            tr.switch_to_grok(pid, True)
-            if not a.json:
-                _out("Sending to Grok is on for this twin. Nothing is sent until the Mirror carries it; "
-                     "`to-grok-off` stops it.")
-                return 0
-        elif act == "to-grok-off":
-            tr.switch_to_grok(pid, False)
         elif act == "refresh":
             prof = _profile(svc, pid)
             r = tr.ingest_hermes(pid, store.profile_home(prof)) if prof else {"new": 0, "updated": 0}
@@ -126,7 +117,7 @@ def cmd_transcripts(a) -> int:
         if a.json:
             _out(json.dumps(v, ensure_ascii=False, indent=1))
             return 0
-        _out(f"Full transcripts: {'on' if v['on'] else 'off'}; to Grok: {'on' if v['to_grok'] else 'off'}; "
+        _out(f"Full transcripts: {'on' if v['on'] else 'off'}; "
              f"kept: {v['conversations']['grok']} from Grok, {v['conversations']['hermes']} from Hermes.")
         _out(v["sentence"])
         return 0

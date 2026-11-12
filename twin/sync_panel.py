@@ -36,6 +36,8 @@ LABELS = dict(ITEMS)
 PRIVATE = frozenset({"session_briefs", "transcripts"})
 DIRECTIONS = ("grok_to_hermes", "hermes_to_grok", "both", "off")
 ARROWS = {"grok_to_hermes": "Grok → Hermes", "hermes_to_grok": "Hermes → Grok", "both": "Both ways", "off": "Off"}
+# a row with fewer ways than the four: full transcripts are a local archive, kept (Grok → Hermes) or off
+WAYS = {"transcripts": ("grok_to_hermes", "off")}
 CHOICE_STATES = ("ok", "needs_mirror", "not_yet")
 MIRROR_STATES = ("ready", "not_set_up", "no_permission")
 
@@ -60,8 +62,6 @@ def _sentence(key: str, direction: str) -> str:
     if key == "transcripts":
         return {
             "grok_to_hermes": "Whole conversations from Grok are kept on this computer, searchable; none go to Grok.",
-            "hermes_to_grok": "Whole conversations from Hermes would be sent to Grok; none come back.",
-            "both": "Whole conversations are kept on this computer and sent to Grok too.",
             "off": "No conversation is copied either way.",
         }[direction]
     if key in PRIVATE:
@@ -175,6 +175,10 @@ def _provider(key: str) -> Provider:
     return _providers.get(key) or _defaults()[key]
 
 
+def _ways(key: str) -> tuple:
+    return WAYS.get(key, DIRECTIONS)
+
+
 # ---- the file ---------------------------------------------------------------------------------------------------
 def _path():
     return store.central_dir() / FILE
@@ -205,6 +209,8 @@ def wanted(pair_id: str, key: str) -> Optional[str]:
     if key not in KEYS:
         return None
     d = _entry(_read()["twins"], pair_id, key).get("direction")
+    if d in DIRECTIONS and d not in _ways(key):  # (a 0.3.5 transcripts choice that also sent to Grok: kept, not sent)
+        return "grok_to_hermes"
     return d if d in DIRECTIONS else None
 
 
@@ -255,12 +261,12 @@ def _contexts(svc: Any) -> list[Ctx]:
     return out
 
 
-def _directions(prov: Provider, ctx: Ctx) -> dict:
+def _directions(prov: Provider, ctx: Ctx, key: str) -> dict:
     try:
         got = prov.directions(ctx) or {}
     except Exception:
         got = {}
-    out = {d: (got.get(d) if got.get(d) in CHOICE_STATES else "not_yet") for d in DIRECTIONS}
+    out = {d: (got.get(d) if got.get(d) in CHOICE_STATES else "not_yet") for d in _ways(key)}
     # never "needs the Mirror" when the Mirror is there: then the part itself is what is missing
     if ctx.mirror == "ready":
         out = {d: ("not_yet" if s == "needs_mirror" else s) for d, s in out.items()}
@@ -294,10 +300,11 @@ def _said(prov: Provider, key: str, ctx: Ctx, direction: str) -> str:
 
 def _row(key: str, ctx: Ctx, f: dict) -> dict:
     prov = _provider(key)
-    dirs = _directions(prov, ctx)
+    dirs = _directions(prov, ctx, key)
     chosen = None if prov.live and prov.default else _entry(f["twins"], ctx.pair_id, key).get("direction")
     # a choice that can no longer work (the Mirror went, a part left) is not shown as in effect
     direction = chosen if chosen in DIRECTIONS and dirs.get(chosen) == "ok" else _default_direction(prov, ctx, dirs)
+    direction = direction if direction in dirs else "off"
     at, last_dir = None, None
     s = _entry(f["synced"], ctx.pair_id, key)
     if parse_iso(s.get("at")) and s.get("direction") in ("grok_to_hermes", "hermes_to_grok"):
@@ -315,7 +322,7 @@ def _row(key: str, ctx: Ctx, f: dict) -> dict:
     else:
         state = "needs_mirror" if "needs_mirror" in dirs.values() else "not_yet"
     # a row where only the direction in effect can be had: say what would open it up
-    others = [d for d in DIRECTIONS if d != direction]
+    others = [d for d in dirs if d != direction]
     if state == "ok" and all(dirs[d] != "ok" for d in others):
         state = "needs_mirror" if any(dirs[d] == "needs_mirror" for d in others) else "not_yet"
     note = ""
@@ -325,7 +332,7 @@ def _row(key: str, ctx: Ctx, f: dict) -> dict:
         except Exception:
             note = ""
     choices = []
-    for d in DIRECTIONS:
+    for d in dirs:
         c = {"direction": d, "state": dirs[d], "sentence": _said(prov, key, ctx, d)}
         if dirs[d] != "ok":
             c["why"] = WHY[dirs[d]]
@@ -374,7 +381,9 @@ def choose(svc: Any, pair_id: Any, key: Any, direction: Any) -> dict:
     if before["direction"] == direction and (saved in (None, direction) or _provider(key).live):
         said = f"Nothing changed: {LABELS[key]} for {ctx.name} was already set to {ARROWS[direction]}."
     else:
-        dirs = _directions(_provider(key), ctx)
+        dirs = _directions(_provider(key), ctx, key)
+        if direction not in dirs:
+            raise EngineError("not_available", f"{LABELS[key]} can only be kept here or off: they never go to Grok.")
         if dirs[direction] != "ok":
             raise EngineError("not_available", WHY[dirs[direction]])
         prov = _provider(key)

@@ -134,28 +134,17 @@ def test_turned_on_in_the_panel_never_briefs_the_past(setup, monkeypatch):
     assert svc.briefs_now(PID)["results"][0]["made"] == 0  # the chat ended in 2000, before "now"
 
 
-def test_mem_layers_transport_adapter(setup):
-    sent, inbound = [], [{"id": "g1", "title": "t", "markdown": br.HEADER + "\n# Soup\n\n## Decided\n- Soup.\n"},
-                         {"id": "g2", "markdown": 7}]
-
-    class T:
-        def write_brief(self, brief):
-            sent.append(brief)
-            return True
-
-        def read_briefs(self):
-            return inbound
-
-    layers = types.SimpleNamespace(mirror_ready=lambda: True, transport=lambda profile: T() if profile else None)
-    t = br.LayersTransport(layers, lambda pid: "test-scout" if pid == PID else None)
-    assert t.state(PID) == "ok" and t.state("other") == "needs_mirror"
-    t.send(PID, "b-0123456789abcdef", br.HEADER + "\n# Title here\n")
-    assert sent[0]["id"] == "b-0123456789abcdef" and sent[0]["title"] == "Title here"
-    assert t.fetch(PID) == [("g1", inbound[0]["markdown"])]
-    layers.mirror_ready = lambda: False
+def test_ARCH_1_the_default_transport_is_null_until_one_is_set(setup):
+    """The memory layers' Grok transport is gone: briefs own the one transport hook. Without set_transport() the
+    transport is NullTransport ("needs_mirror": nothing is sent, nothing fetched); set_transport(None) goes back."""
+    svc, rec, _ = setup
+    assert br.transport() is rec
+    br.set_transport(None)
+    t = br.transport()
+    assert isinstance(t, br.NullTransport) and t.state(PID) == "needs_mirror" and t.fetch(PID) == []
     with pytest.raises(br.TransportUnavailable):
-        t.send(PID, "b-0123456789abcdef", "x")
-    assert t.fetch(PID) == []
+        t.send(PID, "b-0123456789abcdef", br.HEADER + "\n# Title here\n")
+    assert not hasattr(br, "LayersTransport")
 
 
 def test_cli_briefs(setup, monkeypatch, capsys):
