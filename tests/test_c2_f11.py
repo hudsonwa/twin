@@ -9,8 +9,7 @@ import time
 import pytest
 
 from twin_testlib import central, config, home, plugin, service, svc, timer  # noqa: F401
-from hermes_plugins.grok_bot_twin.twin import fleet, h2g, mem_facts, routines
-from hermes_plugins.grok_bot_twin.twin import mem_layers as ml
+from hermes_plugins.grok_bot_twin.twin import fleet, h2g, routines
 from hermes_plugins.grok_bot_twin.twin.engine import EngineError
 
 STEPS = ("fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "to_grok_tick", "check_changed",
@@ -40,7 +39,6 @@ def _spy(monkeypatch, s, calls: list, fail: dict = None, changed=()):
         return fn
     for name in STEPS:
         monkeypatch.setattr(s, name, make(name))
-    monkeypatch.setattr(mem_facts, "tick", make("mem_facts"))
 
 
 @pytest.fixture
@@ -77,32 +75,30 @@ def test_F11_real_twin_runs_no_switched_off_opt_in(home, monkeypatch):  # noqa: 
     calls: list = []
     _spy(monkeypatch, s, calls)
     s.tick()
-    assert "mem_facts" not in calls and "to_grok_tick" not in calls  # no Mirror, Hermes -> Grok never used
+    assert "to_grok_tick" not in calls  # Hermes -> Grok never used
     assert calls[-1] == "check_changed"
 
 
 def test_F11_one_failing_step_never_skips_the_others(home, monkeypatch):  # noqa: F811
     _real_twin(home)
     s = service.get_service()
-    monkeypatch.setattr(ml, "mirror_ready", lambda: True)
     (central(home) / h2g.STATE_FILE).write_text("{}", encoding="utf-8")
     calls: list = []
     boom = RuntimeError("boom")
-    fail = {n: RuntimeError(n) for n in ("note_grok_app", "briefs_tick", "instructions_sync_tick", "mem_facts",
+    fail = {n: RuntimeError(n) for n in ("note_grok_app", "briefs_tick", "instructions_sync_tick",
                                          "to_grok_tick")}
     _spy(monkeypatch, s, calls, fail={"fleet_tick": boom, **fail})
     with pytest.raises(RuntimeError) as exc:
         s.tick()
     assert exc.value is boom  # the first failure, raised after every step ran
-    assert calls == ["fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "mem_facts",
-                     "to_grok_tick", "check_changed"]
+    assert calls == ["fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "to_grok_tick",
+                     "check_changed"]
     # the engine failing in the check: every other step still ran this round
     calls.clear()
     _spy(monkeypatch, s, calls, fail={"check_changed": EngineError("engine_failed", "x")})
     with pytest.raises(EngineError):
         s.tick()
-    assert calls[:6] == ["fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "mem_facts",
-                         "to_grok_tick"]
+    assert calls[:5] == ["fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "to_grok_tick"]
     # one pair's sync failing: the next pair is still synced
     calls.clear()
     _spy(monkeypatch, s, calls, changed=["test-scout", "test-quill"], fail={"sync": EngineError("engine_failed", "x")})

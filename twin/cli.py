@@ -87,7 +87,6 @@ Advanced
   digest [TWIN]          the optional activity digest to Grok: preview, --on, --off
   transcripts ACTION [TWIN]  whole conversations kept here, encrypted, searchable by the twin (off by
                          default). ACTION: on, off, add-grok, refresh, search, export, to-hermes, forget
-  facts [TWIN]           memory facts shared with Grok: sync, keep CONFLICT hermes|grok, restore POINT
   briefs [TWIN]          session briefs to and from Grok, off until you choose: --way to-grok|from-grok|both|off
   to-grok [TWIN]         changes made in Hermes, made in Grok by your Mirror bot: preview, then
                          allow ITEMS, apply ID, undo ID, resolve ITEM hermes|grok, runner ROUTINE grok|hermes
@@ -1588,59 +1587,6 @@ def cmd_attest(a) -> int:
     return 0 if res["verified"] else 1
 
 
-def cmd_facts(a) -> int:
-    """Memory facts between a Grok bot and its twin (twin/mem_facts.py). Off until switched on."""
-    from . import mem_facts as mf, mem_layers as ml, tasks
-    words = [str(w) for w in (a.words or [])]
-    verbs = ("sync", "keep", "restore", "way")
-    twin = None
-    if words and words[0] not in verbs:
-        twin, words = words[0], words[1:]
-    svc = _svc()
-    pid = _one(svc, twin)
-    prof = mf._pairs(svc).get(pid)
-    if prof is None:
-        raise EngineError("no_twin", "That twin has no Hermes bot on this computer.")
-    if tasks.asked_turn():  # a request from another computer neither reads nor changes a twin's memory facts
-        raise EngineError("refused", "A request from another computer cannot read or change a twin's memory facts.",
-                          "Do it yourself, on the Twins page or in your own terminal.")
-    res = None
-    if words[:1] == ["sync"] and len(words) == 1:
-        res = mf.sync_twin(svc, pid)
-    elif words[:1] == ["keep"] and len(words) == 3:
-        res = mf.resolve(prof, words[1], words[2], key=pid)
-    elif words[:1] == ["restore"] and len(words) == 2:
-        res = mf.restore(prof, words[1])
-    elif words[:1] == ["way"] and len(words) == 2:
-        if ml._panel() is not None:
-            raise EngineError("usage", "Choose the direction in the What syncs panel.",
-                              "hermes twin syncs TWIN memory from-grok|to-grok|both|off")
-        ml.set_direction(pid, "facts", words[1])
-    elif words:
-        raise EngineError("usage", "Use: hermes twin facts [TWIN] [sync | keep CONFLICT hermes|grok | restore POINT]")
-    v = mf.view(prof, key=pid)
-    if a.json:
-        _out(json.dumps({"facts": v, **({"result": res} if res is not None else {})}, indent=1, ensure_ascii=False))
-        return 0
-    if res is not None and res.get("state"):
-        th, tg = res.get("to_hermes") or {}, res.get("to_grok") or {}
-        _out(f"Sync: {res['state']}. Into Hermes: {th.get('added', 0)} added, {th.get('updated', 0)} changed, "
-             f"{th.get('removed', 0)} removed. To Grok: {tg.get('added', 0)} added, {tg.get('updated', 0)} changed, "
-             f"{tg.get('removed', 0)} removed.")
-    _out(f"Memory facts: {v['direction_words']}. {v['sentence']}")
-    _out(f"  {v['facts']} shared facts; last synced {v['last'] or 'never'}.")
-    for line in v["held"]:
-        _out(f"  Kept back: {line}")
-    if v["no_room"]:
-        _out(f"  {v['no_room']} not added: this twin's memory is full.")
-    for c in v["conflicts"]:
-        _out(f"  Differs ({c['why']}), {c['id']}:")
-        _out(f"    Hermes: {c['hermes'] if c['hermes'] is not None else '(removed)'}")
-        _out(f"    Grok:   {c['grok'] if c['grok'] is not None else '(removed)'}")
-        _out(f"    keep one: hermes twin facts keep {c['id']} hermes|grok")
-    return 0
-
-
 def cmd_digest(a) -> int:
     svc = _svc()
     pid = _one(svc, a.pair)
@@ -1668,7 +1614,7 @@ def cmd_syncs(a) -> int:
     elif len(words) == 2:
         raise EngineError("usage", f"\"{safe.clean_name(words[0], 60)} {safe.clean_name(words[1], 60)}\" is not an "
                                    "item and a direction.",
-                          "Items: name, description, instructions, skills, routines, memory, briefs, conversations. "
+                          "Items: name, description, instructions, skills, routines, briefs, conversations. "
                           "Directions: from-grok, to-grok, both, off")
     elif words:
         twin = words[0]
@@ -1680,7 +1626,7 @@ def cmd_syncs(a) -> int:
         if not key or not way:
             raise EngineError("usage", f"\"{safe.clean_name(item if not key else direction, 60)}\" is not "
                                        + ("an item." if not key else "a direction."),
-                              "Items: name, description, instructions, skills, routines, memory, briefs, "
+                              "Items: name, description, instructions, skills, routines, briefs, "
                               "conversations. Directions: from-grok, to-grok, both, off")
         if tasks.asked_turn():  # (the chat turn of a request from another computer never changes a twin's setup)
             raise EngineError("refused", "A request from another computer cannot change what syncs.",
@@ -1842,7 +1788,7 @@ HANDLERS: dict[str, Callable[[Any], int]] = {
     "restore": cmd_restore, "recent": cmd_recent, "compare": cmd_parity, "copies": cmd_copies, "checklist": cmd_checklist,
     "switch": cmd_switch, "send-to-grok": cmd_send, "doctor": cmd_doctor, "demo": cmd_demo,
     "approve": cmd_approve, "skill-sync": cmd_mirror, "remove": cmd_remove, "stop": cmd_remove, "digest": cmd_digest,
-    "facts": cmd_facts, "briefs": cmd_briefs,
+    "briefs": cmd_briefs,
     "setup": cmd_setup, "verify": cmd_attest, "uninstall": cmd_uninstall, "skip": cmd_skip, "import": cmd_import,
     "finish": cmd_finish, "import-exports": cmd_import_exports, "syncs": cmd_syncs,
     "background": lambda a: bgagent.handle_cli(a, _out),
@@ -2011,7 +1957,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     p = subs.add_parser("syncs", help="What syncs with Grok and which way: syncs [TWIN] [ITEM DIRECTION]")
     p.add_argument("words", nargs="*", metavar="[TWIN] [ITEM DIRECTION]",
                    help="The twin's name in quotes (not needed with one twin); to change a row, its item (name, "
-                        "description, instructions, skills, routines, memory, briefs, conversations) and a direction "
+                        "description, instructions, skills, routines, briefs, conversations) and a direction "
                         "(from-grok, to-grok, both, off)")
     p.add_argument("--json", action="store_true", help="The panel as JSON")
     p = subs.add_parser("digest", help="Activity digest to Grok: preview, or turn it on/off for one twin")
@@ -2020,9 +1966,6 @@ def setup(parser: argparse.ArgumentParser) -> None:
     g.add_argument("--on", action="store_true")
     g.add_argument("--off", action="store_true")
     p.add_argument("--titles", action="store_true", help="Also send short titles (separate opt-in)")
-    p = subs.add_parser("facts", help="Memory facts shared with Grok (off until switched on)")
-    p.add_argument("words", nargs="*", help="[TWIN] [sync | keep CONFLICT hermes|grok | restore POINT]")
-    p.add_argument("--json", action="store_true")
     p = subs.add_parser("briefs", help="Session briefs to and from Grok (off until you turn them on)")
     _twin_arg(p)
     p.add_argument("--way", choices=["from-grok", "to-grok", "both", "off"], help="Which way briefs go")

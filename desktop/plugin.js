@@ -2312,7 +2312,7 @@ const WHAT_COPIES = [
       { what: 'Instructions, routines and connections', how: "With Import setup export: the bot writes a file about itself when you ask it in Grok. Instructions are filled in, routines arrive switched off, and connections arrive as a list of names. Logins are never copied. With skill sync set up, instructions also follow Grok's every 15 minutes by themselves, unless you switch that off. When it is unsure which to keep, you are asked." },
       { what: 'Skills', how: 'With skill sync, which is optional: a sync bot in your own Grok account carries them. Without it you copy them yourself.' },
       { what: 'Conversations', how: 'Off until you switch full transcripts on for a twin. Then conversations from a Grok export can become Hermes chats of the twin; full transcripts are set up in the terminal.' },
-      { what: 'Grok memory', how: 'Does not copy: memory is the most private thing a bot holds, so none is taken unless you switch on memory facts, which need skill sync.' },
+      { what: 'Grok memory', how: 'Does not copy: memory is the most private thing a bot holds, so none is taken.' },
       { what: 'Grok model setting', how: "Does not copy: nothing Hermes reads from Grok names the bot's model, so the twin uses the model you choose in Hermes." }
     ]
   },
@@ -2566,7 +2566,7 @@ function SameOrNot({ pair, open, onShow, onFinish, more = [], initialOpen = fals
   )
 }
 
-// ── What syncs: one twin's eight things, and which way each goes ────────────
+// ── What syncs: one twin's seven things, and which way each goes ────────────
 //
 // The owner's choice, per twin and per thing: from Grok to Hermes, back, both ways, or off. The backend owns
 // whether a way can work yet and when something last moved; the page shows what it last said (never ahead of
@@ -2576,14 +2576,13 @@ function SameOrNot({ pair, open, onShow, onFinish, more = [], initialOpen = fals
 
 const SYNC_PANEL_KEY = [ID, 'sync-panel']
 const SYNC_SCHEMA = 'grok-bot-twin.syncpanel.v1'
-// the eight things, always in this order, with the page's own label for each
+// the seven things, always in this order, with the page's own label for each
 const SYNC_ITEMS = [
   ['name', 'Name'],
   ['description', 'Description'],
   ['instructions', 'Instructions'],
   ['skills', 'Skills'],
   ['routines', 'Routines'],
-  ['memory_facts', 'Memory facts'],
   ['session_briefs', 'Session briefs'],
   ['transcripts', 'Conversations (full)']
 ]
@@ -2592,7 +2591,7 @@ const SYNC_ROW_STATES = ['ok', 'needs_mirror', 'not_yet', 'error']
 const SYNC_MIRROR_STATES = ['ready', 'not_set_up', 'no_permission', 'unknown']
 const SYNC_NEEDS_MIRROR = 'Needs the Mirror'
 const SYNC_NOT_YET = 'Not in this version yet'
-const SYNC_PRIVATE = 'Memory, session briefs and conversations start off for every twin, and only you switch them on.'
+const SYNC_PRIVATE = 'Session briefs and conversations start off for every twin, and only you switch them on.'
 const syncGroupLabel = (label, twin) => `${label} for ${twin}: which way it syncs`
 
 // GET (or POST) /sync/panel, tidied once: every text clean and capped, every key, way and state one of the

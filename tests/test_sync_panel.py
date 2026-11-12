@@ -1,4 +1,4 @@
-"""The "What syncs" panel: eight rows per twin, a direction each, honest about what
+"""The "What syncs" panel: seven rows per twin, a direction each, honest about what
 this version cannot do yet, and the way a backend part plugs in. Invented bots only, a throwaway HERMES_HOME, the
 fake botport helper."""
 from __future__ import annotations
@@ -20,7 +20,7 @@ from hermes_plugins.grok_bot_twin.twin.engine import EngineError  # noqa: E402
 
 FAKE = Path(__file__).resolve().parent / "fake_botport.py"
 fleet_testlib._SHAPES.update(json.loads((ROOT / "tests" / "desktop" / "syncs_shapes.json").read_text("utf-8"))["shapes"])
-KEYS = ["name", "description", "instructions", "skills", "routines", "memory_facts", "session_briefs", "transcripts"]
+KEYS = ["name", "description", "instructions", "skills", "routines", "session_briefs", "transcripts"]
 
 
 @pytest.fixture(autouse=True)
@@ -89,7 +89,7 @@ def test_the_rows_say_what_this_version_does(bp):
         assert [c["direction"] for c in it["choices"]] == list(sp.DIRECTIONS)
         assert it["sentence"] and all(c["sentence"] for c in it["choices"])
         assert all(("why" in c) == (c["state"] != "ok") for c in it["choices"])
-        assert it["private"] is (it["key"] in ("memory_facts", "session_briefs", "transcripts"))
+        assert it["private"] is (it["key"] in ("session_briefs", "transcripts"))
     # name: follows Grok; the way back needs the Mirror
     n = _item(t, "name")
     assert n["direction"] == "grok_to_hermes" and n["state"] == "needs_mirror"
@@ -103,8 +103,8 @@ def test_the_rows_say_what_this_version_does(bp):
     # skills without skill sync: off, and every way of syncing them needs the Mirror
     sk = _item(t, "skills")
     assert sk["direction"] == "off" and sk["state"] == "needs_mirror"
-    # routines and the three private rows: off, not in this version yet
-    for key in ("routines", "memory_facts", "session_briefs", "transcripts"):
+    # routines and the two private rows: off, not in this version yet
+    for key in ("routines", "session_briefs", "transcripts"):
         it = _item(t, key)
         assert it["direction"] == "off" and it["state"] == "not_yet" and it["last_synced_at"] is None
     assert "none go to Grok" in _item(t, "transcripts")["choices"][0]["sentence"]
@@ -113,12 +113,12 @@ def test_the_rows_say_what_this_version_does(bp):
 def test_a_direction_that_cannot_work_is_refused_and_nothing_is_saved(bp):
     pid = _twin(sp.view(bp))["id"]
     with pytest.raises(EngineError) as e:
-        sp.choose(bp, pid, "memory_facts", "both")
+        sp.choose(bp, pid, "session_briefs", "both")
     assert e.value.code == "not_available" and e.value.message == sp.WHY["not_yet"]
     with pytest.raises(EngineError) as e:
         sp.choose(bp, pid, "name", "hermes_to_grok")
     assert e.value.code == "not_available" and "Mirror" in e.value.message
-    assert sp.wanted(pid, "memory_facts") is None and not (bp.central / sp.FILE).exists()
+    assert sp.wanted(pid, "session_briefs") is None and not (bp.central / sp.FILE).exists()
     for bad in (("nope", "off"), ("name", "sideways"), (None, "off"), ("name", 3)):
         with pytest.raises(EngineError) as e:
             sp.choose(bp, pid, *bad)
@@ -127,39 +127,39 @@ def test_a_direction_that_cannot_work_is_refused_and_nothing_is_saved(bp):
         sp.choose(bp, "not-a-twin", "name", "off")
     assert e.value.code == "no_twin"
     # the direction already in effect: nothing changed, nothing to refuse
-    same = sp.choose(bp, pid, "memory_facts", "off")
-    assert same["said"]["sentence"] == "Nothing changed: Memory facts for Acme Support was already set to Off." and fleet_testlib.shape_problems(same, "SyncPanel") == []
+    same = sp.choose(bp, pid, "session_briefs", "off")
+    assert same["said"]["sentence"] == "Nothing changed: Session briefs for Acme Support was already set to Off." and fleet_testlib.shape_problems(same, "SyncPanel") == []
 
 
 def test_a_backend_part_plugs_in(bp):
     pid = _twin(sp.view(bp))["id"]
     seen = []
-    sp.provide("memory_facts", directions=lambda c: {"grok_to_hermes": "ok", "hermes_to_grok": "ok", "both": "ok",
-                                                     "off": "ok"},
-               on_change=lambda c, d: seen.append((c.pair_id, d)), note=lambda c: "Two facts wait for you.")
-    out = sp.choose(bp, pid, "memory_facts", "both")
-    assert seen == [(pid, "both")] and sp.wanted(pid, "memory_facts") == "both"
-    it = _item(_twin(out), "memory_facts")
-    assert it["direction"] == "both" and it["state"] == "ok" and it["note"] == "Two facts wait for you."
-    assert "Memory facts for Acme Support: Both ways." in out["said"]["sentence"]
+    sp.provide("session_briefs", directions=lambda c: {"grok_to_hermes": "ok", "hermes_to_grok": "ok", "both": "ok",
+                                                       "off": "ok"},
+               on_change=lambda c, d: seen.append((c.pair_id, d)), note=lambda c: "Two briefs wait for you.")
+    out = sp.choose(bp, pid, "session_briefs", "both")
+    assert seen == [(pid, "both")] and sp.wanted(pid, "session_briefs") == "both"
+    it = _item(_twin(out), "session_briefs")
+    assert it["direction"] == "both" and it["state"] == "ok" and it["note"] == "Two briefs wait for you."
+    assert "Session briefs for Acme Support: Both ways." in out["said"]["sentence"]
     saved = json.loads((bp.central / sp.FILE).read_text("utf-8"))
-    assert saved["twins"][pid]["memory_facts"]["direction"] == "both"
+    assert saved["twins"][pid]["session_briefs"]["direction"] == "both"
     # a part says it moved something
-    sp.mark_synced(pid, "memory_facts", "hermes_to_grok", "2000-01-01T09:00:00Z")
-    it = _item(_twin(sp.view(bp)), "memory_facts")
+    sp.mark_synced(pid, "session_briefs", "hermes_to_grok", "2000-01-01T09:00:00Z")
+    it = _item(_twin(sp.view(bp)), "session_briefs")
     assert it["last_synced_at"] == "2000-01-01T09:00:00Z" and it["last_direction"] == "hermes_to_grok"
     with pytest.raises(ValueError):
-        sp.mark_synced(pid, "memory_facts", "both")
+        sp.mark_synced(pid, "session_briefs", "both")
     # a part that refuses: its words, and nothing saved
     def refuse(c, d):
         raise EngineError("held", "A conflict waits: settle it first.")
-    sp.provide("memory_facts", directions=lambda c: {d: "ok" for d in sp.DIRECTIONS}, on_change=refuse)
+    sp.provide("session_briefs", directions=lambda c: {d: "ok" for d in sp.DIRECTIONS}, on_change=refuse)
     with pytest.raises(EngineError) as e:
-        sp.choose(bp, pid, "memory_facts", "off")
-    assert e.value.message == "A conflict waits: settle it first." and sp.wanted(pid, "memory_facts") == "both"
+        sp.choose(bp, pid, "session_briefs", "off")
+    assert e.value.message == "A conflict waits: settle it first." and sp.wanted(pid, "session_briefs") == "both"
     # a part that goes away: its saved choice is no longer shown as in effect
     sp._reset_for_tests()
-    assert _item(_twin(sp.view(bp)), "memory_facts")["direction"] == "off"
+    assert _item(_twin(sp.view(bp)), "session_briefs")["direction"] == "off"
     with pytest.raises(ValueError):
         sp.provide("passwords", directions=lambda c: {})
     # the twin goes: so do its choices
@@ -198,7 +198,7 @@ def test_the_terminal(bp):
     assert rc == 0 and err == "", err
     lines = out.splitlines()
     assert lines[0] == "What syncs for Acme Support"
-    for label in ("Name", "Description", "Instructions", "Skills", "Routines", "Memory facts", "Session briefs",
+    for label in ("Name", "Description", "Instructions", "Skills", "Routines", "Session briefs",
                   "Conversations (full)"):
         assert any(line.startswith(f"  {label} ") for line in lines), label
     assert "Grok → Hermes" in out and "Not in this version yet" in out and "Needs the Mirror" in out
@@ -208,7 +208,7 @@ def test_the_terminal(bp):
     assert name_off == "The name stays as it is on each side."
     rc, out, err = run(["syncs", "--json"])
     assert rc == 0 and fleet_testlib.shape_problems(json.loads(out), "SyncPanel") == []
-    rc, out, err = run(["syncs", "memory", "from-grok"])
+    rc, out, err = run(["syncs", "briefs", "from-grok"])
     assert rc == 1 and "Not in this version yet." in err
     rc, out, err = run(["syncs", "Acme Support", "conversations", "off"])
     assert rc == 0 and "Nothing changed" in out
@@ -219,6 +219,50 @@ def test_the_terminal(bp):
     rc, out, err = run(["syncs", "a", "b", "c", "d"])
     assert rc == 2
     assert "syncs [TWIN]" in cli.HELP_TEXT
+
+
+def test_ARCH_1_facts_is_not_an_item_any_more(bp):
+    """Memory facts with Grok are gone (they could never run): "facts" and its aliases get the ordinary answer."""
+    for word in ("facts", "memory", "memory-facts", "memory_facts", "Memory facts"):
+        rc, out, err = run(["syncs", "Acme Support", word, "both"])
+        assert rc == 2 and f'"{word}" is not an item.' in err, (word, err)
+        assert "memory" not in err.split("is not an item.")[1]  # the list of items no longer offers it
+        assert sp.item_word(word) is None
+    rc, out, err = run(["syncs", "facts", "off"])
+    assert rc == 2 and "is not an item and a direction." in err
+    rc, out, err = run(["syncs"])
+    assert rc == 0 and "Memory facts" not in out and "Memory, " not in out
+    assert "Session briefs and conversations start off for every twin." in out
+
+
+def test_ARCH_1_a_saved_memory_facts_choice_from_0_3_5_is_ignored(bp):
+    pid = _twin(sp.view(bp))["id"]
+    (bp.central / sp.FILE).write_text(json.dumps({"v": 1, "twins": {pid: {
+        "memory_facts": {"direction": "both", "at": "2000-01-01T09:00:00Z"},
+        "routines": {"direction": "off", "at": "2000-01-01T09:00:00Z"}}},
+        "synced": {pid: {"memory_facts": {"at": "2000-01-01T09:00:00Z", "direction": "hermes_to_grok"}}}}), "utf-8")
+    v = sp.view(bp)
+    assert fleet_testlib.shape_problems(v, "SyncPanel") == []
+    assert [i["key"] for i in _twin(v)["items"]] == KEYS
+    assert sp.wanted(pid, "memory_facts") is None
+    from hermes_plugins.grok_bot_twin.twin import mem_layers as ml
+    assert ml.direction(pid, "briefs") == "off" and ml.direction(pid, "facts") == "off"
+    out = sp.choose(bp, pid, "routines", "off")  # the file is still changed as usual
+    assert "Nothing changed" in out["said"]["sentence"]
+    rc, out, err = run(["syncs", "--json"])
+    assert rc == 0 and fleet_testlib.shape_problems(json.loads(out), "SyncPanel") == []
+    bp.remove(pid)
+    assert pid not in json.loads((bp.central / sp.FILE).read_text("utf-8"))["twins"]
+
+
+def test_ARCH_1_uninstall_leaves_no_memory_facts_folders_from_an_older_version(bp):
+    for d in ("mem-facts", "mem-facts-points/acme-support"):
+        (bp.central / d).mkdir(parents=True)
+    (bp.central / "mem-facts" / "acme-support.json").write_text("{}", "utf-8")
+    (bp.central / "mem-facts-points" / "acme-support" / "MEMORY.md.1").write_text("Likes soup.", "utf-8")
+    rc, out, err = run(["uninstall", "--yes"])
+    assert rc == 0, err
+    assert not (bp.central / "mem-facts").exists() and not (bp.central / "mem-facts-points").exists()
 
 
 def test_the_local_routes(bp, monkeypatch):

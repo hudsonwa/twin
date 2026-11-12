@@ -50,8 +50,7 @@ _ROWS: tuple[tuple[str, str, str, str, Optional[str], Optional[str]], ...] = (
      "Off until you switch full transcripts on for a twin. Then conversations from a Grok export can become Hermes "
      "chats of the twin; full transcripts are set up in the terminal.", None, None),
     ("grok-memory", "grok", "Grok memory",
-     "Does not copy: memory is the most private thing a bot holds, so none is taken unless you switch on memory "
-     "facts, which need skill sync.", None, None),
+     "Does not copy: memory is the most private thing a bot holds, so none is taken.", None, None),
     ("grok-model", "grok", "Grok model setting",
      "Does not copy: nothing Hermes reads from Grok names the bot's model, so the twin uses the model you choose in "
      "Hermes.", None, None),

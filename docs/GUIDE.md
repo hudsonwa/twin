@@ -257,24 +257,6 @@ twin, and the pass is replaced, so the sync bot must be set up again to turn it 
 `hermes twin skill-sync --folder DIR` prints the same steps with the files to use, and
 `hermes twin skill-sync --status` says when the sync bot last ran.
 
-## Memory facts with Grok (0.3.0)
-
-Off for every twin. Switch it on in the twin's **What syncs** panel (row "Memory facts"; the terminal has the
-same panel). Then the facts the Grok bot remembers and the notes in the twin's
-`MEMORY.md` and `USER.md` are kept the same, one fact per note, each ending with where it came from and when:
-`Prefers short answers. (fact g3a91c0e, from Grok, 2000-01-02)`. Leave the part in brackets as it is: it is how
-the fact is matched with Grok. Deleting the whole line removes the fact on both sides.
-
-**Both ways.** A fact added, changed or removed on one side is added, changed or removed on the other. If it was
-changed on both sides, or changed on one and removed on the other, both stay as they are and the panel asks which
-to keep (`hermes twin facts "Test Scout" keep <id> hermes|grok`). Before a memory file is changed, the file as it
-was is kept (`hermes twin facts "Test Scout" restore <point>`).
-
-**What never crosses.** The same check as memory between your computers: a fact that looks like it holds a
-password, key, code or card number, or reads like an instruction, stays where it was written; the panel counts
-them and never shows them. Both directions need the Mirror: until it is set up, the row says so and no fact
-moves.
-
 ## A twin's whole conversations (archive and search)
 
 Off until you switch it on for a twin. Then the plugin keeps that twin's conversations on this computer, both sides:

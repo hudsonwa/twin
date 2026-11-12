@@ -1,8 +1,6 @@
 """Memory layers between a Grok bot and its Hermes twin: what they share, which way, and how it is kept private.
 
-Three layers, each switched per twin and OFF until the owner switches it on:
-- "facts" (`mem_facts.py`): the twin's MEMORY.md / USER.md notes and the Grok bot's memories, one fact per entry,
-  each with an id, where it came from and when. Merged both ways; conflicts shown; deletions honoured both ways.
+Two layers, each switched per twin and OFF until the owner switches it on:
 - "briefs" (`mem_briefs.py`): each conversation compacted into a short Markdown brief (who, what was decided, open
   threads), passed both ways so "carry on over there" works without the whole conversation.
 - "transcripts" (`mem_archive.py`): whole conversations kept in a local SQLite archive with full-text search and a
@@ -42,7 +40,7 @@ from . import store, xs_memory
 from .engine import EngineError
 from .model import now_iso
 
-LAYERS = ("facts", "briefs", "transcripts")
+LAYERS = ("briefs", "transcripts")
 DIRECTIONS = ("off", "grok_to_hermes", "hermes_to_grok", "both")
 SETTINGS_FILE = "mem-layers.json"
 STUB_DIR = "mem-grok-stub"
@@ -50,8 +48,6 @@ PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}\Z")
 OUTBOX_CAP = 500
 
 SENTENCES = {
-    "facts": "Facts: the twin's memory notes and the Grok bot's memories, one fact each, kept the same both ways. "
-             "A note that looks like a password, key or instruction never crosses.",
     "briefs": "Briefs: each conversation summed up in a few lines (who, what was decided, what is still open), so "
               "you can carry on on the other side. Not the whole conversation.",
     "transcripts": "Transcripts: whole conversations kept on this computer in a searchable archive you can export "
@@ -96,7 +92,7 @@ def _load() -> dict:
 
 
 def settings(profile: str) -> dict:
-    """{"facts": direction, "briefs": ..., "transcripts": ..., "changed": iso or None}. Unknown twin: all off."""
+    """{"briefs": direction, "transcripts": ..., "changed": iso or None}. Unknown twin: all off."""
     check_profile(profile)
     rec = _load()["twins"].get(profile)
     return dict(rec) if rec else {**{layer: "off" for layer in LAYERS}, "changed": None}
@@ -105,7 +101,7 @@ def settings(profile: str) -> dict:
 def set_direction(profile: str, layer: str, direction: str) -> dict:
     check_profile(profile)
     if layer not in LAYERS:
-        raise _bad("bad_layer", "That is not a memory layer.", "Use facts, briefs or transcripts.")
+        raise _bad("bad_layer", "That is not a memory layer.", "Use briefs or transcripts.")
     if direction not in DIRECTIONS:
         raise _bad("bad_direction", "That is not a direction.", "Use off, grok_to_hermes, hermes_to_grok or both.")
     with _guard:
@@ -119,7 +115,7 @@ def set_direction(profile: str, layer: str, direction: str) -> dict:
     return settings(profile)
 
 
-PANEL_KEYS = {"facts": "memory_facts", "briefs": "session_briefs", "transcripts": "transcripts"}
+PANEL_KEYS = {"briefs": "session_briefs", "transcripts": "transcripts"}
 
 
 def _panel() -> Any:
@@ -144,14 +140,6 @@ def direction(key: str, layer: str) -> str:
             d = None
         if d not in DIRECTIONS:
             return "off"
-        if layer == "facts" and d != "off":
-            # a choice saved while a direction was available counts only while it still is (the panel shows Off then)
-            try:
-                from . import mem_facts
-                if mem_facts._panel_dirs(None).get(d) != "ok":
-                    return "off"
-            except Exception:
-                return "off"
         return d
     try:
         return settings(key).get(layer, "off")

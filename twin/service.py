@@ -902,7 +902,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         """One timer cycle: the metadata check, then a Grok->Hermes sync of each changed pair; an opt-in part only
         while it can have work (cheap looks). One failing step (the engine too) never skips the others; the first
         failure is raised after all ran."""
-        from . import fleet, mem_facts, mem_layers as ml
+        from . import fleet
         errors: list = []
 
         def step(fn: Any, *args: Any) -> Any:
@@ -920,8 +920,6 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             step(self.note_grok_app)
             step(self.briefs_tick)
             step(self.instructions_sync_tick)
-        if ml.mirror_ready():
-            step(mem_facts.tick, lambda: self)
         if os.path.lexists(self.central / h2g.STATE_FILE):  # Hermes -> Grok was used here
             step(self.to_grok_tick)
         changed = step(self.check_changed) or []
@@ -2000,14 +1998,12 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 was = entry.get("hermes") if isinstance(entry, dict) else None
                 prof = (st.get("hermes") or {}).get("profile") or (was.get("profile") if isinstance(was, dict) else None)
                 if prof:
-                    try:  # its memory-facts ledger, restore points and Grok stand-in (MEMORY.md / USER.md stay)
-                        from . import mem_facts as _mem_facts
-                        _mem_facts.forget(prof)
-                        from . import mem_layers as _ml  # and its memory layers are off (twinned again: off too)
+                    try:  # its memory layers are off (twinned again: off too)
+                        from . import mem_layers as _ml
                         for layer in [x for x in _ml.LAYERS if _ml.settings(prof).get(x) != "off"]:
                             _ml.set_direction(prof, layer, "off")
                     except Exception:
-                        log.warning("grok-bot-twin: could not drop a removed twin's memory-facts records", exc_info=True)
+                        log.warning("grok-bot-twin: could not switch off a removed twin's memory layers", exc_info=True)
             self._checked.pop(pid, None)
             self.invalidate()
             watch.poke()  # with the last real twin gone, nothing is watched any more

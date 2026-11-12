@@ -1,4 +1,4 @@
-"""What syncs between a Grok bot and its twin: one panel per twin, eight rows, a direction each.
+"""What syncs between a Grok bot and its twin: one panel per twin, seven rows, a direction each.
 
 The panel owns the owner's choice (which way each item goes); the parts of the plugin that move things own whether a
 direction can work at all and when it last ran. Each part plugs in with `provide(...)` and acts only on `wanted(...)`.
@@ -28,13 +28,12 @@ ITEMS: tuple[tuple[str, str], ...] = (
     ("instructions", "Instructions"),
     ("skills", "Skills"),
     ("routines", "Routines"),
-    ("memory_facts", "Memory facts"),
     ("session_briefs", "Session briefs"),
     ("transcripts", "Conversations (full)"),
 )
 KEYS = tuple(k for k, _ in ITEMS)
 LABELS = dict(ITEMS)
-PRIVATE = frozenset({"memory_facts", "session_briefs", "transcripts"})
+PRIVATE = frozenset({"session_briefs", "transcripts"})
 DIRECTIONS = ("grok_to_hermes", "hermes_to_grok", "both", "off")
 ARROWS = {"grok_to_hermes": "Grok → Hermes", "hermes_to_grok": "Hermes → Grok", "both": "Both ways", "off": "Off"}
 CHOICE_STATES = ("ok", "needs_mirror", "not_yet")
@@ -53,8 +52,7 @@ MIRROR_SENTENCE = {
 
 # What each direction means, said once per item: what choosing it does (or would do).
 _NOUN = {"name": "the name", "description": "the description", "instructions": "the instructions",
-         "skills": "skills", "routines": "routines", "memory_facts": "memory facts",
-         "session_briefs": "session briefs", "transcripts": "whole conversations"}
+         "skills": "skills", "routines": "routines", "session_briefs": "session briefs", "transcripts": "whole conversations"}
 
 
 def _sentence(key: str, direction: str) -> str:
@@ -168,7 +166,6 @@ def _defaults() -> dict:
         "skills": Provider(_skills_dirs, note=_skills_note,
                            default=lambda c: "both" if c.skill_sync else "off"),
         "routines": Provider(_fixed(("off",))),
-        "memory_facts": Provider(_fixed(("off",))),
         "session_briefs": Provider(_fixed(("off",))),
         "transcripts": Provider(_fixed(("off",))),
     }
@@ -346,7 +343,7 @@ def _twin(ctx: Ctx, f: dict) -> dict:
 
 
 def view(svc: Any) -> dict:
-    """GET /sync/panel: every twin on this computer, eight rows each. Reads local files only."""
+    """GET /sync/panel: every twin on this computer, seven rows each. Reads local files only."""
     ctxs = _contexts(svc)
     f = _read()
     if not ctxs:
@@ -398,9 +395,8 @@ def forget_twin(pair_id: str) -> None:
 
 
 # ---- the terminal -----------------------------------------------------------------------------------------------
-_ITEM_WORDS = {**{k: k for k in KEYS}, **{v.lower(): k for k, v in ITEMS}, "memory": "memory_facts",
-               "facts": "memory_facts", "briefs": "session_briefs", "conversations": "transcripts",
-               "memory-facts": "memory_facts", "session-briefs": "session_briefs"}
+_ITEM_WORDS = {**{k: k for k in KEYS}, **{v.lower(): k for k, v in ITEMS}, "briefs": "session_briefs",
+               "conversations": "transcripts", "session-briefs": "session_briefs"}
 _DIR_WORDS = {**{d: d for d in DIRECTIONS}, "from-grok": "grok_to_hermes", "to-grok": "hermes_to_grok",
               "both-ways": "both"}
 
@@ -432,7 +428,7 @@ def lines(twin: dict, ago: Callable[[Optional[str]], str]) -> list[str]:
             if ds:
                 out.append(f"  {'':<{width}}  {', '.join(ds)}: {WHY[st]}")
     if any(it["private"] for it in twin["items"]):
-        out.append("Memory, session briefs and conversations start off for every twin. Only you switch them on; "
+        out.append("Session briefs and conversations start off for every twin. Only you switch them on; "
                    "nothing private moves without your choice.")
     out.append("Change one: hermes twin syncs [TWIN] ITEM from-grok|to-grok|both|off")
     return out

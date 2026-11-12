@@ -73,7 +73,7 @@ tests here can run only in a pretend box): watch its first runs.
 | Ask a twin on another computer | experimental | [Sharing](docs/SHARING.md#ask-a-twin-on-another-computer) |
 | Up to date while Hermes is closed (terminal only) | experimental | [Sharing](docs/SHARING.md#in-the-terminal) |
 | Skill sync through a sync bot in your Grok account | experimental | [Skill sync](docs/GUIDE.md#skill-sync-optional) |
-| Hermes → Grok, memory facts with Grok (need the sync bot) | experimental | [What syncs](docs/GUIDE.md#what-syncs-and-hermes--grok) |
+| Hermes → Grok (needs the sync bot) | experimental | [What syncs](docs/GUIDE.md#what-syncs-and-hermes--grok) |
 | A twin's whole conversations (archive and search) | experimental | [Archive](docs/GUIDE.md#a-twins-whole-conversations-archive-and-search) |
 | Hermes clicking in the Grok app for you; a Grok bot setting itself up | design only, not built | [SETUP-ORIGINS](docs/SETUP-ORIGINS.md) |
 
@@ -91,7 +91,7 @@ The Twins page shows the same table (a twin's **…** menu, **Details…**, **Th
 | Instructions, routines and connections | With Import setup export: the bot writes a file about itself when you ask it in Grok. Instructions are filled in, routines arrive switched off, and connections arrive as a list of names. Logins are never copied. With skill sync set up, instructions also follow Grok's every 15 minutes by themselves, unless you switch that off. When it is unsure which to keep, you are asked. |
 | Skills | With skill sync, which is optional: a sync bot in your own Grok account carries them. Without it you copy them yourself. |
 | Conversations | Off until you switch full transcripts on for a twin. Then conversations from a Grok export can become Hermes chats of the twin; full transcripts are set up in the terminal. |
-| Grok memory | Does not copy: memory is the most private thing a bot holds, so none is taken unless you switch on memory facts, which need skill sync. |
+| Grok memory | Does not copy: memory is the most private thing a bot holds, so none is taken. |
 | Grok model setting | Does not copy: nothing Hermes reads from Grok names the bot's model, so the twin uses the model you choose in Hermes. |
 | **From Hermes back to Grok** | |
 | Name, description and instructions | Off for every twin until you allow it. Then, with skill sync set up, you see a preview of each change and apply it. A bot in your own Grok account makes it there, and you can undo it. Otherwise you make the same change in Grok yourself. |
