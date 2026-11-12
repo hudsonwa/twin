@@ -496,6 +496,9 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
     def status(self, fresh: bool = False, allow_engine: bool = True) -> dict:
         """A pure read of files and botport: it writes nothing and publishes one finished snapshot."""
         store.not_inside("TwinService._lock")  # THE LOCK ORDER (store.py): _lock first, never inside locked()
+        snap = self._status  # a fresh snapshot needs no lock; one rebuild must not hold up every reader
+        if not fresh and snap and time.monotonic() - snap[0] < STATUS_TTL:
+            return snap[1]
         with self._lock:
             if not fresh and self._status and time.monotonic() - self._status[0] < STATUS_TTL:
                 return self._status[1]
