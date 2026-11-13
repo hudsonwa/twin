@@ -64,11 +64,11 @@ Add `--json` to `--check` or `--plan` for a machine-readable answer.
      on the computer, so setup cannot copy them.
    - Choosing a model for a twin that has none. A new twin takes the model of your owner's other Hermes
      chats; only when there is none does the Twins page ask them to choose one.
-   For several new twins, you may help with both once your owner said yes to it: `hermes twin finish --all
-   --model MODEL` gives them one model and prints the request your owner pastes into each bot's chat in Grok;
-   when the answer files are in their Downloads folder, `hermes twin import-exports ~/Downloads --show` shows
-   what would be imported, and after their yes the same line with `--yes` imports it. Never paste into Grok
-   yourself.
+   For several new twins, give your owner two commands to run in their own terminal; do not run them
+   yourself, because they print bot names and instructions: `hermes twin finish --all --model MODEL` gives
+   the twins one model and prints the request your owner pastes into each bot's chat in Grok; when the answer
+   files are in their Downloads folder, `hermes twin import-exports ~/Downloads --show` shows what would be
+   imported, and after reading it the same line with `--yes` imports it. Never paste into Grok yourself.
    - Signing in to anything.
 
 ### A second computer
@@ -96,8 +96,9 @@ with Hermes and this plugin; no Grok app and no botport needed there), run
   instructions or its routines. The only guided steps in Grok are the ones the Twins page shows your owner
   (pasting instructions, the Skill sync… sheet), and your owner does them.
 - **Do not list your owner's bots.** `hermes twin setup` counts twins and never prints a name you did not
-  type, so nothing private reaches your chat. `hermes twin`, `hermes twin list-grok` and `hermes twin fleet`
-  do print names: run them only when your owner asks you to.
+  type, so nothing private reaches your chat. `hermes twin`, `hermes twin list-grok`, `hermes twin fleet`,
+  `hermes twin finish` and `hermes twin import-exports DIR` do print names (the last two also instructions):
+  run them only when your owner asks you to.
 - **Do not edit Hermes' files by hand.** Not `config.yaml`, not a bot's `SOUL.md`, nothing under
   `plugin-data/grok-bot-twin/`. Every change has a command.
 - **Do not go around a refusal.** If a step fails, report its exact words and stop. Do not retry with other
