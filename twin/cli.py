@@ -87,7 +87,6 @@ Advanced
   digest [TWIN]          the optional activity digest to Grok: preview, --on, --off
   transcripts ACTION [TWIN]  whole conversations kept here, encrypted, searchable by the twin (off by
                          default). ACTION: on, off, add-grok, refresh, search, export, to-hermes, forget
-  briefs [TWIN]          session briefs to and from Grok, off until you choose: --way to-grok|from-grok|both|off
   to-grok [TWIN]         changes made in Hermes, made in Grok by your Mirror bot: preview, then
                          allow ITEMS, apply ID, undo ID, resolve ITEM hermes|grok, runner ROUTINE grok|hermes
   verify                 check botport against GitHub's signed build record
@@ -1614,7 +1613,7 @@ def cmd_syncs(a) -> int:
     elif len(words) == 2:
         raise EngineError("usage", f"\"{safe.clean_name(words[0], 60)} {safe.clean_name(words[1], 60)}\" is not an "
                                    "item and a direction.",
-                          "Items: name, description, instructions, skills, routines, briefs, conversations. "
+                          "Items: name, description, instructions, skills, routines, conversations. "
                           "Directions: from-grok, to-grok, both, off")
     elif words:
         twin = words[0]
@@ -1626,7 +1625,7 @@ def cmd_syncs(a) -> int:
         if not key or not way:
             raise EngineError("usage", f"\"{safe.clean_name(item if not key else direction, 60)}\" is not "
                                        + ("an item." if not key else "a direction."),
-                              "Items: name, description, instructions, skills, routines, briefs, "
+                              "Items: name, description, instructions, skills, routines, "
                               "conversations. Directions: from-grok, to-grok, both, off")
         if tasks.asked_turn():  # (the chat turn of a request from another computer never changes a twin's setup)
             raise EngineError("refused", "A request from another computer cannot change what syncs.",
@@ -1650,88 +1649,6 @@ def cmd_syncs(a) -> int:
     if twin_view["mirror"] != "ready" and any(it["state"] == "needs_mirror" for it in twin_view["items"]):
         _out(view["mirror"]["sentence"] + " Set it up with `hermes twin skill-sync`, or Skill sync… in the twin's "
              "Details on the Twins page.")
-
-
-_BRIEF_WORDS = {"from-grok": "grok_to_hermes", "to-grok": "hermes_to_grok", "both": "both", "off": "off",
-                "grok_to_hermes": "grok_to_hermes", "hermes_to_grok": "hermes_to_grok"}
-_BRIEF_SAID = {"grok_to_hermes": "Grok → Hermes", "hermes_to_grok": "Hermes → Grok", "both": "both ways", "off": "off"}
-
-
-def _brief_round(r: dict) -> list:
-    """One round's counts as plain sentences."""
-    if r.get("failed"):
-        return ["That round did not finish. It is tried again on the next check."]
-    out = []
-
-    def were(n: int) -> str:
-        return "was" if n == 1 else "were"
-
-    if r["made"]:
-        out.append(f"Made {plural(r['made'], 'brief')} of finished Hermes chats.")
-    if r["sent"]:
-        out.append(f"Handed {plural(r['sent'], 'brief')} to the Grok bot.")
-    if r["waiting"]:
-        out.append(f"{plural(r['waiting'], 'brief')} {'waits' if r['waiting'] == 1 else 'wait'} on this computer "
-                   "until the Mirror can carry them.")
-    if r["received"]:
-        out.append(f"Took in {plural(r['received'], 'brief')} from the Grok bot.")
-    if r["refused"]:
-        out.append(f"{plural(r['refused'], 'file')} from the Grok bot {were(r['refused'])} not a brief and "
-                   f"{were(r['refused'])} left alone.")
-    if r["left_out"]:
-        out.append(f"{plural(r['left_out'], 'line')} {were(r['left_out'])} left out for privacy.")
-    return out or ["Nothing new to brief."]
-
-
-def cmd_briefs(a) -> int:
-    """Session briefs: show, choose a direction, run one round now, show the latest from Grok, or forget."""
-    from . import tasks
-    svc = _svc()
-    pid = _one(svc, a.pair)
-    if tasks.asked_turn():  # neither read nor changed from a request from another computer
-        # (the chat turn of a request from another computer never changes a twin's setup)
-        raise EngineError("refused", "A request from another computer cannot read or change session briefs.",
-                          "Change it yourself, on the Twins page or in your own terminal.")
-    if a.forget and not a.yes:
-        t = svc.briefs_info(pid)["twins"][0]
-        n = t["count"]["out"] + t["count"]["in"]
-        if n:
-            _out(f"This deletes the {plural(n, 'brief')} kept for {t['name']} and turns their briefs off. "
-                 "It cannot be undone. Run again with --yes.")
-            return 1
-    if a.way:
-        svc.briefs_set(pid, _BRIEF_WORDS[a.way])
-    if a.now:
-        res = svc.briefs_now(pid)
-        if not res["results"]:
-            _out("Briefs are off for this twin, so nothing was made.")
-        for r in res["results"]:
-            _out(" ".join(_brief_round(r)))
-    if a.forget:
-        out = svc.briefs_forget(pid)["forgot"]
-        _out(f"Deleted {plural(out['deleted'], 'brief')} kept for this twin. Its briefs are off.")
-        if out.get("said"):
-            _out(out["said"])
-    info = svc.briefs_info(pid)
-    if a.json:
-        _out(json.dumps(info, indent=1, ensure_ascii=False))
-        return 0
-    t = info["twins"][0]
-    wait = " (waiting for the Mirror to carry them)" if t["transport"] != "ok" and t["direction"] != "off" else ""
-    _out(f"Session briefs for {t['name']}: {_BRIEF_SAID[t['direction']]}{wait}")
-    _out(f"  kept here: {t['count']['out']} made for Grok, {t['count']['in']} from Grok")
-    if t["direction"] == "off":
-        _out("  " + info["sentence"])
-        if t.get("can_turn_on", True):
-            _out("  Turn on: hermes twin briefs TWIN --way to-grok | from-grok | both")
-        else:
-            _out("  Briefs can be turned on once the Mirror is set up.")
-    if a.show:
-        from . import briefs as _briefs
-        for b in _briefs.stored(pid, "in")[:3]:
-            _out("")
-            _out(_briefs.render(b).rstrip())
-    return 0
 
 
 def cmd_doctor(a) -> int:
@@ -1788,7 +1705,6 @@ HANDLERS: dict[str, Callable[[Any], int]] = {
     "restore": cmd_restore, "recent": cmd_recent, "compare": cmd_parity, "copies": cmd_copies, "checklist": cmd_checklist,
     "switch": cmd_switch, "send-to-grok": cmd_send, "doctor": cmd_doctor, "demo": cmd_demo,
     "approve": cmd_approve, "skill-sync": cmd_mirror, "remove": cmd_remove, "stop": cmd_remove, "digest": cmd_digest,
-    "briefs": cmd_briefs,
     "setup": cmd_setup, "verify": cmd_attest, "uninstall": cmd_uninstall, "skip": cmd_skip, "import": cmd_import,
     "finish": cmd_finish, "import-exports": cmd_import_exports, "syncs": cmd_syncs,
     "background": lambda a: bgagent.handle_cli(a, _out),
@@ -1957,7 +1873,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     p = subs.add_parser("syncs", help="What syncs with Grok and which way: syncs [TWIN] [ITEM DIRECTION]")
     p.add_argument("words", nargs="*", metavar="[TWIN] [ITEM DIRECTION]",
                    help="The twin's name in quotes (not needed with one twin); to change a row, its item (name, "
-                        "description, instructions, skills, routines, briefs, conversations) and a direction "
+                        "description, instructions, skills, routines, conversations) and a direction "
                         "(from-grok, to-grok, both, off)")
     p.add_argument("--json", action="store_true", help="The panel as JSON")
     p = subs.add_parser("digest", help="Activity digest to Grok: preview, or turn it on/off for one twin")
@@ -1966,14 +1882,6 @@ def setup(parser: argparse.ArgumentParser) -> None:
     g.add_argument("--on", action="store_true")
     g.add_argument("--off", action="store_true")
     p.add_argument("--titles", action="store_true", help="Also send short titles (separate opt-in)")
-    p = subs.add_parser("briefs", help="Session briefs to and from Grok (off until you turn them on)")
-    _twin_arg(p)
-    p.add_argument("--way", choices=["from-grok", "to-grok", "both", "off"], help="Which way briefs go")
-    p.add_argument("--now", action="store_true", help="Make and take briefs now")
-    p.add_argument("--show", action="store_true", help="Show the latest briefs from Grok")
-    p.add_argument("--forget", action="store_true", help="Delete every brief kept for this twin")
-    p.add_argument("--yes", "-y", action="store_true", help="Do not ask before --forget deletes")
-    p.add_argument("--json", action="store_true")
     subs.add_parser("doctor", help="Check the setup and say what to fix")
     _fleet_cli.setup(subs)
     _tasks_cli.setup(subs)

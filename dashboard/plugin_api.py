@@ -934,45 +934,6 @@ async def sync_panel_set(body: Any = Body(None)) -> Any:
     return await _call(_sync_panel().choose, svc, b["twin"], b["item"], b["direction"])
 
 
-# ---- session briefs (twin/briefs.py) ---------------------------------------------------------------
-_BRIEF_WAYS = ("grok_to_hermes", "hermes_to_grok", "both", "off")
-
-
-@router.get("/briefs")
-async def briefs_get() -> Any:
-    """Every twin's session-brief direction, counts and the latest briefs from Grok (already filtered)."""
-    svc = await asyncio.to_thread(_svc)
-    return await _call(svc.briefs_info)
-
-
-@router.post("/briefs")
-async def briefs_set(body: Any = Body(None)) -> Any:
-    """{"twin": id, "direction": grok_to_hermes | hermes_to_grok | both | off}; off by default for every twin."""
-    b = _body(body)
-    twin = _twin_word(b)
-    if b.get("direction") not in _BRIEF_WAYS:
-        raise HTTPException(status_code=400, detail={"code": "bad_input", "message": "That request was not understood."})
-    svc = await asyncio.to_thread(_svc)
-    return await _call(svc.briefs_set, twin, b["direction"])
-
-
-@router.post("/briefs/now")
-async def briefs_now(body: Any = Body(None)) -> Any:
-    """{"twin"?: id}: one round now (counts only, never a brief's text)."""
-    b = _body(body)
-    twin = _twin_word(b) if b.get("twin") is not None else None
-    svc = await asyncio.to_thread(_svc)
-    return await _call(svc.briefs_now, twin)
-
-
-@router.post("/briefs/forget")
-async def briefs_forget(body: Any = Body(None)) -> Any:
-    """{"twin": id}: delete every brief kept for this twin; its briefs go off."""
-    twin = _twin_word(_body(body))
-    svc = await asyncio.to_thread(_svc)
-    return await _call(svc.briefs_forget, twin)
-
-
 # ---- Hermes -> Grok through the Mirror bot (twin/h2g.py, twin/h2g_service.py) ----------------------------------------
 _H2G_ITEMS = ("name", "description", "instructions", "routines")
 _H2G_CHANGE_RE = re.compile(r"^c-[0-9a-f]{16}$")

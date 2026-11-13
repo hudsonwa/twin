@@ -1,8 +1,8 @@
-"""The shared core of the memory layers (twin/mem_layers.py): briefs and transcripts.
+"""The shared core of the memory layers (twin/mem_layers.py): transcripts, the one layer left.
 
 Switches (off by default, the "What syncs" panel's choice wins when the build has it), the 0.2 sealed box with one
 key per layer between the owner's computers (attack tests: tamper, replay into another layer, wrong link, reading
-the bytes). No Grok transport here: briefs own the one transport hook. Invented data only.
+the bytes). No Grok transport here. Invented data only.
 """
 from __future__ import annotations
 
@@ -33,34 +33,32 @@ def test_every_layer_starts_off(home):
     for layer in ml.LAYERS:
         assert ml.direction(P, layer) == "off"
         assert not ml.allowed(P, layer, "to_hermes") and not ml.allowed(P, layer, "to_grok")
-    ml.set_direction(P, "briefs", "grok_to_hermes")
-    assert ml.allowed(P, "briefs", "to_hermes") and not ml.allowed(P, "briefs", "to_grok")
-    assert ml.direction(P, "transcripts") == "off" and ml.direction("test-quill", "briefs") == "off"
-    ml.set_direction(P, "briefs", "off")
+    ml.set_direction(P, "transcripts", "grok_to_hermes")
+    assert ml.allowed(P, "transcripts", "to_hermes") and not ml.allowed(P, "transcripts", "to_grok")
+    assert ml.direction("test-quill", "transcripts") == "off"
+    ml.set_direction(P, "transcripts", "off")
     assert not ml.any_on()
 
 
 def test_panel_choice_wins_when_present(home, monkeypatch):
     calls = []
     fake = types.SimpleNamespace(
-        wanted=lambda pid, key: {"session_briefs": "both"}.get(key) if pid == "test-scout" else None,
+        wanted=lambda pid, key: {"transcripts": "grok_to_hermes"}.get(key) if pid == "test-scout" else None,
         mark_synced=lambda pid, key, way: calls.append((pid, key, way)))
     monkeypatch.setattr(ml, "_panel", lambda: fake)
-    ml.set_direction(P, "transcripts", "both")  # the fallback store is not believed while the panel is there
-    assert ml.direction(P, "briefs") == "both"
-    assert ml.direction(P, "transcripts") == "off"
-    assert ml.direction("test-quill", "briefs") == "off"
-    ml.mark_synced(P, "briefs", "grok_to_hermes")
-    assert (P, "session_briefs", "grok_to_hermes") in calls
+    ml.set_direction("test-quill", "transcripts", "both")  # the fallback store is not believed while the panel is there
+    assert ml.direction(P, "transcripts") == "grok_to_hermes"
+    assert ml.direction("test-quill", "transcripts") == "off"
+    ml.mark_synced(P, "transcripts", "grok_to_hermes")
+    assert (P, "transcripts", "grok_to_hermes") in calls
 
 
 def test_ARCH_1_no_grok_transport_in_the_memory_layers(home):
     """The pretend Grok bot and its factory fed only briefs' adapter and transcripts' to-Grok direction, and were
-    never plugged in outside the tests: gone, with their folder. Briefs keep their one hook (briefs.set_transport)."""
-    from hermes_plugins.grok_bot_twin.twin import briefs, store
+    never plugged in outside the tests: gone, with their folder."""
+    from hermes_plugins.grok_bot_twin.twin import store
     for name in ("GrokTransport", "StubTransport", "set_transport_factory", "mirror_ready", "transport", "STUB_DIR"):
         assert not hasattr(ml, name), name
-    assert callable(briefs.set_transport) and not hasattr(briefs, "LayersTransport")
     assert not (store.central_dir() / "mem-grok-stub").exists()
 
 
@@ -68,7 +66,7 @@ def test_ARCH_1_memory_facts_are_gone(home, capsys):
     """Memory facts with Grok could never run (no Grok transport outside the tests): the layer, its row and its
     command are removed. "facts" is not a layer any more and `hermes twin facts` is not a command."""
     from hermes_plugins.grok_bot_twin.twin import cli, sync_panel
-    assert ml.LAYERS == ("briefs", "transcripts") and "facts" not in ml.PANEL_KEYS and "facts" not in ml.SENTENCES
+    assert ml.LAYERS == ("transcripts",) and "facts" not in ml.PANEL_KEYS and "facts" not in ml.SENTENCES
     assert ml.direction(P, "facts") == "off"
     with pytest.raises(ml.LayerError):
         ml.set_direction(P, "facts", "both")
@@ -85,8 +83,8 @@ NOTE = {"facts": ["Prefers short answers.", "Owner keeps a garden."], "secret_ma
 
 
 def test_box_round_trip_and_unreadable_bytes():
-    box = ml.seal(LINK, "briefs", "ask", MID, "bind-1", NOTE)
-    assert ml.unseal(LINK, "briefs", "ask", MID, "bind-1", box) == NOTE
+    box = ml.seal(LINK, "transcripts", "ask", MID, "bind-1", NOTE)
+    assert ml.unseal(LINK, "transcripts", "ask", MID, "bind-1", box) == NOTE
     raw = base64.b64decode(box["box"])
     assert b"ZEBRA" not in raw and b"garden" not in raw and b"ZEBRA" not in json.dumps(box).encode()
     assert len(raw) % 1024 == 0
@@ -96,8 +94,10 @@ def test_box_round_trip_and_unreadable_bytes():
 def test_box_refuses_anything_not_made_for_this_use(change):
     box = ml.seal(LINK, "transcripts", "ask", MID, "bind-1", NOTE)
     args = dict(link=LINK, layer="transcripts", way="ask", machine=MID, bind="bind-1")
-    if change == "layer":
-        args["layer"] = "briefs"
+    if change == "layer":  # (briefs was a layer until 0.3.5: a name that is no layer opens nothing)
+        with pytest.raises(ValueError):
+            ml.unseal(LINK, "briefs", "ask", MID, "bind-1", box)
+        return
     elif change == "way":
         args["way"] = "answer"
     elif change == "machine":
@@ -120,8 +120,8 @@ def test_box_refuses_anything_not_made_for_this_use(change):
 def test_layer_keys_differ_and_differ_from_02_memory():
     from hermes_plugins.grok_bot_twin.twin import xs_memory
     keys = {ml.layer_key(LINK, layer) for layer in ml.LAYERS}
-    assert len(keys) == 2
-    box = ml.seal(LINK, "briefs", "ask", MID, "b", NOTE)
+    assert len(keys) == len(ml.LAYERS) == 1 and LINK not in keys
+    box = ml.seal(LINK, "transcripts", "ask", MID, "b", NOTE)
     assert xs_memory.unseal(LINK, "ask", MID, "b", box) is None  # a layer box is not a 0.2 memory box
     with pytest.raises(ValueError):
         ml.layer_key(LINK, "everything")

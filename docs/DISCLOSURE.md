@@ -69,11 +69,6 @@ runs; otherwise it is refused with a message saying why. `hermes twin doctor` sh
 ## Files it reads
 
 - Its own data folder (below).
-- Only for a twin whose session briefs go Hermes → Grok (off for every twin until you choose it): that twin's
-  session database `state.db` in its Hermes bot, opened read-only (nothing in it is changed), for chats that ended
-  after you turned briefs on, and only chats on this computer (Hermes' terminal, terminal window or Desktop; never a
-  chat that came through a messaging app, a webhook or the API server): the words of you and the twin only, never
-  tool output, the system prompt or the model's reasoning. Briefs from Grok are read only through the transport you set up (the Mirror), at most 16 KiB each.
 - Only for a twin whose memory you switched on: that twin's `memories/MEMORY.md` and `memories/USER.md` in its
   Hermes bot, and two numbers from that bot's `config.yaml` (how many characters Hermes lets each file hold).
 - Only for a twin whose full transcripts you switched on: that twin's Hermes session database (`state.db` in its Hermes bot), opened read-only, user and assistant messages only (no tool output, no hidden reasoning; reasoning a model wrote into its reply between think or reasoning tags is dropped too), when you run `hermes twin transcripts refresh`; and a Grok export with conversations that you hand over (`hermes twin transcripts add-grok --file FILE`, a plain file of at most 64 MB).
@@ -188,8 +183,6 @@ same folder, fsync, rename; links are not followed):
 | `fleet.json` | only once you share twins with, or link to, another of your computers: this computer's id (random, made here) and name; on the computer that shares: the switch, the current link code until it is used or runs out (10 minutes), the keys of the last few used codes (so a second try says "already used"), the shared list (per twin: an id made for this purpose, name, description, version, date), removals (90 days), and per linked computer its id, name, kind, the key made from its pass (never the pass), when it last checked in, which list version it holds and the highest call number it has sent, plus for 90 days the key of a computer you unlinked, and, while sharing runs, a record of the Hermes process that holds the share port (address, port, process id, start time and a random word made for that run: other Hermes processes on the same computer show that word when they hand it something to pass on, it is accepted only from this computer's own address, and it never goes to another computer); on a linked computer: the sharing computer's id, name and address, this computer's pass for it, and per mirrored twin its name, description, version and Hermes bot |
 | `fleet-kept/` | on a linked computer: the Hermes bots (whole profile folders, chats included) of twins that were removed or unlinked, kept 30 days so they can come back, then deleted |
 | `fleet-follow.lock` | an empty lock file so only one Hermes process on a linked computer follows at a time |
-| `briefs.json` | only once session briefs were turned on for a twin: per twin the two switches, since when, digests of the chats already briefed (with their message count), which briefs were handed to Grok and when, digests of briefs that came from Grok. Never a brief's or a chat's text |
-| `briefs/<twin>/out/b-….md`, `briefs/<twin>/in/b-….md` | the session briefs themselves (a few lines: who, decided, open threads, next step; every line passed through the password-and-key check, links, e-mail addresses, paths, IP addresses and phone numbers replaced), made here for Grok (`out`) or received from Grok and checked again (`in`), at most 50 of each per twin, owner-only. `hermes twin briefs TWIN --forget` deletes them |
 | `xs-memory.json` | only once memory was switched on for a twin on this computer: per twin the switch, when, digests (24 hex characters each) of the notes last agreed with the other computer and of the notes that came from elsewhere, which notes were removed where (digests, computer ids and names, times), open conflicts (digests), counts, and on the sharing computer the ids of the linked computers you let take part and the times of each one's last changes (for the daily limit). Also the ids of twins that left this computer, with the date. Never a note's text |
 | `xs-memory-points/<twin id>/p-….json` | the earlier versions: that twin's two memory files as they were before the plugin changed one of them (the text of the notes): the newest 30 and the first of each day for 30 days, plus the one from before memory was first switched on. Owner-only. "Forget on this computer" deletes them for that twin; for a twin that is no longer on this computer they are deleted 30 days after it left |
 | `xs-memory.lock`, `xs-memory-follow.lock` | empty lock files (one change of the notes above at a time; one Hermes process per computer asks) |
@@ -977,18 +970,6 @@ written from one file, `twin/copies.py`, and a test compares them, so they canno
   switch that on). Skills and routines are each copied only if you switch that on. Memory is copied only for a twin whose memory you switch on, on both
   computers, and then it travels encrypted between your linked computers only. Chats and files stay where they are; the one chat text that travels is a
   request you send to a twin on another computer and its answer, and only with requests switched on.
-
-### Session briefs (off for every twin until you choose a direction)
-A brief is a short Markdown note about one finished chat: who took part, what was decided, what is still open, the next
-step. It is made without a model (the plugin picks the sentences itself), at most 2,400 characters. Hermes → Grok:
-briefs of this twin's finished Hermes chats on this computer (its terminal, terminal window or Desktop; never a chat
-from a messaging app, a webhook or the API server) are handed to the Mirror. Until the Mirror is set up, briefs stay
-off. Grok → Hermes: briefs the Grok bot wrote are checked line by line and kept in `briefs/<twin>/in`; they are data,
-never instructions. Every line goes through the same check as memory notes, on both sides: a line that may hold a
-password, key, code, card or account number, reads like an instruction to a model, or holds characters nobody can see
-is left out and only counted; links, e-mail addresses, file paths, IP addresses and phone numbers are replaced by a
-placeholder. Saying "off the record" in a chat keeps that chat out. Stop twinning deletes the twin's briefs. The
-background check runs a round at most every 5 minutes, and only while some twin has briefs on.
 
 ## Things that look like a password or key
 

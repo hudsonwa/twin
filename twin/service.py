@@ -31,7 +31,6 @@ from .routines import RoutinesMixin
 from .instr_sync import InstrSyncMixin
 from .h2g_service import H2GMixin
 from .tasks_api import TasksMixin
-from .briefs import BriefsMixin
 from .engine import (INSTALL_HINT, TRUST_HINT, UNATTESTED_TEXT, BotportEngine, Engine, EngineError, _home_label,
                      find_botport, find_gh, tool_problem_text, valid_tag)
 from .model import (DIRECTIONS, KEEP_SIDES, MIRROR_NOTE, SAMPLE_PROFILE, STATE_LABELS, clean_waiting,
@@ -202,7 +201,7 @@ def select_engine(pair_id: Optional[str], demo: DemoEngine, botport: Optional[Bo
 
 
 class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, FleetMixin, TasksMixin, SkillSyncMixin,
-                  RoutinesMixin, InstrSyncMixin, BriefsMixin, H2GMixin):
+                  RoutinesMixin, InstrSyncMixin, H2GMixin):
     def __init__(self) -> None:
         self.ctx: Any = None
         self.demo = DemoEngine()
@@ -921,7 +920,6 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             step(self.fleet_tick)  # sharing / following; each real twin's Hermes bot keeps its note and plugin
         if real:  # parts that only act on real twins (each at its own few-minute pace)
             step(self.note_grok_app)
-            step(self.briefs_tick)
             step(self.instructions_sync_tick)
         if os.path.lexists(self.central / h2g.STATE_FILE):  # Hermes -> Grok was used here
             step(self.to_grok_tick)
@@ -1983,11 +1981,6 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                     _sync_panel.forget_twin(pid)
                 except Exception:
                     log.warning("grok-bot-twin: could not drop a removed twin's sync choices", exc_info=True)
-                try:  # and so do its session briefs (each file by its exact name) and their bookkeeping
-                    from . import briefs as _briefs
-                    _briefs.forget(pid)
-                except Exception:
-                    log.warning("grok-bot-twin: could not delete a removed twin's session briefs", exc_info=True)
                 try:  # and its full transcripts (the archive's rows, exports and import files of this twin)
                     from . import transcripts as _transcripts
                     _transcripts.forget(pid)

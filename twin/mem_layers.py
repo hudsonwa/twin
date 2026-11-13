@@ -1,8 +1,6 @@
 """Memory layers between a Grok bot and its Hermes twin: what they share, which way, and how it is kept private.
 
-Two layers, each switched per twin and OFF until the owner switches it on:
-- "briefs" (`mem_briefs.py`): each conversation compacted into a short Markdown brief (who, what was decided, open
-  threads), passed both ways so "carry on over there" works without the whole conversation.
+One layer, switched per twin and OFF until the owner switches it on:
 - "transcripts" (`mem_archive.py`): whole conversations kept in a local SQLite archive with full-text search and a
   JSON export that Hermes can import as its own sessions. They are never sent to Grok.
 
@@ -11,12 +9,11 @@ Directions: "off", "grok_to_hermes", "hermes_to_grok", "both". Everything here s
 Privacy filter (`held`, `mask`): the 0.2 memory check (`xs_memory.why_held`): a note that looks like it holds a
 password, key, code or card number, reads like an instruction to the model, looks like one of this plugin's own
 notes, holds characters nobody can see, or is too long to check, never crosses: it stays on the side it was written
-on and is counted, never quoted. Briefs and transcripts are filtered line by line.
+on and is counted, never quoted. Transcripts are filtered line by line.
 
 Between the owner's computers: the sealed box of the 0.2 memory sync (`xs_memory.seal` / `unseal`: SHAKE-256 keyed
 stream + HMAC-SHA256, encrypt then authenticate) with a key of its own per layer, made from the link's key.
 
-The Grok side is not this module's business: briefs have their own transport hook (`briefs.set_transport`).
 Nothing in this module talks to Grok or to the network.
 
 Standard library only.
@@ -36,14 +33,12 @@ from . import store, xs_memory
 from .engine import EngineError
 from .model import now_iso
 
-LAYERS = ("briefs", "transcripts")
+LAYERS = ("transcripts",)
 DIRECTIONS = ("off", "grok_to_hermes", "hermes_to_grok", "both")
 SETTINGS_FILE = "mem-layers.json"
 PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}\Z")
 
 SENTENCES = {
-    "briefs": "Briefs: each conversation summed up in a few lines (who, what was decided, what is still open), so "
-              "you can carry on on the other side. Not the whole conversation.",
     "transcripts": "Transcripts: whole conversations kept on this computer in a searchable archive you can export "
                    "or open in Hermes. Never sent to Grok.",
 }
@@ -86,7 +81,7 @@ def _load() -> dict:
 
 
 def settings(profile: str) -> dict:
-    """{"briefs": direction, "transcripts": ..., "changed": iso or None}. Unknown twin: all off."""
+    """{"transcripts": direction, "changed": iso or None}. Unknown twin: all off."""
     check_profile(profile)
     rec = _load()["twins"].get(profile)
     return dict(rec) if rec else {**{layer: "off" for layer in LAYERS}, "changed": None}
@@ -95,7 +90,7 @@ def settings(profile: str) -> dict:
 def set_direction(profile: str, layer: str, direction: str) -> dict:
     check_profile(profile)
     if layer not in LAYERS:
-        raise _bad("bad_layer", "That is not a memory layer.", "Use briefs or transcripts.")
+        raise _bad("bad_layer", "That is not a memory layer.", "Use transcripts.")
     if direction not in DIRECTIONS:
         raise _bad("bad_direction", "That is not a direction.", "Use off, grok_to_hermes, hermes_to_grok or both.")
     with _guard:
@@ -109,7 +104,7 @@ def set_direction(profile: str, layer: str, direction: str) -> dict:
     return settings(profile)
 
 
-PANEL_KEYS = {"briefs": "session_briefs", "transcripts": "transcripts"}
+PANEL_KEYS = {"transcripts": "transcripts"}
 
 
 def _panel() -> Any:

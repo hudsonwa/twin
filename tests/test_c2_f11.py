@@ -12,8 +12,7 @@ from twin_testlib import central, config, home, plugin, service, svc, timer  # n
 from hermes_plugins.grok_bot_twin.twin import fleet, h2g, routines
 from hermes_plugins.grok_bot_twin.twin.engine import EngineError
 
-STEPS = ("fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "to_grok_tick", "check_changed",
-         "sync")
+STEPS = ("fleet_tick", "note_grok_app", "instructions_sync_tick", "to_grok_tick", "check_changed", "sync")
 
 
 def _ours() -> set:
@@ -85,20 +84,18 @@ def test_F11_one_failing_step_never_skips_the_others(home, monkeypatch):  # noqa
     (central(home) / h2g.STATE_FILE).write_text("{}", encoding="utf-8")
     calls: list = []
     boom = RuntimeError("boom")
-    fail = {n: RuntimeError(n) for n in ("note_grok_app", "briefs_tick", "instructions_sync_tick",
-                                         "to_grok_tick")}
+    fail = {n: RuntimeError(n) for n in ("note_grok_app", "instructions_sync_tick", "to_grok_tick")}
     _spy(monkeypatch, s, calls, fail={"fleet_tick": boom, **fail})
     with pytest.raises(RuntimeError) as exc:
         s.tick()
     assert exc.value is boom  # the first failure, raised after every step ran
-    assert calls == ["fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "to_grok_tick",
-                     "check_changed"]
+    assert calls == ["fleet_tick", "note_grok_app", "instructions_sync_tick", "to_grok_tick", "check_changed"]
     # the engine failing in the check: every other step still ran this round
     calls.clear()
     _spy(monkeypatch, s, calls, fail={"check_changed": EngineError("engine_failed", "x")})
     with pytest.raises(EngineError):
         s.tick()
-    assert calls[:5] == ["fleet_tick", "note_grok_app", "briefs_tick", "instructions_sync_tick", "to_grok_tick"]
+    assert calls[:4] == ["fleet_tick", "note_grok_app", "instructions_sync_tick", "to_grok_tick"]
     # one pair's sync failing: the next pair is still synced
     calls.clear()
     _spy(monkeypatch, s, calls, changed=["test-scout", "test-quill"], fail={"sync": EngineError("engine_failed", "x")})

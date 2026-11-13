@@ -166,7 +166,7 @@ def _save_settings(st: dict) -> None:
 
 def imported_sessions() -> set:
     """The Hermes session ids this archive made from Grok conversations (import_to_hermes), every twin's: chats that
-    are Grok's words, not the owner's in Hermes (session briefs pass them over). Reads only; makes nothing. An error
+    are Grok's words, not the owner's in Hermes. Reads only; makes nothing. An error
     is raised, never taken for "none imported" (that would let a Grok chat pass for the owner's own)."""
     return {sid for rec in _settings()["twins"].values() for sid in rec["imported"].values()}
 

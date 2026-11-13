@@ -96,7 +96,7 @@ def test_F3_dry_run_changes_nothing_and_says_so(allowed):
 
 def test_F3_no_twin_keyed_file_keeps_a_removed_twin(allowed):
     svc, _ = allowed  # (allowing also set its What syncs rows)
-    mem_layers.set_direction(PID, "briefs", "both")
+    mem_layers.set_direction(PID, "transcripts", "both")
     root = svc.central
     seen = set(_leftovers(root, PID))
     assert {"pairs.json", h2g.STATE_FILE, "sync-panel.json", mem_layers.SETTINGS_FILE} <= seen  # the scan sees it

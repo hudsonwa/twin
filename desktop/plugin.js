@@ -2566,7 +2566,7 @@ function SameOrNot({ pair, open, onShow, onFinish, more = [], initialOpen = fals
   )
 }
 
-// ── What syncs: one twin's seven things, and which way each goes ────────────
+// ── What syncs: one twin's six things, and which way each goes ────────────
 //
 // The owner's choice, per twin and per thing: from Grok to Hermes, back, both ways, or off. The backend owns
 // whether a way can work yet and when something last moved; the page shows what it last said (never ahead of
@@ -2576,14 +2576,13 @@ function SameOrNot({ pair, open, onShow, onFinish, more = [], initialOpen = fals
 
 const SYNC_PANEL_KEY = [ID, 'sync-panel']
 const SYNC_SCHEMA = 'grok-bot-twin.syncpanel.v1'
-// the seven things, always in this order, with the page's own label for each
+// the six things, always in this order, with the page's own label for each
 const SYNC_ITEMS = [
   ['name', 'Name'],
   ['description', 'Description'],
   ['instructions', 'Instructions'],
   ['skills', 'Skills'],
   ['routines', 'Routines'],
-  ['session_briefs', 'Session briefs'],
   ['transcripts', 'Conversations (full)']
 ]
 const SYNC_WAYS = { grok_to_hermes: 'Grok → Hermes', hermes_to_grok: 'Hermes → Grok', both: 'Both ways', off: 'Off' }
@@ -2593,7 +2592,7 @@ const SYNC_ROW_STATES = ['ok', 'needs_mirror', 'not_yet', 'error']
 const SYNC_MIRROR_STATES = ['ready', 'not_set_up', 'no_permission', 'unknown']
 const SYNC_NEEDS_MIRROR = 'Needs the Mirror'
 const SYNC_NOT_YET = 'Not in this version yet'
-const SYNC_PRIVATE = 'Session briefs and conversations start off for every twin, and only you switch them on.'
+const SYNC_PRIVATE = 'Conversations start off for every twin, and only you switch them on.'
 const syncGroupLabel = (label, twin) => `${label} for ${twin}: which way it syncs`
 
 // GET (or POST) /sync/panel, tidied once: every text clean and capped, every key, way and state one of the
