@@ -14,10 +14,12 @@ password-like lines left out, markers and over-long text refused) and compared w
 - `base`: the instructions both sides last agreed on (what was last taken from Grok, or found the same on both);
 - `own`:  what the twin holds now (the plugin's block in the twin's SOUL.md).
 
-    Grok == Hermes                       in step (base moves to it)
+    Grok == Hermes                       in step (base moves to Hermes' text); a change in whitespace only (line
+                                         ends, trailing spaces, blank lines) counts as the same
     only Grok changed (own == base)      applied: the twin gets Grok's text; the version before is kept under
                                          Earlier versions ("Before Grok's instructions arrived"), at most
-                                         AUTO_MAX times a day per twin (after that: a card, as below)
+                                         AUTO_MAX times a day per twin (after that: a card, as below), and
+                                         never a text much shorter than Hermes' (it may be cut short: a card)
     only Hermes changed (Grok == base)   hermes_ahead: nothing here changes (Hermes -> Grok is another switch)
     both changed, and differently        conflict: nothing changes; a card shows both and the lines that differ,
                                          and the owner picks Grok's, keeps Hermes', or saves a text of their own
@@ -59,7 +61,7 @@ SETTINGS_FILE = "instructions-sync-settings.json"
 EVERY_S = 15 * 60               # seconds between two background re-reads
 STATES = ("off", "waiting", "in_step", "applied", "hermes_ahead", "conflict", "held")
 # why a card asks instead of applying: Grok and Hermes both changed, a first read, or one of ASKS
-ASKS = ("downloads", "name_only", "many_bots", "file_name", "limit")
+ASKS = ("downloads", "name_only", "many_bots", "file_name", "limit", "shorter")
 AUTO_MAX = 4                    # changes applied by themselves per twin in AUTO_WINDOW_S; more become a card
 AUTO_WINDOW_S = 24 * 3600
 FILE_PREFIX, FILE_SUFFIX = "grok-bot-export-", ".json"
@@ -88,6 +90,8 @@ WHY = {
                   "and choose which to keep.",
     "limit": f"Grok's instructions already changed {AUTO_MAX} times today, so Hermes does not take this change by "
              "itself. Read it and choose which to keep.",
+    "shorter": "Grok's setup export is much shorter than the twin's instructions in Hermes, so it may be cut short; "
+               "Hermes does not take it by itself. Read it and choose which to keep.",
 }
 NO_SOURCE = ("Nowhere to read setup exports from: set up skill sync, or let the plugin look in Downloads too.")
 NO_CONFLICT = "There is nothing to choose: Grok's and Hermes' instructions are not in conflict now."
@@ -106,12 +110,18 @@ def _digest(text: str) -> str:
     return hs.text_digest(_norm(text))
 
 
+def _loose(text: Any) -> str:
+    """The text with what a fresh transcription drifts in left out: CRLF, trailing spaces, extra blank lines."""
+    lines = [ln.rstrip() for ln in (text if isinstance(text, str) else "").replace("\r\n", "\n").split("\n")]
+    return "\n".join(ln for i, ln in enumerate(lines) if ln or (i and lines[i - 1])).strip("\n")
+
+
 def decide(grok: str, own: str, base: Optional[str], other_instructions: bool = False) -> str:
     """What one re-read does: in_step | apply | hermes_ahead | conflict. `base`: the digest of the last agreed text
     (None: never agreed). `other_instructions`: the twin has instructions outside the plugin's block."""
     g, o = _digest(grok), _digest(own)
-    if g == o and _norm(own):
-        return "in_step"
+    if _loose(grok) == _loose(own) and _norm(own):
+        return "in_step"  # (a change in whitespace only is no change)
     if base is None:
         return "apply" if not _norm(own) and not other_instructions else "conflict"
     if g == base:
@@ -512,12 +522,14 @@ class InstrSyncMixin:
             and e["conflict"].get("reason") == "limit"
         if what == "apply" and not ask and (len(recent) >= AUTO_MAX or held_back):
             ask = "limit"  # (until the owner answers that card, every later change from Grok asks too)
+        if what == "apply" and not ask and _norm(own) and len(_loose(grok)) < 0.9 * len(_loose(own)):
+            ask = "shorter"  # (a fresh transcription may be cut short)
         if ask:
             if what != "apply" and what != "conflict":
                 return self._isync_view(pid, e)  # (nothing to choose, and nothing here moves what was agreed)
             what = "conflict"
         if what == "in_step":
-            e = self._isync_update(pid, state="in_step", base=g, base_at=now_iso(), conflict=None, why=None,
+            e = self._isync_update(pid, state="in_step", base=_digest(own), base_at=now_iso(), conflict=None, why=None,
                                    left_out=None, **common)
         elif what == "hermes_ahead":
             e = self._isync_update(pid, state="hermes_ahead", conflict=None, why=None, **common)

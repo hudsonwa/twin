@@ -381,6 +381,51 @@ def test_at_most_four_changes_a_day_are_taken_by_themselves(box, world, home, mo
     assert world.instructions_sync_now()["results"][0]["state"] == "applied" and own(home) == texts[6]
 
 
+def test_sync_3_a_whitespace_only_drift_is_in_step_and_a_later_real_change_is_applied(box, world, home, monkeypatch):
+    clock = [START]
+    monkeypatch.setattr(I, "_clock", lambda: clock[0])
+    text = V1 + "\n\nAlways end with a widget fact."
+    box.grok(text)
+    world.instructions_sync_now()
+    before, kept = soul(home), hs.kept_list(central(home), ACME)
+    auto_at = list(world._isync_load()["twins"][ACME]["auto_at"])
+    drift = "\n" + text.replace("helper.\n", "helper.   \r\n").replace("brief.\n\n", "brief.  \r\n\n \n") + "\n\n"
+    assert I.decide(drift, text, hs.text_digest(text)) == "in_step"
+    box.grok(drift)
+    clock[0] += 60
+    assert world.instructions_sync_now()["results"][0]["state"] == "in_step"
+    assert soul(home) == before and hs.kept_list(central(home), ACME) == kept
+    assert world._isync_load()["twins"][ACME]["auto_at"] == auto_at
+    box.grok(drift + "A real new line.")
+    assert world.instructions_sync_now()["results"][0]["state"] == "applied"
+    assert own(home).endswith("A real new line.")
+
+
+def test_sync_3_a_much_shorter_export_asks_and_choosing_grok_still_writes_it(box, world, home):
+    long = V2 + "\n" + "\n".join(f"Invented rule number {n}: be kind to widgets." for n in range(10))
+    box.grok(long)
+    world.instructions_sync_now()
+    before = soul(home)
+    cut = long[:int(len(long) * 0.8)]
+    box.grok(cut)
+    r = world.instructions_sync_now()["results"][0]
+    assert r["state"] == "conflict" and r["conflict"]["reason"] == "shorter" and r["why"] == I.WHY["shorter"]
+    assert soul(home) == before
+    got = world.instructions_conflict_resolve(ACME, "grok", None, r["conflict"]["grok_digest"])
+    assert got["state"] == "applied" and own(home) == cut
+
+
+def test_sync_3_a_real_change_a_little_shorter_is_applied(box, world, home):
+    long = V2 + "\n" + "\n".join(f"Invented rule number {n}: be kind to widgets." for n in range(10))
+    box.grok(long)
+    world.instructions_sync_now()
+    lines = long.split("\n")
+    changed = "\n".join(lines[:-1]) + "\nInvented rule 9: kind."
+    assert 0.9 * len(long) < len(changed) < len(long)
+    box.grok(changed)
+    assert world.instructions_sync_now()["results"][0]["state"] == "applied" and own(home) == changed
+
+
 def test_changes_from_grok_never_push_the_owners_own_version_out(box, world, home, monkeypatch):
     monkeypatch.setattr(hs, "KEPT_MAX", 3)
     monkeypatch.setattr(I, "AUTO_MAX", 100)
