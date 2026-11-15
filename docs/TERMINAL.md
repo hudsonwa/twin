@@ -118,6 +118,9 @@ hermes twin
 
 `hermes twin --help` lists them in five groups:
 
+Removed in 0.3.6: `facts`, `briefs` and `transcripts to-grok-on|to-grok-off` (they never synced anything; see
+CHANGELOG.md).
+
 - **Everyday**: `status` (also plain `hermes twin`), `add`, `finish`, `import-exports`, `stop` (also `remove`).
 - **Your other computers**: `share on|off|code`, `link CODE`, `unlink`, `fleet` (also `fleet remove NAME`,
   `fleet name NAME`, `fleet once`, `fleet run`, `fleet settings`, `fleet skills`, `fleet memory`), `routines`

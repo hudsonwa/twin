@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.6 (15 November 2026)
+
+Smaller again: two features that could never run are gone, and a few fixes from the review.
+
+- A routine runs in one place: Hermes to Grok's runner and routines between computers now check each other first.
+- `status()` answers from a fresh snapshot instead of waiting for a rebuild.
+- Grok's export is not applied by itself when it only differs in whitespace or is much shorter than before.
+- A coding agent no longer prints the owner's bot names or instructions into its chat.
+- Stopping a twin deletes the files the removed session briefs and memory facts kept for it (its briefs, their
+  bookkeeping, the memory-facts ledger, restore points and Grok stand-in). MEMORY.md and USER.md stay.
+
+### Removed (no replacement)
+Memory facts with Grok and session briefs needed a Grok side that does not exist, so they never synced anything.
+These are gone; scripts that call them get an "unknown command" error or a 404:
+- `hermes twin facts` and `hermes twin briefs`;
+- the dashboard routes `GET/POST /briefs`, `POST /briefs/now` and `POST /briefs/forget`;
+- `hermes twin transcripts to-grok-on` and `to-grok-off` (the archive stays on this computer; a saved "send to
+  Grok" choice from 0.3.5 now reads as off).
+
 ## 0.3.5 (12 November 2026)
 
 The fixes from the cycle-3 review: a possible hang, two ways a choice or a routine could slip through, and a much

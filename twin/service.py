@@ -2000,6 +2000,11 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                             _ml.set_direction(prof, layer, "off")
                     except Exception:
                         log.warning("grok-bot-twin: could not switch off a removed twin's memory layers", exc_info=True)
+                try:  # files left by the removed session briefs / memory facts of 0.3.5 and older
+                    forget_old_layer_files(pid, prof)
+                except Exception:
+                    log.warning("grok-bot-twin: could not delete a removed twin's old briefs / memory-facts files",
+                                exc_info=True)
             self._checked.pop(pid, None)
             self.invalidate()
             watch.poke()  # with the last real twin gone, nothing is watched any more
@@ -2429,3 +2434,49 @@ def reset_service() -> None:
     global _service
     with _service_lock:
         _service = None
+
+
+_BRIEF_NAME = re.compile(r"^b-[0-9a-f]{16}\.md\Z")
+
+
+def forget_old_layer_files(pid: str, profile: Optional[str]) -> int:
+    """Stopping a twin deletes what the session briefs and memory facts of 0.3.5 and older kept for it: its briefs
+    (each file by its exact name), its briefs bookkeeping and, with its Hermes profile, its memory-facts ledger,
+    restore points and Grok stand-in. MEMORY.md / USER.md stay. Returns how many files or folders went."""
+    root = store.central_dir()
+    n = 0
+    with store.locked():
+        for way in ("out", "in"):
+            folder = store.safe_child(root, "briefs", pid, way)
+            try:
+                names = [e.name for e in os.scandir(folder) if _BRIEF_NAME.match(e.name) and e.is_file(follow_symlinks=False)]
+            except OSError:
+                names = []
+            for name in names:
+                with contextlib.suppress(OSError):
+                    os.unlink(folder / name)
+                    n += 1
+            with contextlib.suppress(OSError):
+                folder.rmdir()
+        with contextlib.suppress(OSError):
+            store.safe_child(root, "briefs", pid).rmdir()
+        state_path = root / "briefs.json"
+        state = store.read_json(state_path, None)
+        if isinstance(state, dict) and isinstance(state.get("twins"), dict) and pid in state["twins"]:
+            state["twins"].pop(pid)
+            store.atomic_write_json(state_path, state)
+            n += 1
+        if profile:
+            from . import mem_layers as _ml
+            profile = _ml.check_profile(profile)
+            for d in ("mem-facts-points", "mem-grok-stub"):
+                target = store.safe_child(root, d, profile)
+                if target.exists():
+                    store.remove_tree(root / d, target)
+                    n += 1
+            for name in (f"{profile}.json", f"{profile}.lock"):
+                f = store.safe_child(root, "mem-facts", name)
+                if f.is_file() and not f.is_symlink():
+                    f.unlink()
+                    n += 1
+    return n
