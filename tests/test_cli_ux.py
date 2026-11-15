@@ -194,13 +194,15 @@ def test_add_wording_with_the_sample(svc, monkeypatch):
 
 
 # ---- leaving: stop twinning, end the sample, start it again ---------------------------------------------------
-def test_remove_the_only_twin_needs_no_id_and_the_sample_can_start_again(svc):
+def test_remove_needs_the_twin_named_and_the_sample_can_start_again(svc):
     run(["demo"])
-    rc, out, err = run(["remove"])  # not a terminal and no --yes: asks, changes nothing
+    rc, out, err = run(["remove", "--yes"])  # the twin is never guessed
+    assert rc == 2 and "Say which twin" in err and svc.pair_ids() == ["acme-support"]
+    rc, out, err = run(["remove", "Acme Support"])  # not a terminal and no --yes: asks, changes nothing
     assert rc == 1 and "End the sample? Nothing of yours changes." in out and "Nothing changed." in out
     assert svc.pair_ids() == ["acme-support"]
-    rc, out, _ = run(["remove", "--yes"])
-    assert rc == 0 and out.splitlines()[-1] == "Sample removed. Nothing of yours was changed."
+    rc, out, _ = run(["remove", "Acme Support", "--yes"])
+    assert rc == 0 and out.splitlines()[-2:] == ["Sample removed. Nothing of yours was changed.", 'PASS: stop "Acme Support"']
     assert "profile" not in out and "state:" not in out
     assert svc.pair_ids() == []
     # removing the last sample twin ended the sample: no dead end, it starts again
@@ -216,7 +218,7 @@ def test_remove_the_only_twin_needs_no_id_and_the_sample_can_start_again(svc):
 
 
 def test_remove_a_real_twin_says_what_stays_and_what_goes(bp_svc):
-    rc, out, _ = run(["remove", "--dry-run"])
+    rc, out, _ = run(["remove", "Acme Support", "--dry-run"])
     assert rc == 0
     assert out.splitlines()[0] == "Stop twinning Acme Support?"
     for line in ("Your bot in Grok, unchanged.", "Its Hermes bot and all its chats.", "Following Grok.",
@@ -226,10 +228,10 @@ def test_remove_a_real_twin_says_what_stays_and_what_goes(bp_svc):
     assert "key file" not in out and "pass" not in out.split("Files:")[0]  # the small internal file is not a line
     assert out.index("Stays:") < out.index("Removed:") < out.index("Files:")
     assert "Removed 2 item(s)" not in out and "The profile was kept" not in out
-    rc, out, _ = run(["remove"])  # no --yes, not a terminal
+    rc, out, _ = run(["remove", "Acme Support"])  # no --yes, not a terminal
     assert rc == 1 and "Nothing changed." in out
-    rc, out, _ = run(["remove", "--yes"])
-    assert rc == 0 and out.splitlines()[-1] == "Acme Support is no longer twinned. Its Hermes bot is still here."
+    rc, out, _ = run(["remove", "Acme Support", "--yes"])
+    assert rc == 0 and out.splitlines()[-3] == "Acme Support is no longer twinned. Its Hermes bot is still here."
 
 
 def test_uninstall_dry_run_then_for_real(svc, home):

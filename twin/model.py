@@ -166,6 +166,12 @@ def view(p: dict) -> dict:
 
     if p.get("state") == "error":
         return said(STATE_LABELS["error"], "bad", "you")
+    if p.get("driver") == "bot":
+        bs = p.get("last_call") if isinstance(p.get("last_call"), dict) else {}
+        at = (bs.get("at") or "")[:16].replace("T", " ")
+        last = f"last synced {at} UTC, {bs.get('result')}" if at and bs.get("result") else "not synced yet"
+        return said(f"Kept in step by the bot · {last}", "good" if bs.get("result") == "PASS" else "warn",
+                    None if bs.get("result") == "PASS" else "you")
     if p.get("state") == "grok_missing" or grok.get("present") is False:
         return said(STATE_LABELS["grok_missing"], "muted", "you")
     pending = p.get("pending") if isinstance(p.get("pending"), dict) else {}
@@ -445,6 +451,11 @@ def normalize_pair(raw: Any, demo: bool = False) -> Optional[dict]:
     sw = raw.get("switched")
     p["switched"] = ({"at": sw["at"][:40], "routines_on": _int(sw.get("routines_on"))}
                      if isinstance(sw, dict) and isinstance(sw.get("at"), str) and parse_iso(sw["at"]) else None)
+    bs = raw.get("last_call") if isinstance(raw.get("last_call"), dict) else {}
+    if raw.get("driver") == "bot":  # kept in step by the Grok bot itself (the one-prompt route), not by botport
+        p["driver"] = "bot"
+        p["last_call"] = {"at": _iso_or_none(bs.get("at")),
+                         "result": bs.get("result") if bs.get("result") in ("PASS", "FAIL") else None}
     p["skipped"] = []  # filled by the service (items the owner keeps in Hermes only)
     p["error"] = clean_error(raw.get("error"))
     # The state follows the counters (invariant: they never disagree). Only "error" (nothing could be read) and

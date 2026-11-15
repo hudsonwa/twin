@@ -2789,6 +2789,139 @@ function SyncsFold({ pair, onMirror, initialOpen = false, initialSaid = null }) 
   return el(Fold, { initialOpen, label: 'What syncs' }, jsx(SyncsPanel, { initialSaid, mirror: panel.mirror, onMirror, twin }))
 }
 
+// ── Git history: one twin's optional, readable history, off until the owner switches it on ─────────────
+//
+// The same switch as `hermes twin git on|off` (GET/POST /git/panel). The backend says whether git is installed,
+// whether a remote is set (its host only: the address itself, which may hold a token, never comes back) and what
+// the last commit and push did. Not on the sample, and nothing at all on a backend that does not answer in this shape.
+
+const GIT_PANEL_KEY = [ID, 'git-panel']
+const GIT_SCHEMA = 'grok-bot-twin.gitpanel.v1'
+
+function gitPanelOf(raw) {
+  if (!raw || typeof raw !== 'object' || raw.schema !== GIT_SCHEMA || !Array.isArray(raw.twins)) {
+    return null
+  }
+
+  const text = (v, max = 300) => clean(typeof v === 'string' ? v : '', max)
+
+  return {
+    git: raw.git === true,
+    install: text(raw.install, 400),
+    said: raw.said && typeof raw.said === 'object' ? text(raw.said.sentence, 300) : '',
+    twins: raw.twins
+      .filter(t => t && typeof t === 'object' && typeof t.id === 'string' && t.id !== '' && t.id.length <= 120 && t.id === clean(t.id, 120))
+      .slice(0, 100)
+      .map(t => ({
+        every: t.every === true,
+        id: t.id,
+        last: t.last && typeof t.last === 'object' ? { at: isoOf(t.last.at), commit: text(t.last.commit, 40), problem: text(t.last.problem, 200), pushed: typeof t.last.pushed === 'boolean' ? t.last.pushed : null } : null,
+        name: text(t.name, 60) || 'This twin',
+        on: t.on === true,
+        remoteHost: text(t.remote_host, 120),
+        remoteSet: t.remote_set === true
+      }))
+  }
+}
+
+// "Last commit 3 min ago (a1b2c3d), pushed" / "Nothing kept yet: the next sync writes the first commit."
+function gitLastText(last) {
+  if (!last || (!last.commit && !last.problem)) {
+    return 'Nothing kept yet: the next sync writes the first commit.'
+  }
+
+  const when = last.at ? ` ${ago(last.at)}` : ''
+
+  return last.commit ? `Last commit${when} (${last.commit})${last.pushed === true ? ', pushed' : last.pushed === false ? ', not pushed' : ''}.` : `Last try${when}: no commit.`
+}
+
+function GitPanel({ twin, git, install, initialSaid = null, initialRemote = '' }) {
+  const [busy, run] = useBusy()
+  const [said, setSaid] = useState(initialSaid) // { problem } | { said } | null
+  const [remote, setRemote] = useState(initialRemote)
+  const id = `gbt-git-${twin.id}`
+  const noGit = !git
+
+  // One act at a time; the switch shows what the backend last said, so a refusal leaves it where it was.
+  const act = (on, withRemote) =>
+    run(`git:${twin.id}`, async () => {
+      setSaid(null)
+
+      try {
+        const body = { on, twin: twin.id }
+
+        if (withRemote !== undefined) {
+          body.remote = withRemote
+        }
+
+        const res = await post('/git/panel', body)
+
+        if (gitPanelOf(res)) {
+          queryClient.setQueryData?.(GIT_PANEL_KEY, res)
+        } else {
+          void queryClient.invalidateQueries({ queryKey: GIT_PANEL_KEY })
+        }
+
+        if (withRemote !== undefined) {
+          setRemote('')
+        }
+
+        setSaid({ said: gitPanelOf(res)?.said ?? '' })
+      } catch (err) {
+        setSaid({ problem: asProblem(err) })
+      }
+    })
+
+  return el(
+    'div',
+    { className: BOX },
+    el(
+      'div',
+      { className: 'flex items-start gap-3' },
+      el(
+        'div',
+        { className: 'flex min-w-0 flex-1 flex-col gap-0.5' },
+        el('label', { className: HEADING, htmlFor: id }, 'Git history'),
+        el('p', { className: SMALL, id: `${id}-says` }, 'Keeps a readable history of this twin\'s instructions, skills, memory and routines, one commit per sync. Off until you switch it on.'),
+        twin.every && el('p', { className: SMALL }, 'It is on for every twin; switching it off here turns it off for this one.')
+      ),
+      jsx(SwitchTarget, { children: jsx(Switch, { 'aria-describedby': `${id}-says`, 'aria-label': `Keep a git history of ${twin.name}`, checked: twin.on, disabled: Boolean(busy) || (noGit && !twin.on), id, onCheckedChange: v => act(v === true) }), htmlFor: id })
+    ),
+    noGit && el('p', { className: NOTE, role: 'status' }, install || 'git is not installed on this computer. Install it (macOS: xcode-select --install; Debian or Ubuntu: sudo apt install git; Windows: git-scm.com/download/win), then switch this on.'),
+    twin.on &&
+      el(
+        'form',
+        {
+          className: 'flex flex-col gap-1',
+          onSubmit: e => {
+            e.preventDefault?.()
+            void act(true, remote.trim())
+          }
+        },
+        el('label', { className: SMALL, htmlFor: `${id}-remote` }, twin.remoteSet ? `Pushes to ${twin.remoteHost || 'a remote'} after each commit. Type a new address to change it, or leave it empty and press Save to stop pushing.` : 'Remote address (optional): push each commit to your own Forgejo or other git server.'),
+        el(
+          'div',
+          { className: 'flex flex-wrap items-center gap-2' },
+          el('input', { autoComplete: 'off', className: 'min-h-7 min-w-0 flex-1 rounded-md border border-(--ui-stroke-secondary) bg-transparent px-2 text-[0.8125rem]', disabled: Boolean(busy), id: `${id}-remote`, onChange: e => setRemote(e.target.value), placeholder: 'https://forgejo.example/me/bot.git', spellCheck: false, type: 'text', value: remote }),
+          el(Button, { disabled: Boolean(busy) || (remote.trim() === '' && !twin.remoteSet), type: 'submit', variant: 'secondary' }, 'Save')
+        )
+      ),
+    twin.on && el('p', { className: SMALL }, gitLastText(twin.last)),
+    twin.on && twin.last?.problem && el('p', { className: SMALL, role: 'status' }, twin.last.problem),
+    said?.problem && jsx(InlineProblem, { error: said.problem }),
+    said?.said && el('p', { className: cn(BODY, 'text-(--ui-text-primary)'), role: 'status' }, said.said)
+  )
+}
+
+function GitFold({ pair, initialSaid = null, initialRemote = '' }) {
+  const sample = isSample(pair)
+  const q = useQuery({ enabled: !sample, queryFn: () => api('/git/panel'), queryKey: GIT_PANEL_KEY, refetchInterval: 15_000, retry: 1 })
+  const panel = sample ? null : gitPanelOf(q.data)
+  const twin = panel?.twins.find(t => t.id === pair?.pair_id)
+
+  return twin ? jsx(GitPanel, { git: panel.git, initialRemote, initialSaid, install: panel.install, twin }) : null
+}
+
 // ── Hermes → Grok: the owner's own changes, sent to Grok when asked ─────────
 // Off for every twin until the owner allows it, item by item. Nothing goes without the owner seeing the preview
 // first and pressing the button bound to that very preview (its change_id); every change can be put back while
@@ -3403,6 +3536,8 @@ function CopiesPanel({ pair, open, intervalS, fastCheck, onSkillSync, onToGrok, 
     el(Fold, { initialOpen: initialTable, label: 'The whole table' }, jsx(WholeTable, {})),
     // (which way each of this twin's things goes, the owner's choice: folded too, and only on a backend that knows it)
     jsx(SyncsFold, { initialOpen: initialSyncs, onMirror: onSkillSync, pair }),
+    // (the optional git history of this twin: a switch, an optional remote, what the last commit did)
+    jsx(GitFold, { pair }),
     // (the owner's own changes back to Grok: off until allowed, and always after a preview)
     onToGrok &&
       !isSample(pair) &&

@@ -121,14 +121,14 @@ hermes twin
 Removed in 0.3.6: `facts`, `briefs` and `transcripts to-grok-on|to-grok-off` (they never synced anything; see
 CHANGELOG.md).
 
-- **Everyday**: `status` (also plain `hermes twin`), `add`, `finish`, `import-exports`, `stop` (also `remove`).
+- **Everyday**: `status` (also plain `hermes twin`), `add`, `quick`, `finish`, `import-exports`, `stop` (also `remove`).
 - **Your other computers**: `share on|off|code`, `link CODE`, `unlink`, `fleet` (also `fleet remove NAME`,
   `fleet name NAME`, `fleet once`, `fleet run`, `fleet settings`, `fleet skills`, `fleet memory`), `routines`
   (`on|off`, `move ROUTINE COMPUTER`, `run-here on|off`, `restore`), `background on|off`; each takes `--json`.
 - **Ask another computer**: `ask COMPUTER "TEXT"`, `requests` (the log), `requests on|off`,
   `requests approve|deny ID`, `requests mode [here|safe]`.
 - **Fix things**: `conflicts`, `resolve`, `versions`, `restore`, `doctor`, `setup`.
-- **Advanced**: `check`, `list-grok`, `recent`, `compare`, `copies`, `checklist`, `syncs`, `import`, `switch`, `approve`,
+- **Advanced**: `check`, `list-grok`, `recent`, `compare`, `test`, `copies`, `checklist`, `syncs`, `import`, `switch`, `approve`,
   `skip`, `send-to-grok`, `skill-sync`, `digest`, `verify`, `demo`, `uninstall`.
 
 Also: `check` (sync) and `move` (switch). The older names still work: `restore-points` (versions), `parity`
@@ -152,6 +152,26 @@ with something left) one model, the model your other Hermes chats use unless you
 request to paste into each bot's chat in Grok. `hermes twin import-exports DIR` matches every setup export
 file in DIR to its twin by the bot's name (or id) and imports them all after one question (`--yes` skips it,
 `--show` prints the text first, `--twin NAME` limits it); it refuses in a request's chat turn too.
+`hermes twin quick "Acme Support" --model MODEL --yes` does one twin start to finish: `add`, the request to paste
+into the bot's chat in Grok, a wait for the answer file in Downloads (files saved up to an hour before count;
+`--wait MIN`, 15 by default, at most 120), `import-exports`, `finish`, `compare`, then one summary line per step
+and PASS or FAIL (exit status 0 or 1). It only calls those commands, so each asks as it always does unless
+`--yes` (`--show` prints the text before the import). Run it again when the wait ran out: a twin that exists and
+instructions that are in are skipped. It refuses in a request's chat turn. With `--from-file FILE` or `--stdin`
+the bot's setup export (a `grok-bot-export` JSON document) is handed over directly, so there is no paste step
+and no wait: with `--yes` an agent, or the Grok bot itself through its shell, runs it in one command. The import
+is the same as `hermes twin import` (instructions, routines switched off, connector names; memories, facts about
+you and skills are counted and left out). The last line is always `PASS: ...` or `FAIL: ...`.
+`hermes twin quick --all --model MODEL --yes` runs `quick` for every Grok bot in turn and ends with one verdict
+(`PASS: quick setup of 2 of 2 bots`). `hermes twin link-computer` (`--wait MIN`) turns sharing on, prints a link code
+and the line for the other computer, and waits (at most 10 minutes, the code's life) until a computer used it, then
+PASS or FAIL; Hermes serves the link from that command while it waits. `hermes twin stop "Acme Support"` needs the
+twin named, keeps its full transcripts and What syncs choices unless `--remove-data`, and ends with PASS or FAIL.
+`hermes twin test "Acme Support" --from-export FILE` (or `--battery FILE`) runs botport's behaviour test on the twin's
+Hermes bot: botport asks it each case (`hermes -p PROFILE chat`) and checks the answer, so every run costs what
+those chats cost. `--from-export FILE` makes the cases from a setup export once and keeps them; `--battery FILE`
+uses your own. It prints passed of total and one line per case, exits 1 when a case fails, and the twin's line
+in `hermes twin status` then shows "test 5/6 ✗" with when it ran.
 
 Slash command: `/twin [status | check [TWIN] | conflicts [TWIN] | recent [TWIN] | ask COMPUTER: TEXT | requests | demo ...]`.
 Anything but status and recent works only in a chat that Hermes names as one of its own local surfaces (its

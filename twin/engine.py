@@ -59,6 +59,7 @@ from .model import SCHEMA
 TIMEOUT_S = 20.0
 CHECK_TIMEOUT_S = 5.0
 LONG_TIMEOUT_S = 60.0
+TEST_TIMEOUT_S = 900.0  # `botport test` asks the twin's Hermes bot every case of its battery
 ATTEST_TIMEOUT_S = 90.0
 QUICK_ATTEST_TIMEOUT_S = 6.0  # the page's plain "verify": an answer in seconds, whatever GitHub's tool does
 # the page's plain "verify" when this plugin version has no table for the release: one sentence, one next act, and
@@ -78,6 +79,16 @@ VALUE_CAP = 1024
 # --source-ref refs/tags/<tag>`; the owner may override it with the botport_release_tag setting or --tag.
 EXPECTED_BOTPORT_TAG = "v0.2.1"
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+
+
+def command_words(args: list) -> str:
+    """The botport command a message names ("sync", "twin create"): its words up to the first option, never a path."""
+    words = []
+    for a in args[:2]:
+        if str(a).startswith("-"):
+            break
+        words.append(str(a))
+    return safe.clean_name(" ".join(words), 40)
 ATTEST_REPO = "hudsonwa/botport"
 ATTEST_WORKFLOW = "hudsonwa/botport/.github/workflows/release.yml"
 RELEASES_URL = "https://github.com/hudsonwa/botport/releases"
@@ -539,6 +550,9 @@ class BotportEngine(Engine):
             if os.environ.get(k):
                 env[k] = os.environ[k]
         env["NO_COLOR"] = "1"
+        # the Hermes folder botport is told with --hermes-home: `botport test` starts `hermes chat` without passing
+        # it on, so a Hermes kept anywhere but ~/.hermes would answer from the wrong (or no) folder
+        env["HERMES_HOME"] = str(self.hermes_home)
         # botport keeps all twin state in --state-dir; pointing its XDG folders inside that folder too means no
         # code path can ever touch the owner's global botport config or state.
         xdg = self.state_dir / "xdg"
@@ -1076,6 +1090,71 @@ class BotportEngine(Engine):
 
     def parity(self, pair: str) -> dict:
         return self.run(["twin", "parity", _arg("pair", pair)])
+
+    # -- the behaviour test: `botport battery init` and `botport test` (not twin commands: no envelope, no
+    # --state-dir; they print their report as JSON, exit 0 on pass, 1 on a failed case, 2 on an error) -------------
+    def _exec_report(self, args: list[str], timeout: float) -> dict:
+        exe, _rec = self._verify()  # the same verified, digest-pinned copy every other command runs
+        from . import store
+        try:
+            store.ensure_dir(self.state_dir)
+            for sub in ("config", "state", "cache", "data"):
+                store.ensure_dir(self.state_dir / "xdg" / sub)
+        except OSError as exc:
+            raise EngineError("unsafe_folder", str(exc) or "botport's state folder is not safe")
+        argv = [exe, *args, "--json", _arg("hermes-home", str(self.hermes_home))]
+        rc, out, err, over = run_capped(argv, timeout, env=self._env())
+        what = command_words(args)
+        if over:
+            raise EngineError("output_too_large", "botport output exceeded 2 MB")
+        text = out.decode("utf-8", errors="replace").strip()
+        # exit 3 of sync/apply: conflicts left (main.rs), with the usual JSON report; the caller reports them
+        if rc not in ((0, 1, 3) if args[:1] in (["sync"], ["apply"]) else (0, 1)) or not text:
+            last = (err.decode("utf-8", errors="replace").strip().splitlines()[-1:] or [""])[0]
+            last = safe.clean_summary(self.tidy(last.removeprefix("botport: ERROR: ")), 200)
+            raise EngineError(f"exit_{rc}", f"botport {what} failed" + (f": {last}" if last else "."))
+        try:
+            data = json.loads(text)
+        except (ValueError, RecursionError):
+            raise EngineError("bad_output", f"botport {what} printed something that is not JSON")
+        if not isinstance(data, dict):
+            raise EngineError("bad_output", f"botport {what} returned a non-object")
+        data = _light(data)
+        data["_rc"] = rc
+        return data
+
+    def tidy(self, text: str) -> str:
+        """botport's message with this plugin's own folders said in words: a long path reads like a key to the
+        secret check, which would hide it (and the useful part of the message with it)."""
+        for path, words in ((self.hermes_home / "profiles", "Hermes bot"), (self.state_dir, "botport's folder"),
+                            (self.hermes_home, "the Hermes folder")):
+            text = text.replace(str(path) + os.sep, words + " ").replace(str(path), words)
+        return text
+
+    def battery_init(self, export_file: str, out: str) -> dict:
+        """`botport battery init EXPORT --out FILE`: the cases of a behaviour test, made from a setup export."""
+        return self._exec_report(["battery", "init", _arg("bundle", export_file), _arg("out", out)],
+                                 LONG_TIMEOUT_S)
+
+    def behaviour_test(self, profile: str, battery: str, hermes_bin: str, out_dir: str) -> dict:
+        """`botport test`: each case is asked of the twin's Hermes bot (`hermes chat`), and its answer checked.
+        -> {"pass": n, "total": n, "results": [{"id","family","pass","why"}], "file"}"""
+        return self._exec_report(["test", _arg("profile", profile), _arg("battery", battery),
+                                  _arg("hermes-bin", hermes_bin), _arg("out", out_dir)], TEST_TIMEOUT_S)
+
+    # -- one prompt from a Grok bot (twin/one_prompt.py): `botport sync` and `botport drift` with a grok-bot-export
+    # file as the bundle, into one named profile. --no-cron: routines go through the plugin's own paused import.
+    def bundle_sync(self, profile: str, export_file: str, spec: str) -> dict:
+        """`botport sync --bundle FILE --spec SPEC --profile P --direction=g2h`: apply only what changed (a second
+        call with the same export is a no-op, `in_sync: true`); botport keeps its own restore zip in the profile.
+        SPEC is the twin's one spec (sync_both.write_spec), the same every path uses."""
+        return self._exec_report(["sync", _arg("bundle", export_file), _arg("spec", spec), _arg("profile", profile),
+                                  "--direction=g2h", "--adopt", "--no-cron"], LONG_TIMEOUT_S)
+
+    def bundle_drift(self, profile: str, export_file: str, spec: str) -> dict:
+        """`botport drift` Grok -> Hermes: `_rc` 0 when the profile matches the export, 1 on any difference."""
+        return self._exec_report(["drift", _arg("bundle", export_file), _arg("spec", spec), _arg("profile", profile),
+                                  "--direction=g2h", "--no-cron"], LONG_TIMEOUT_S)
 
     def demo(self, step: Optional[str] = None) -> dict:
         """`botport twin demo [--step rename|secret|conflict|reset]` (invented bots, own folders only)."""

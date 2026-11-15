@@ -18,7 +18,7 @@ from twin import engine as E  # noqa: E402
 from twin.engine import BotportEngine, EngineError  # noqa: E402
 
 FAKE_SRC = (Path(__file__).resolve().parent / "fake_botport.py").read_text(encoding="utf-8")
-ALLOWED_ENV = {"PATH", "HOME", "LANG", "HERMES_GATEWAY_LOCK_DIR", "NO_COLOR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
+ALLOWED_ENV = {"PATH", "HOME", "LANG", "HERMES_GATEWAY_LOCK_DIR", "NO_COLOR", "HERMES_HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME",
                "__CF_USER_TEXT_ENCODING", "LC_CTYPE"}  # the last two may be added by the OS/interpreter itself
 
 
@@ -224,6 +224,7 @@ def test_env_scrubbed(rig):
     assert set(env) <= ALLOWED_ENV
     assert env["HERMES_GATEWAY_LOCK_DIR"] == os.environ["HERMES_GATEWAY_LOCK_DIR"]
     assert env["NO_COLOR"] == "1"
+    assert env["HERMES_HOME"] == str(rig.eng.hermes_home)  # `botport test` starts `hermes chat` with this
 
 
 # ---------------------------------------------------------------------------------------------- trust

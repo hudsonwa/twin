@@ -427,6 +427,15 @@ class SetupExportMixin:
         return (p.get("grok") or {}).get("name") or "", prof, self._profile_home(prof)
 
     def import_setup(self, pid: str, text: Any = None, apply: Any = False, bot: Any = None, skip: Any = None) -> dict:
+        """The twin's shared lock (botlock.py) around _import_setup when it writes."""
+        if apply is not True:
+            return self._import_setup(pid, text, apply, bot, skip)
+        from . import botlock
+        pid = self.require_pair(pid)
+        with botlock.for_pair(self, pid):
+            return self._import_setup(pid, text, apply, bot, skip)
+
+    def _import_setup(self, pid: str, text: Any = None, apply: Any = False, bot: Any = None, skip: Any = None) -> dict:
         """Read a setup export for one twin. `apply=False`: say what an import would do (nothing is written).
         `apply=True`: save the instructions, add the routines switched off, note the connector names. `bot`: the
         name of the bot in the file to take (the page sends back the one it showed). `skip`: parts to leave

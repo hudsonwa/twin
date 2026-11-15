@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from twin_testlib import plugin  # noqa: F401  (loads the plugin package the way Hermes does)
-from hermes_plugins.grok_bot_twin.twin import engine, pins, service
+from hermes_plugins.grok_bot_twin.twin import engine, pins, secret_ref, service
 
 
 # ---- the real Hermes folder is never a test's folder -----------------------------------------------------------------
@@ -102,6 +102,9 @@ def _no_extra_program_folders(monkeypatch, tmp_path):
     # the stand-in botport of these tests is in no table of digests, so every test starts without one; a test
     # about the table sets its own, or reads the one that ships with pins.set_table(None)
     pins.set_table({"releases": {}})
+    # no test reaches this computer's real Keychain / Secret Service / Credential Manager: by default there is no
+    # store at all (a test about the store puts a mocked one in, see test_secret_ref.py)
+    monkeypatch.setattr(secret_ref, "_override", [None])
     yield
     pins.set_table(None)
 

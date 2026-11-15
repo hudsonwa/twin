@@ -25,6 +25,8 @@ from .demo import DemoEngine, unique_profile
 from .finish import REPLACED_BY, FinishMixin
 from .setup_export import SetupExportMixin
 from .batch import BatchMixin
+from .behaviour import BehaviourTestMixin
+from .behaviour import summary as _test_summary
 from .fleet_api import FleetMixin
 from .skill_sync import SkillSyncMixin
 from .routines import RoutinesMixin
@@ -201,7 +203,7 @@ def select_engine(pair_id: Optional[str], demo: DemoEngine, botport: Optional[Bo
 
 
 class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, FleetMixin, TasksMixin, SkillSyncMixin,
-                  RoutinesMixin, InstrSyncMixin, H2GMixin):
+                  RoutinesMixin, InstrSyncMixin, H2GMixin, BehaviourTestMixin):
     def __init__(self) -> None:
         self.ctx: Any = None
         self.demo = DemoEngine()
@@ -381,6 +383,12 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         return {p["pair_id"]: p for p in pairs if isinstance(p, dict) and valid_id(p.get("pair_id"))} \
             if isinstance(pairs, list) else {}
 
+    def _save_registry_quiet(self, reg: dict) -> None:
+        """pairs.json alone: for the plugin's own bookkeeping on a twin (one_prompt's driver and last call), which
+        the owner's other computers need not hear of at once and which must not touch the twin's Hermes folder."""
+        with store.locked():
+            store.atomic_write_json(self.central / "pairs.json", {"pairs": list(reg.values())})
+
     def _save_registry(self, reg: dict) -> None:
         with store.locked():
             store.atomic_write_json(self.central / "pairs.json", {"pairs": list(reg.values())})
@@ -406,7 +414,9 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 jobs = old.get("job_ids")
             if isinstance(jobs, list):
                 entry["job_ids"] = [j for j in jobs if valid_id(j)][:200]
-            for key in ("switched", "instructions", "model"):
+            if old.get("driver") == "bot":
+                entry["driver"] = "bot"
+            for key in ("switched", "instructions", "model", "test", "last_call"):
                 if isinstance(old.get(key), dict):
                     entry[key] = old[key]
             if reg.get(p["pair_id"]) != entry:
@@ -535,7 +545,8 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                             p["waiting"] = self._waiting_for(p["pair_id"])
                     pairs.extend(got)  # (pairs.json is kept by the tick: save_status)
                     seen = {p["pair_id"] for p in got}
-                    pairs.extend(self._error_pair(reg[pid], "botport no longer knows this twin", "unknown_twin",
+                    pairs.extend(self._bot_pair(reg[pid]) if reg[pid].get("driver") == "bot" else
+                                 self._error_pair(reg[pid], "botport no longer knows this twin", "unknown_twin",
                                                   UNKNOWN_TWIN_HINT)
                                  for pid in real_ids if pid not in seen)
                 except EngineError as exc:
@@ -548,6 +559,8 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 if not p.get("demo"):
                     entry = reg.get(p["pair_id"]) or {}
                     p["switched"] = self._switched_view(entry, p["hermes"]["profile"])
+                    if _test_summary(entry.get("test")):
+                        p["test"] = _test_summary(entry.get("test"))  # (only once a behaviour test ran)
                     self._finish_real(p, entry)
                     self._apply_copied(p, copied.get(p["pair_id"]) or {})
                     self._apply_stuck(p, stuck.get(p["pair_id"]))
@@ -673,6 +686,13 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         if p and hint:
             p["error"]["hint"] = safe.clean_summary(hint, 300)
         return p
+
+    @staticmethod
+    def _bot_pair(entry: dict) -> dict:
+        """A twin the Grok bot keeps in step itself (driver "bot", one_prompt.make_bot_driven): botport no longer
+        pairs it, so its row comes from pairs.json: the last one-prompt call (when, PASS or FAIL)."""
+        bs = entry.get("last_call") if isinstance(entry.get("last_call"), dict) else {}
+        return normalize_pair({**entry, "state": "in_step", "last_sync_at": bs.get("at")}) or {}
 
     def cached_status(self, compute: bool = True) -> Optional[dict]:
         """Status without calling botport (for the per-turn hook): memory, then disk, then a demo-only build."""
@@ -1691,6 +1711,13 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             return None
 
     def switch(self, pid: str, job_ids: Any = None, undo: Any = False) -> dict:
+        """The twin's shared lock (botlock.py) around _switch."""
+        from . import botlock
+        pid = self.require_pair(pid)
+        with botlock.for_pair(self, pid):
+            return self._switch(pid, job_ids, undo)
+
+    def _switch(self, pid: str, job_ids: Any = None, undo: Any = False) -> dict:
         """"Move routines to Hermes": turn on the chosen routines of the twin (they arrived switched off). What was turned
         on is recorded, so `undo=True` can switch off exactly those routines again."""
         pid = self.require_pair(pid)
@@ -1927,7 +1954,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 raise BadInput("Choose a folder outside Hermes' own folders.")
         return str(real)
 
-    def remove(self, pid: str, dry_run: Any = False) -> dict:
+    def remove(self, pid: str, dry_run: Any = False, keep_data: bool = False) -> dict:
         """Stop twinning one bot. The bot in Grok and its Hermes bot stay (and so do routines already switched on
         there); the link and the earlier versions kept for undo go. The lists name only what exists now.
         Removing the last sample twin ends the sample completely."""
@@ -1949,7 +1976,8 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         # botport already let go of this twin (Hermes was stopped in the middle of Stop twinning, after botport's
         # half and before the plugin's own): it is not asked again, it would only answer that there is no such
         # twin. What is left is the plugin's half below, so the row's own advice, "Stop twinning it", works.
-        let_go = not sample and (st.get("error") or {}).get("code") == "unknown_twin"
+        let_go = not sample and ((st.get("error") or {}).get("code") == "unknown_twin"
+                                 or (self._registry().get(pid) or {}).get("driver") == "bot")  # (botport let it go)
         if eng is None or let_go:
             data: dict = {}
         else:
@@ -1975,7 +2003,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 from . import fleet as _fleet  # its Hermes bot stays, without the fleet note and the plugin in it
                 _fleet.untend_profile((st.get("hermes") or {}).get("profile"))
             self._drop_notes([pid])
-            if not sample:  # what the owner chose in its "What syncs" panel goes with it
+            if not sample and not keep_data:  # what the owner chose in its "What syncs" panel goes with it
                 try:
                     from . import sync_panel as _sync_panel
                     _sync_panel.forget_twin(pid)
@@ -1986,6 +2014,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                     _transcripts.forget(pid)
                 except Exception:
                     log.warning("grok-bot-twin: could not delete a removed twin's full transcripts", exc_info=True)
+            if not sample:
                 try:  # its Hermes -> Grok allow and record: the Mirror may no longer change its Grok bot
                     to_grok.forget(pid)
                 except Exception:

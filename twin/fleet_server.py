@@ -40,6 +40,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Iterator, Optional
 
 from . import config, fleet, fleet_items, fleet_net as net, routines, store, tasks_hub
+from . import secret_cli  # noqa: F401  (registers /v1/xs/secrets in fleet_items.routes)
 from . import xs_memory  # a twin's memory between the owner's computers: one sealed route of its own
 from . import xs_config
 from .model import now_iso, parse_iso

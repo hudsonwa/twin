@@ -1,6 +1,6 @@
 name: grok-bot-twin
 label: Grok Bot Twin
-version: "0.3.6"
+version: "0.4.0"
 description: >-
   Gives each bot from the Grok desktop app a twin in Hermes: a Hermes bot that follows its name and description.
   It runs botport (your own verified download), reads the Grok app's bot list, writes mainly in your Hermes
@@ -17,6 +17,7 @@ provides_tools:
   - twin_status
   - twin_recent
   - twin_transcripts_search
+  - twin_make
 provides_hooks:
   - pre_llm_call
   - on_session_start

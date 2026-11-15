@@ -42,12 +42,14 @@ exactly as it is. Everything here is also on the Twins page in Hermes Desktop.
 Everyday
   status                 your twins and what to do next (--json for scripts)
   add                    give a Grok bot a twin: add --bot "Acme Support" (or --all); asks first
+  quick NAME             one twin start to finish: add, import its setup export, set the model, compare (--all)
   finish [TWIN ...]      new twins: set their model and print what to ask each bot for (--all)
-  stop [TWIN]            stop twinning a bot; its Hermes bot and chats stay
+  stop TWIN              stop twinning a bot; its Hermes bot and chats stay
 
 Your other computers
   share on|off|code      share your twins with your other computers; shows the link code
   link CODE              on another computer: link it to the one that shares (paste the code)
+  link-computer          share, print a link code and wait until another computer has used it
   unlink                 stop following; this computer's twins leave it (kept 30 days)
   fleet                  which computers hold your twins, and how up to date each is
   routines [on|off]      copy each twin's routines to your other computers; each runs on one computer
@@ -74,9 +76,12 @@ Advanced
   list-grok              the bots in your Grok app
   recent [TWIN]          recent activity (when and what kind; never content)
   compare [TWIN]         compare with Grok, item by item
+  test [TWIN]            botport's behaviour test: asks the twin's model each case (--from-export FILE)
   copies                 what copies over and how: the whole table, as on the Twins page
   checklist [TWIN]       what you do yourself, and what moving routines to Hermes takes
   syncs [TWIN]           what syncs with Grok, which way, and when it last did (ITEM from-grok|to-grok|both|off)
+  git on|off|status [TWIN|--all]  optional git history of a twin (off by default; --remote URL to push)
+  secret list|set|forget|share|pull [NAME]  secrets kept by reference in this computer's OS store
   import [TWIN] FILE     import the setup export a Grok bot wrote about itself (--request prints what to ask it)
   import-exports DIR     import every setup export in a folder, each into its bot's twin (--show)
   switch [TWIN]          move routines to Hermes: turn the copied routines on (--undo pauses them again)
@@ -90,6 +95,9 @@ Advanced
   to-grok [TWIN]         changes made in Hermes, made in Grok by your Mirror bot: preview, then
                          allow ITEMS, apply ID, undo ID, resolve ITEM hermes|grok, runner ROUTINE grok|hermes
   verify                 check botport against GitHub's signed build record
+  from-grok --bot NAME   one prompt in Grok: twin, back up or move the bot (its state as JSON on stdin; the
+                         bot runs this on this computer; docs/ONE-PROMPT.md). back-to-grok: bring it back
+  mcp --bot NAME         the same two calls as a local MCP server (for a future local connector)
   demo [ACTION]          a sample twin with invented data (demo remove ends it)
   uninstall              remove Grok Bot Twin: every twin and its records; Hermes bots and chats stay
 
@@ -244,7 +252,7 @@ def _pair_line(p: dict) -> str:
     moved = (f" · runs in Hermes ({plural(int(sw.get('routines_on') or 0), 'routine')} on)"
              if sw and "in Hermes" not in label else "")
     return (f" {DOT.get(p.get('state'), '·')} {p['grok']['name']}{' (sample)' if _is_sample(p) else ''}: "
-            f"{label}{tail}{moved} · checked {ago(p.get('last_sync_at'))}")
+            f"{label}{tail}{moved} · checked {ago(p.get('last_sync_at'))}{_quick_cli.tested_words(p.get('test'))}")
 
 
 def _header(pairs: list) -> str:
@@ -873,7 +881,11 @@ def cmd_import(a) -> int:
     pair, path = (None, vals[0]) if len(vals) == 1 else (vals[0], vals[1])
     svc = _svc()
     pid = _one(svc, _twin(pair) if pair else None)
-    text = _read_export_file(path)
+    return import_text(svc, pid, _read_export_file(path), a)
+
+
+def import_text(svc, pid: str, text: str, a) -> int:
+    """The import of one setup export's text into one twin: the plan, the question (or --yes), the import."""
     twin = _call(_twin_names(svc), pid)
     plan = svc.import_setup(pid, text, False, a.bot)
     _show_setup_export(plan, twin)
@@ -1394,7 +1406,7 @@ def cmd_remove(a) -> int:
     if not a.yes and not _confirm(ask):
         _out("Nothing changed.")
         return 1
-    svc.remove(pid, False)
+    svc.remove(pid, False, keep_data=not getattr(a, "remove_data", True))
     if sample:
         _out("Sample removed. Nothing of yours was changed." if ends
              else f"The sample twin of {name} is removed. Nothing of yours was changed.")
@@ -1728,6 +1740,10 @@ from . import tasks_api as _tasks_cli  # noqa: E402  (ask, requests)
 
 HANDLERS.update(_tasks_cli.HANDLERS)
 
+from . import mcp_server as _mcp_server  # noqa: E402  (mcp)
+
+HANDLERS.update(_mcp_server.HANDLERS)
+
 from . import routines as _routines_cli  # noqa: E402  (routines)
 
 HANDLERS.update(_routines_cli.HANDLERS)
@@ -1739,6 +1755,23 @@ HANDLERS.update(_instr_cli.HANDLERS)
 from . import h2g_service as _h2g_cli  # noqa: E402  (to-grok)
 
 HANDLERS.update(_h2g_cli.HANDLERS)
+
+from . import quick_cli as _quick_cli  # noqa: E402  (quick, test)
+
+HANDLERS.update(_quick_cli.HANDLERS)
+
+from . import sync_both as _sync_cli  # noqa: E402  (sync NAME --from-file|--stdin; else check)
+
+HANDLERS.update(_sync_cli.HANDLERS)
+from . import bulk as _bulk  # noqa: E402  (link-computer; stop needs a name)
+
+HANDLERS.update(_bulk.HANDLERS)
+from . import git_mirror as _git_cli  # noqa: E402  (git on|off|status)
+
+HANDLERS.update(_git_cli.HANDLERS)
+from . import secret_cli as _secret_cli  # noqa: E402  (secret list|set|forget|share|pull)
+
+HANDLERS.update(_secret_cli.HANDLERS)
 
 
 def _tag(value: str) -> str:
@@ -1776,7 +1809,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     subs = parser.add_subparsers(dest="twin_command", metavar="COMMAND", help=argparse.SUPPRESS)
     p = subs.add_parser("status", help="Your twins and what to do next")
     p.add_argument("--json", action="store_true", help="Machine-readable output")
-    p = subs.add_parser("check", aliases=["sync"], help="Check Grok now")  # (`sync`: the older name still works)
+    p = subs.add_parser("check", help="Check Grok now")  # (`sync` with no state given: twin/sync_both.py)
     _twin_arg(p)
     p.add_argument("--pair", dest="pair_opt", type=_twin, help=argparse.SUPPRESS)  # the older spelling still works
     subs.add_parser("list-grok", help="The bots in your Grok app")
@@ -1865,6 +1898,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
                    help="Replace the twin's pass, the small file the sync bot needs (also: --rotate-key)")
     p = subs.add_parser("stop", aliases=["remove"], help="Stop twinning a bot (its Hermes bot and chats stay)")
     _twin_arg(p)
+    p.add_argument("--remove-data", action="store_true", help="Also delete its full transcripts and What syncs choices")
     p.add_argument("--dry-run", action="store_true", help="Only show what would happen")
     p.add_argument("--yes", "-y", action="store_true")
     p = subs.add_parser("uninstall", help="Remove Grok Bot Twin: every twin and its records")
@@ -1886,9 +1920,15 @@ def setup(parser: argparse.ArgumentParser) -> None:
     _fleet_cli.setup(subs)
     _tasks_cli.setup(subs)
     _transcripts_cli.setup(subs)
+    _mcp_server.setup(subs)
     _routines_cli.setup(subs)
     _instr_cli.setup(subs)
     _h2g_cli.setup(subs)
+    _quick_cli.setup(subs, _twin, _pid)
+    _sync_cli.setup(subs, _twin)
+    _bulk.setup(subs)
+    _git_cli.setup(subs, _twin)
+    _secret_cli.setup(subs)
     p = subs.add_parser("setup", help="Set up this computer or finish what is left (--check, --plan; safe to run again)")
     p.add_argument("--file", "--helper", dest="helper", metavar="FILE",
                    help="The downloaded botport file or archive; Hermes keeps its own copy of it (also: --helper)")
@@ -1965,7 +2005,7 @@ def _handle(args, sub) -> int:
             with _one_shot():
                 return cmd_status(argparse.Namespace(json=False)) or 0
         stays = (sub == "fleet" and getattr(args, "what", None) == "run") or \
-                (sub == "background" and getattr(args, "action", None) == "run")
+                (sub == "background" and getattr(args, "action", None) == "run") or sub == "mcp"
         if stays:  # the commands that keep running may serve the share port; every other one ends in a moment
             return HANDLERS[sub](args) or 0
         with _one_shot():

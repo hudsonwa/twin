@@ -304,3 +304,27 @@ def unlock_file(fd: int) -> None:
         return
     os.lseek(fd, 0, os.SEEK_SET)
     _msvcrt.locking(fd, _msvcrt.LK_UNLCK, 1)
+
+
+def try_lock_file(fd: int) -> bool:
+    """The same lock as lock_file, without waiting: True when taken, False when another holder has it."""
+    if not WINDOWS:
+        if _fcntl is None:
+            return True
+        try:
+            _fcntl.flock(fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+        except OSError as exc:
+            if exc.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
+                return False
+            raise
+    if _msvcrt is None:
+        return True
+    os.lseek(fd, 0, os.SEEK_SET)
+    try:
+        _msvcrt.locking(fd, _msvcrt.LK_NBLCK, 1)
+        return True
+    except OSError:
+        return False

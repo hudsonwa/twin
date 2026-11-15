@@ -24,6 +24,15 @@ password, key or pass, and never lists the owner's bots by name.
 - Not for everyday questions about a twin (use the `twin_status` tool), and not for moving a bot to Hermes
   once and for all (that is `hermes import-agent grok-bot`, from the agent-importers plugin).
 
+## One bot, one prompt
+
+When the owner asks to twin, clone, copy, duplicate, mirror or back up ONE Grok bot they name ("back up my
+Acme Support bot"), call the `twin_make` tool with `bot_name` set to that name. Do not ask follow-up
+questions first; it picks the model this Hermes already uses. Give the owner its `verdict` line unchanged.
+When it lists gaps, say that Hermes sees only what mirror mode sees: the bot's memory stays in Grok, and its
+instructions and skills come over only from the bot itself. Then hand over `grok_prompt` to paste into that
+bot's chat in Grok, and `then`. Calling it again is safe. For several bots use `hermes twin setup` below.
+
 ## Prerequisites
 
 - Grok Bot Twin is switched on (this skill is only listed while it is).

@@ -934,6 +934,29 @@ async def sync_panel_set(body: Any = Body(None)) -> Any:
     return await _call(_sync_panel().choose, svc, b["twin"], b["item"], b["direction"])
 
 
+# ---- optional git history of a twin (twin/git_mirror.py, the same functions as `hermes twin git`) -------------
+def _git_mirror() -> Any:
+    return importlib.import_module(_package().__name__ + ".git_mirror")
+
+
+@router.get("/git/panel")
+async def git_panel_get() -> Any:
+    """Every twin: git history on/off, whether a remote is set (host only), the last commit/push. Local files only."""
+    svc = await asyncio.to_thread(_svc)
+    return await _call(_git_mirror().panel, svc)
+
+
+@router.post("/git/panel")
+async def git_panel_set(body: Any = Body(None)) -> Any:
+    """{"twin": id, "on": bool, "remote": str (optional; '' clears)}."""
+    b = _body(body)
+    if not isinstance(b.get("twin"), str) or not _ID_RE.match(b["twin"]) or not isinstance(b.get("on"), bool) or \
+            not (b.get("remote") is None or isinstance(b["remote"], str)):
+        raise HTTPException(status_code=400, detail={"code": "bad_input", "message": "That request was not understood."})
+    svc = await asyncio.to_thread(_svc)
+    return await _call(_git_mirror().choose, svc, b["twin"], b["on"], b.get("remote"))
+
+
 # ---- Hermes -> Grok through the Mirror bot (twin/h2g.py, twin/h2g_service.py) ----------------------------------------
 _H2G_ITEMS = ("name", "description", "instructions", "routines")
 _H2G_CHANGE_RE = re.compile(r"^c-[0-9a-f]{16}$")

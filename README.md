@@ -37,6 +37,9 @@ affiliated with xAI.
 
 ## First steps
 
+Want one prompt to do a whole job (twin, sync, move, back)? See [docs/ONE-PROMPT.md](docs/ONE-PROMPT.md): the bot
+runs one command on your computer per prompt. The steps below set a twin up by hand.
+
 Open **Twins** in the Hermes Desktop sidebar.
 
 1. **See a sample first.** One sample twin with invented data: no Grok account, no botport, nothing of yours

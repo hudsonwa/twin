@@ -163,7 +163,18 @@ The other idea: you make an empty bot in Grok, point it at this repository, and 
 [MIRROR-SELF-SETUP.md](MIRROR-SELF-SETUP.md) to set itself up as the sync bot. No tool clicks in the Grok app.
 The bot does what a bot can do from the inside, and tells you exactly what is left for you.
 
-A Grok bot cannot do all of it. The honest table:
+**Correction (checked on Grok Bot desktop app 1.0.1).** An earlier version of this page said a Grok bot cannot
+act on your computer. That was wrong. A bot in the Grok desktop app can:
+
+- run commands on this computer, with your approval for each command (Settings → Bot → "Execution on Local Computer");
+- use local MCP servers, started by a command. You can set "always allow" for one connector, so it asks once;
+- use computer use.
+
+Its memory, skills and routines are different: they are server-side tools (the bot reads and writes them
+itself), not files on your computer. See [ONE-PROMPT.md](ONE-PROMPT.md) for the one-prompt use cases built on this.
+The facts above come from reading the app; a full twin run through them is not yet tested end to end.
+
+A Grok bot cannot do all of the steps below on its own. The honest table:
 
 | Step | Who | How sure |
 |---|---|---|

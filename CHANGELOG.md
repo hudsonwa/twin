@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.4.0 (15 November 2026)
+
+- **Secrets by reference.** A key the plugin's secret check finds in a bot's text is no longer just blanked: when this
+  computer has an OS secret store (macOS Keychain, Linux Secret Service, Windows Credential Manager) the value is kept
+  there under a NAME (service `grok-bot-twin`) and the text keeps a placeholder: `{{secret:NAME}}` towards Grok,
+  `${NAME}` towards Hermes. The twin's Hermes bot gets the value the way Hermes keeps its own keys, as a line of the
+  profile's own `.env` (0600), written only when the call PASSes. Done on `hermes twin sync`, `from-grok` and
+  `back-to-grok`; the answer names the keys kept, never a value. `hermes twin secret list|set|forget|share`
+  (`share NAME --to-grok` is the one way a value reaches the Grok bot, asked in your own terminal; `--linked` lets
+  your other computers fetch it over `POST /v1/xs/secrets`, sealed like a twin's memory, off by default). No OS
+  store: nothing is kept and the value is blanked as before; there is no file fallback. See docs/SECRETS.md.
+- The optional git history refuses a remote address that carries a password or token (it would have been kept in
+  plain text); sign in with git's credential helper or an SSH key.
+- Optional git history per twin, off by default (no git needed unless it is on): `hermes twin git on "NAME"`
+  (or `--all`) `[--remote URL] [--with-history]`, `hermes twin git off`, `hermes twin git status`. After every
+  PASS of the one-prompt tools (twin, sync, move, back) the bot's instructions, skills, memory and routines are
+  written as Markdown/JSON to `<plugin-data>/git/<twin>/` and committed ("PASS sync from Grok: 2 skills
+  changed"); with a remote (a Forgejo URL, say) it pushes, and a failed push is a warning on the PASS line, never
+  a FAIL. Secret-scrubbed first; keys, tokens and `.env`/auth files are never read; chat history only with
+  `--with-history`. Snapshots stay at 3. See docs/ONE-PROMPT.md.
+
+- `hermes twin quick "Acme Support" --model MODEL --yes`: one twin start to finish in one command. It runs `add`,
+  prints the request to paste into the bot's chat in Grok, waits (15 minutes by default, `--wait MIN`) for the
+  answer file in Downloads, then runs `import-exports`, `finish` and `compare`, and ends with one PASS/FAIL
+  summary. Each step asks as it always does unless `--yes`. Run it again at any time: a step that is done is
+  skipped. No model is called. `--from-file FILE` or `--stdin` takes the bot's setup export directly (no paste,
+  no wait), so an agent can run it in one non-interactive command. The last line is always `PASS: ...` or
+  `FAIL: ...`.
+- `hermes twin test "Acme Support" --from-export FILE` (or `--battery FILE`): botport's behaviour test (`botport test`) of a
+  twin, through the same verified botport copy and minimal environment. Each case is a real chat with the twin's
+  model. `--from-export` makes the cases once (`botport battery init`) and keeps them for the next run. The last
+  result (passed of total, the ids of the failed cases) shows on the twin's line in `hermes twin status`.
+- One prompt in a Grok bot makes a tested Hermes twin, and moves it to Hermes and back:
+  `hermes twin from-grok --bot NAME` and `hermes twin back-to-grok --bot NAME` (the bot's state as JSON on stdin),
+  run by the bot through the Grok app's "Run a command on your local computer": one command, one approval click
+  per prompt (none with Always allow, the owner's choice), and a Grok skill text (`grok/SKILL-twin.md`). See
+  docs/ONE-PROMPT.md. `hermes twin mcp --bot NAME` serves the same two calls as a local MCP server; it is not the
+  route today, because Grok Bot 1.0.1 runs custom Command connectors on the bot's cloud computer.
+- The one prompt also carries the bot's memory into Hermes' own memory file, where the twin's `memory` tool reads
+  it (botport keeps memory only as a skill the model rarely opens). A new twin gets the owner's model server
+  (botport `twin create` copies the model's name, not its `base_url`). `hermes twin stop` works on a bot-driven
+  twin. The written-file secret check looks only at files this call changed (Hermes' own bundled skills hold
+  example keys). botport is told the Hermes folder in its environment too (`botport test` needs it).
+- Twins the one-prompt flow (or `hermes twin sync --stdin`) is used for become **bot-driven**, once: a copy of their
+  botport parts is kept, then `botport twin remove` (the Hermes profile and its chats stay). Status shows them as
+  "Kept in step by the bot · last synced …, PASS". Not yet: a bot-driven twin does not follow a rename or a new
+  description in Grok between prompts (follow-up: apply them from the Grok bot list, read-only).
+- botport errors no longer hide the plugin's own file names as `[secret]`: the command is named by its words
+  only, and the plugin's folders are said in words.
+
+### Decision: bot-driven twins (15 November 2026)
+botport v0.2.1 refuses `apply`, `sync` and `drift --bundle` on any profile its twin pairing owns (the
+`botport.mirror.json` file `twin create` writes), and has no call that applies a bot's own export to such a
+profile: `twin sync --from-export` ignores the export, `twin adopt` skips a paired bot, and after a remove a
+changed skill becomes a conflict. Memory is never part of botport's twin sync. So a twin the bot keeps in step
+itself is converted once with `botport twin remove` (profile kept) and then goes through the spec path, as the
+two-way sync already did. Considered and rejected: remove, adopt and resolve on every call (fragile, and it loses
+the restore points each time). Long-term option: an "apply this export" call in botport for a paired profile, after
+which no twin needs converting.
+- `hermes twin quick --all --model MODEL --yes`: `quick` for every Grok bot in turn (never the sample's), one
+  line per bot and one verdict, `PASS: quick setup of 2 of 2 bots` or `FAIL: ...`.
+- `hermes twin link-computer [--wait MIN]`: one command to link one more computer. It turns sharing on, prints a
+  link code and the line to run on the other computer, then waits (10 minutes at most, as long as the code lasts)
+  until a computer has used it: `PASS: another computer is linked` or `FAIL: ...`.
+- `hermes twin stop` now needs the twin named (`hermes twin stop "Acme Support"`), ends with `PASS:`/`FAIL:`, and
+  keeps the twin's full transcripts and What syncs choices unless `--remove-data`. The Twins page's Stop twinning
+  is unchanged (it deletes them, as before).
+- The same three are library functions (`twin/bulk.py`: `quick_all`, `link_computer`, `stop_twin`) for a Hermes
+  model tool; `stop_twin` is a dry run unless confirmed and has no remove-data choice. No tool is registered.
+
 ## 0.3.6 (15 November 2026)
 
 Smaller again: two features that could never run are gone, and a few fixes from the review.

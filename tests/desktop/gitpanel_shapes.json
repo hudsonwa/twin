@@ -1,0 +1,9 @@
+{
+  "note": "Shape of the answers about the optional git history of a twin (GET /git/panel; POST /git/panel). tests/desktop/gitpanel.mjs checks its invented answers against it; tests/test_git_panel.py holds the real answers to it. The remote address itself never comes back: only whether one is set and its host.",
+  "shapes": {
+    "GitLast": {"required": {"at": "str|null", "commit": "str|null", "pushed": "bool|null", "problem": "str"}, "closed": true},
+    "GitTwin": {"required": {"id": "str", "name": "str", "on": "bool", "every": "bool", "remote_set": "bool", "remote_host": "str", "last": "GitLast|null"}, "closed": true},
+    "GitSaid": {"required": {"sentence": "str"}, "closed": true},
+    "GitPanel": {"route": "GET /git/panel; POST /git/panel", "required": {"schema": "str", "git": "bool", "install": "str", "twins": "list[GitTwin]"}, "optional": {"said": "GitSaid"}, "closed": true}
+  }
+}

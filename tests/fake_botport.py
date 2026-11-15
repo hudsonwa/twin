@@ -27,6 +27,8 @@ FEATURES = ["grok-list", "twin-create", "twin-check", "twin-sync", "twin-status"
             "twin-demo"]
 AT = "2000-01-01T09:00:00Z"
 EXTRA_MARKER = "EXTRA-MARKER-7f3a"
+MIRROR_STATE = "botport.mirror.json"
+SPEC_COMMANDS = ("sync", "apply", "drift", "plan")
 
 
 def with_extras(value):
@@ -90,6 +92,11 @@ def data_for(cmd, vals, flags, mode):
              "fields": {"name": "live", "description": "live", "instructions": "mirror", "skills": "mirror",
                         "routines": "names"}}], "only": vals.get("only", [])}
     if cmd == "twin create":
+        hh, prof = one("hermes-home"), one("profile", "acme-support")
+        if hh and "dry-run" not in flags:  # real botport: the twin pairing owns the profile it made
+            os.makedirs(os.path.join(hh, "profiles", prof), exist_ok=True)
+            with open(os.path.join(hh, "profiles", prof, MIRROR_STATE), "w") as fh:
+                fh.write("{}")
         return {"dry_run": "dry-run" in flags, "skipped": [], "pairs": [{**sync_entry("acme-support"),
                 "waiting": [] if "dry-run" in flags else CREATE_WAITING,
                 "grok": {"id": one("grok-id"), "name": name},
@@ -138,6 +145,12 @@ def data_for(cmd, vals, flags, mode):
         return {"entries": [{"at": AT, "side": "grok", "kind": "name_change", "summary": "renamed"}],
                 "limit": one("limit")}
     if cmd == "twin remove":
+        hh = one("hermes-home")
+        if hh and "dry-run" not in flags:
+            try:
+                os.unlink(os.path.join(hh, "profiles", pair, MIRROR_STATE))
+            except OSError:
+                pass
         return {"pair_id": pair, "dry_run": "dry-run" in flags, "profile_kept": True,
                 "removed": [f"state:pairs/{pair}.toml", f"state:pairs/{pair}.key"]}
     if cmd == "twin mirror":
@@ -148,6 +161,8 @@ def data_for(cmd, vals, flags, mode):
         return {"pair_id": pair, "connected": True, "briefs": f"state:pairs/{pair}.brief",
                 "pair_key": f"state:pairs/{pair}.key", "steps": [{"id": "mirror_bot", "what": "Create a Mirror bot"}],
                 "charter": "# botport Mirror bot charter\n", "folder_seen": one("pair-folder")}
+    if cmd in SPEC_COMMANDS:  # botport's spec commands (one-prompt, sync both ways): refused on an owned profile
+        return {"in_sync": True, "items": [], "h2g": {"items": []}}
     if cmd == "twin parity":
         return {"kind": "setup", "passed": 1, "total": 2, "checks": [
             {"id": "skill:greet-visitors", "name": "skill greet-visitors", "pass": True, "detail": "same"},
@@ -215,6 +230,11 @@ def main():
         env.update(ok="yes", warnings={})
         out.write(json.dumps(env) + "\n")
         return 0
+    prof, hh = vals.get("profile", [None])[-1], vals.get("hermes-home", [None])[-1]
+    if cmd in SPEC_COMMANDS and prof and hh and os.path.exists(os.path.join(hh, "profiles", prof, MIRROR_STATE)):
+        sys.stderr.write(f"botport: ERROR: {os.path.join(hh, 'profiles', prof)} is a mirrored profile: use botport "
+                         "mirror plan|sync (or botport mirror init --undo to stop mirroring)\n")
+        return 2
     data = data_for(cmd, vals, flags, mode)
     if data is None:
         env.update(ok=False, error={"code": "usage", "message": f"unknown command {cmd!r}", "hint": None})

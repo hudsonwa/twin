@@ -104,11 +104,26 @@ def _luhn(digits: str) -> bool:
     return total % 10 == 0
 
 
+# a reference to a secret kept in the OS store (secret_ref.py) is a name, not a value
+_REF = re.compile(r"\{\{secret:[A-Z][A-Z0-9_]{0,63}\}\}|\$\{[A-Z][A-Z0-9_]{0,63}\}")
+
+
+def _is_ref(m: "re.Match[str]") -> bool:
+    """Is the value this match found (its group, else all of it) part of a reference?"""
+    text = m.string
+    if "{{secret:" not in text and "${" not in text:
+        return False
+    g = next((i for i in range(1, (m.lastindex or 0) + 1) if m.group(i)), 0)
+    a, b = m.span(g)
+    return any(r.start() < b and r.end() > a for r in _REF.finditer(text, max(0, a - 80), b + 80))
+
+
 def _matches(text: str):
     """(kind, match) for every suspected secret in `text`, as written."""
     for kind, _what, rx, _whole in _PATTERNS:
         for m in rx.finditer(text):
-            yield kind, m
+            if not _is_ref(m):
+                yield kind, m
     for m in _PRIVATE_BLOCK.finditer(text):
         yield "private_key", m
     for m in _WORD.finditer(text):
@@ -177,7 +192,7 @@ def redact(text: str, marker: str = "[secret]", line_marker: str = "") -> str:
         return text if isinstance(text, str) else ""
     def mask(m: "re.Match[str]") -> str:  # (a value that is already the marker stays: masking twice is a no-op)
         g = m.lastindex or 0
-        if m.string.startswith(marker, m.start(g)):
+        if m.string.startswith(marker, m.start(g)) or _is_ref(m):
             return m.group(0)
         return m.group(0)[:m.start(g) - m.start()] + marker + m.group(0)[m.end(g) - m.start():]
 
