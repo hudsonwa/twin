@@ -126,9 +126,32 @@ def _ver(text: str) -> Optional[Tuple[int, int, int]]:
     return tuple(int(x) for x in m.groups()) if m else None  # type: ignore[return-value]
 
 
+def _count(text: str) -> int:
+    last = (text or "").strip().splitlines()[-1:] or ["0"]
+    return int(last[0]) if last[0].isdigit() else 0
+
+
+def _local_link_code() -> str:
+    """A fresh one-computer link code from this computer's fleet (never printed)."""
+    try:
+        from .fleet_cli import _svc
+        return str(_svc().fleet_code()["code"]["code"])
+    except Exception:
+        return ""
+
+
+def _linked_shared_secrets() -> List[str]:
+    """Names of secrets the owner already shared with linked computers (`secret share NAME --linked`)."""
+    try:
+        from . import secret_ref
+        return sorted(n for n, rec in secret_ref.load().items() if rec.get("linked"))
+    except Exception:
+        return []
+
+
 def execute(t: Target, twin: str, *, ref: str, install_hermes: bool, runner: Runner,
             out: Callable[[str], None], link_code: Callable[[], str] = lambda: "",
-            stop_after: str = "") -> int:
+            shared_secrets: Callable[[], List[str]] = lambda: [], stop_after: str = "") -> int:
     """Run the plan step by step. Returns 0 when every step passed, else 1 (the last line is a FAIL)."""
     def line(ok: bool, step: str, why: str) -> None:
         out(f"{'PASS' if ok else 'FAIL'}: remote-create {t.host} {step}: {why}")
@@ -177,7 +200,16 @@ def execute(t: Target, twin: str, *, ref: str, install_hermes: bool, runner: Run
                 continue
             if s.name == "check":
                 rc, so, _ = runner(t.host, s.command, s.timeout)
-                n = int(so.strip().splitlines()[-1]) if so.strip()[-1:].isdigit() else 0
+                n = _count(so)
+                shared = shared_secrets() if n < 1 else []
+                if n < 1 and shared:
+                    # Secret sharing is on here: the target fetches them over the link by reference (the same
+                    # `secret pull` a linked computer runs). Nothing goes over this SSH session.
+                    rc, so2, err = runner(t.host, _hermes(t, "twin secret pull"), 120)
+                    n = _count(runner(t.host, s.command, s.timeout)[1]) if rc == 0 else 0
+                    if n >= 1:
+                        line(True, "check", f"a model key is set there (fetched by reference: {', '.join(shared)})")
+                        continue
                 if n < 1:
                     line(False, "check", "the twin needs a key on that computer (no key is copied; "
                                          "docs/SECRETS.md)")
@@ -210,7 +242,8 @@ def execute(t: Target, twin: str, *, ref: str, install_hermes: bool, runner: Run
 # ---- CLI (hidden, experimental) ----
 
 def cmd_remote_create(a: Any, *, runner: Optional[Runner] = None, out: Callable[[str], None] = print,
-                      ref: Optional[str] = None) -> int:
+                      ref: Optional[str] = None, link_code: Callable[[], str] = _local_link_code,
+                      shared_secrets: Callable[[], List[str]] = _linked_shared_secrets) -> int:
     err = check_host(a.computer)
     if err:
         out(f"FAIL: remote-create: {err}")
@@ -230,13 +263,15 @@ def cmd_remote_create(a: Any, *, runner: Optional[Runner] = None, out: Callable[
             out(f"{i}. {s.name}{'' if s.changes else ' (read-only)'}: {s.command}")
             if s.probe:
                 out(f"   skipped when already done: {s.probe}")
-        out("No key, token or .env is copied. No sudo.")
+        out("No key, token or .env is copied over SSH. No sudo. If a key is missing there and you already shared "
+            "secrets with linked computers (`hermes twin secret share NAME --linked`), the check step runs "
+            "`hermes twin secret pull` there, which fetches them by reference over the link.")
         return 0
     if not a.yes:
         out("FAIL: remote-create: show the plan first (--plan), then run again with --yes")
         return 2
     return execute(t, a.twin, ref=ref, install_hermes=a.install_hermes, runner=runner or ssh_runner, out=out,
-                   stop_after=a.stop_after or "")
+                   link_code=link_code, shared_secrets=shared_secrets, stop_after=a.stop_after or "")
 
 
 def setup(subs: Any) -> None:

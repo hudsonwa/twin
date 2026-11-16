@@ -18,8 +18,9 @@ REF = "0" * 40
 
 class FakeSSH:
     def __init__(self, system="Linux", hermes="Hermes Agent v0.22.9 (2026.11.1)", reachable=True, keys=1,
-                 done=()):
+                 done=(), pull_gives=0):
         self.system, self.hermes, self.reachable, self.keys, self.done = system, hermes, reachable, keys, set(done)
+        self.pull_gives = pull_gives
         self.calls = []
 
     def __call__(self, host, cmd, timeout):
@@ -33,6 +34,9 @@ class FakeSSH:
         if cmd.startswith("uname -s"):
             path = "/home/u/.local/bin/hermes" if self.hermes else "-"
             return 0, f"{self.system}\nx86_64\n{path}\n{self.hermes}\n", ""
+        if "secret pull" in cmd:
+            self.keys += self.pull_gives
+            return 0, "PASS: 1 secret(s) kept from the computer that shares\n", ""
         if cmd.startswith("grep -cE"):
             return 0, f"{self.keys}\n", ""
         for name in self.done:
@@ -52,7 +56,8 @@ def args(**kw):
 
 def run(fake, **kw):
     lines = []
-    rc = RC.cmd_remote_create(args(**kw), runner=fake, out=lines.append, ref=REF)
+    rc = RC.cmd_remote_create(args(**kw), runner=fake, out=lines.append, ref=REF,
+                              link_code=lambda: "7KQ4-M2XD-P9RA", shared_secrets=lambda: [])
     return rc, lines
 
 
@@ -167,3 +172,75 @@ def test_hidden_from_help():
         except SystemExit:
             pass
     assert "remote-create" not in buf.getvalue()
+
+
+# ---- twin#70 Accept: fake SSH runner, invented host example-desktop ----
+
+def _full(fake, **kw):
+    out = []
+    rc = RC.execute(RC.Target("example-desktop"), "Acme Support", ref=REF, install_hermes=False, runner=fake,
+                    out=out.append, link_code=lambda: "7KQ4-M2XD-P9RA", **kw)
+    return rc, out
+
+
+def test_macos_full_run_passes_every_step():
+    rc, out = _full(FakeSSH(system="Darwin"))
+    assert rc == 0 and all(x.startswith("PASS: remote-create example-desktop ") for x in out)
+    assert [x.split()[3].rstrip(":") for x in out] == ["reach", "detect", "plugin", "setup", "link", "instance",
+                                                      "check"]
+
+
+def test_linux_hermes_missing_runs_nothing_that_changes():
+    fake = FakeSSH(system="Linux", hermes="")
+    rc, out = _full(fake)
+    assert rc == 1 and out[-1] == ("FAIL: remote-create example-desktop detect: Linux: Hermes is missing; add "
+                                   "--install-hermes to install it there (its own pinned installer, no sudo)")
+    assert fake.calls[0] == "true" and fake.calls[1].startswith("uname -s") and len(fake.calls) == 2
+
+
+def test_plan_opens_no_ssh_and_lists_each_remote_command():
+    fake = FakeSSH()
+    rc, lines = run(fake, plan=True, yes=False, install_hermes=True)
+    assert rc == 0 and fake.calls == []
+    steps = RC.plan(RC.Target("example-desktop"), "Acme Support", ref=REF, install_hermes=True)
+    for s in steps:
+        assert any(s.command in x for x in lines)
+        if s.probe:
+            assert any(s.probe in x for x in lines)
+
+
+def test_unreachable_is_one_fail_line_with_the_paste_line():
+    rc, lines = run(FakeSSH(reachable=False))
+    fails = [x for x in lines if x.startswith("FAIL")]
+    assert rc == 1 and len(fails) == 1 and fails[0] == lines[-1]
+    assert fails[0].endswith("paste this one line there: " + RC.paste_line(REF))
+
+
+def test_no_key_and_sharing_off_never_pulls():
+    fake = FakeSSH(keys=0, pull_gives=1)
+    rc, out = _full(fake, shared_secrets=lambda: [])
+    assert rc == 1 and out[-1].endswith("check: the twin needs a key on that computer (no key is copied; "
+                                        "docs/SECRETS.md)")
+    assert not any("secret" in c for c in fake.calls)
+
+
+def test_no_key_with_linked_sharing_on_pulls_by_reference():
+    fake = FakeSSH(keys=0, pull_gives=1)
+    rc, out = _full(fake, shared_secrets=lambda: ["OPENAI_API_KEY"])
+    assert rc == 0 and out[-1] == ("PASS: remote-create example-desktop check: a model key is set there (fetched by "
+                                   "reference: OPENAI_API_KEY)")
+    assert sum("twin secret pull" in c for c in fake.calls) == 1
+    assert not any("OPENAI_API_KEY" in c for c in fake.calls)
+
+
+def test_sharing_on_but_pull_brings_nothing_still_fails():
+    fake = FakeSSH(keys=0, pull_gives=0)
+    rc, out = _full(fake, shared_secrets=lambda: ["OPENAI_API_KEY"])
+    assert rc == 1 and "needs a key on that computer" in out[-1]
+
+
+def test_link_code_is_sent_but_never_printed():
+    fake = FakeSSH()
+    rc, out = _full(fake)
+    assert rc == 0 and any("--link 7KQ4-M2XD-P9RA" in c for c in fake.calls)
+    assert not any("7KQ4" in x for x in out)
