@@ -63,8 +63,9 @@ approvals:
 
 def test_strict_lockdown_applied_by_rule_and_checked(home):
     h = prof(home, "ops-twin", BASE, soul="Runs shell commands on the deploy server.")
-    got = ps.apply_default("ops-twin")
-    assert got["preset"] == "strict" and got["chosen_by"] == "rule" and "shell" in got["words"]
+    assert ps.apply_default("ops-twin")["words"][:1] == ["shell"]  # (twin#71: the rule gives parity, names words)
+    got = {**ps.set_preset("ops-twin", "strict"), "chosen_by": "owner"}
+    assert got["preset"] == "strict"
     c = ps.load_config(h)
     assert c["toolsets"] == ps.STRICT_ALLOWED and c["approvals"]["mode"] == "manual"
     assert c["mcp_servers"] == {} and c["platforms"]["telegram"]["enabled"] is False
@@ -74,8 +75,8 @@ def test_strict_lockdown_applied_by_rule_and_checked(home):
         assert (os.stat(h / "config.yaml").st_mode & 0o777) == 0o600
     assert any(p.name.startswith("config.yaml.pre-safety-") for p in h.iterdir())
     res = ps.check("ops-twin")
-    assert res["ok"] and ps.line("ops-twin", res).startswith("PASS: twin ops-twin safety strict (rule)")
-    # idempotent
+    assert res["ok"] and ps.line("ops-twin", res).startswith("PASS: twin ops-twin safety strict (owner)")
+    # idempotent, and the owner's choice holds
     assert ps.apply_default("ops-twin")["preset"] == "strict"
 
 
@@ -83,13 +84,14 @@ def test_strict_keeps_named_mcp(home):
     from twin_testlib import config
     config.set_override({"botport_path": "/nope", "twin_safe_mcp": ["kb"]})
     prof(home, "ops", BASE, soul="ssh")
-    ps.apply_default("ops")
+    ps.set_preset("ops", "strict")
     assert list(ps.load_config(home / "profiles" / "ops")["mcp_servers"]) == ["kb"]
 
 
 def test_standard_for_benign_bot_and_one_command_widen(home):
     h = prof(home, "meals", BASE, soul="Plan weekly meals.")
-    assert ps.apply_default("meals")["preset"] == "standard"
+    assert ps.apply_default("meals")["preset"] == "parity"  # (twin#71: standard is the owner's choice now)
+    ps.set_preset("meals", "standard")
     c = ps.load_config(h)
     # standard keeps no shell or socket, and by default no web, file or MCP server either (M3)
     assert c["toolsets"] == ["memory"] and c["platform_toolsets"]["cli"] == ["memory"] and not c["mcp_servers"]
@@ -119,7 +121,8 @@ def test_safety_cli_on_a_twin(svc, monkeypatch):
     prof(home, "trader", BASE, soul="trading desk helper")
     monkeypatch.setattr(zt_cli, "resolve_profile", lambda s, n: n)
     rc, out, _ = run(["safety", "trader", "--apply"])
-    assert rc == 0 and "strict because of: trading" in out and out.strip().endswith("model local")
+    assert rc == 0 and "trader: parity; its text mentions: trading" in out
+    assert "safety parity (rule), model local; capabilities: browser ✓" in out
     rc, out, _ = run(["safety", "trader", "standard"])
     assert rc == 0 and "safety standard (owner)" in out
 

@@ -84,7 +84,9 @@ def cmd_safety(a: Any) -> int:
         elif a.apply:
             got = ps.apply_default(prof)
             if got["words"]:
-                print(f"{safe.clean_name(prof, 60)}: {got['preset']} because of: {', '.join(got['words'][:5])}")
+                who = safe.clean_name(prof, 60)
+                print(f"{who}: {got['preset']}; its text mentions: {', '.join(got['words'][:5])} (risky actions ask "
+                      f"first; hermes twin safety {who} strict narrows it)")
         res = ps.check(prof)
         if res["ok"]:
             ps.clear_unsafe(prof)  # (an add whose defaults failed stays off until this passes)
@@ -122,14 +124,15 @@ def setup(subs: Any) -> None:
     p.add_argument("--all", action="store_true", help="on: every twin")
     p.add_argument("--via", metavar="PROFILE", help="The Hermes profile whose Telegram bot to use")
     p.add_argument("--owner", metavar="ID", help="Your numeric Telegram user id, when the bot allows several")
-    p = subs.add_parser("safety", help="A twin's tool preset (strict, standard, open) and model policy")
+    p = subs.add_parser("safety", help="A twin's tool preset (parity, strict, standard, open) and model "
+                                         "policy")
     p.add_argument("twin", nargs="?", metavar="TWIN")
-    p.add_argument("preset", nargs="?", choices=("strict", "standard", "open"),
+    p.add_argument("preset", nargs="?", choices=("parity", "strict", "standard", "open"),
                    help="Set this preset (your choice, kept); without it: check")
     p.add_argument("--allow", action="append", choices=("web", "x_search", "file", "image_gen", "mcp"),
                    metavar="TOOLSET", help="With standard: let the twin keep this toolset (web, x_search, file, "
                                            "image_gen, mcp: all its MCP servers); repeatable")
-    p.add_argument("--apply", action="store_true", help="Apply the default chosen by rule (strict for a risky bot)")
+    p.add_argument("--apply", action="store_true", help="Apply the default chosen by rule (parity: what the Grok bot can do)")
     p.add_argument("--all", action="store_true", help="Every twin")
     p.add_argument("--model-policy", choices=("local", "any"), help="Record the model policy (default local)")
 

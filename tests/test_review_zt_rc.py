@@ -194,7 +194,8 @@ def test_m2_record_stays_when_the_restore_fails_and_keep_data_stop_restores(rig,
 # ---- M3 ------------------------------------------------------------------------------------------------------
 def test_m3_standard_drops_web_file_and_mcp_until_the_owner_widens(home):
     h = _prof("meals")
-    assert ps.apply_default("meals")["preset"] == "standard"
+    assert ps.apply_default("meals")["preset"] == "parity"  # (twin#71: standard is the owner's choice now)
+    ps.set_preset("meals", "standard")
     c = ps.load_config(h)
     assert c["toolsets"] == ["memory"] and c["mcp_servers"] == {}
     assert {"web", "x_search", "file", "image_gen"} <= set(c["agent"]["disabled_toolsets"])

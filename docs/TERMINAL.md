@@ -65,13 +65,17 @@ that profile's bot answers `/twin to|use|say`. `--via PROFILE` picks the profile
 Stopping a twin takes it off the route.
 With no Telegram bot in any profile it FAILs and names the one human step (@BotFather).
 
-`hermes twin safety [TWIN] [strict|standard|open]` shows or sets a twin's tool preset. By default a rule picks it:
-a bot whose instructions, skills or routines mention shell, ssh, servers, trading, brokers, wallets or credentials
-gets `strict` (knowledge, memory, session search and todo only; approvals manual; no MCP server except those named
-in the `twin_safe_mcp` setting; the twin's own Telegram off); any other gets `standard` (no terminal, code,
+`hermes twin safety [TWIN] [parity|strict|standard|open]` shows or sets a twin's tool preset. By default every twin
+gets `parity` (twin#71): what its Grok bot can do (browser, web, X search, shell, files, code, image generation,
+computer use) on every platform, Telegram included; approvals manual, so a risky action asks first in its chat
+(Telegram's buttons or `/approve`); agent scheduling, delegation and terminal environment passthrough stay off.
+The PASS line lists every capability and its state. Words like shell, ssh, servers, trading, brokers, wallets or
+credentials in the bot's text are named, and you narrow with `strict` (knowledge, memory, session search and todo only; approvals manual; no MCP server except those named
+in the `twin_safe_mcp` setting; the twin's own Telegram off) or `standard` (no terminal, code,
 delegation, cron, browser or computer use, and by default no web, x_search, file or image_gen and no MCP server
 except those in `twin_safe_mcp`; approvals manual). `--apply` applies the rule's choice; naming a preset is your
-choice and is kept. Widen `standard` one toolset at a time: `hermes twin safety TWIN standard --allow web` (also
+choice and is kept. `hermes twin setup --auto` moves twins the rule set to `standard` or `strict` before 0.5.1 to
+`parity` once and says what it turned on; a preset you chose is left alone. Widen `standard` one toolset at a time: `hermes twin safety TWIN standard --allow web` (also
 `x_search`, `file`, `image_gen`, `mcp` for all its MCP servers; repeatable). A twin whose model is not local FAILs
 the check until you record `--model-policy any`. Every write keeps a dated copy of the config (the newest five).
 Stopping a twin puts its config.yaml back as it was before the safe defaults when nothing changed it since;

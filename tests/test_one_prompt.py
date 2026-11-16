@@ -153,7 +153,8 @@ def test_one_call_makes_a_tested_twin(svc, home, monkeypatch):
     res = call(svc)
     assert res["ok"], res
     assert res["line"].startswith("PASS: Acme Support twinned to Hermes (profile acme-support): 1 skills, "
-                                  "1 memories, 1 routines added switched off; matches what the bot sent; behaviour test 2/2.")
+                                  "1 memories, 1 routines added switched off; matches what the bot sent; behaviour test 2/2; "
+                                  "capabilities: browser ✓, web ✓")  # (twin#71: parity with the Grok bot)
     assert w.created == 1 and [c[0] for c in w.eng.calls] == ["remove", "sync", "drift"]
     assert w.imports == [("acme-support", "Acme Support", ["instructions", "connectors"])]
     prof = store.profile_home("acme-support")
@@ -215,7 +216,7 @@ def test_passing_behaviour_test_is_in_the_line(svc, home, monkeypatch):
     monkeypatch.setattr(svc, "behaviour_test", lambda pid, **kw: {"passed": 4, "total": 4, "ok": True},
                         raising=False)
     res = call(svc)
-    assert res["ok"] and res["line"].endswith("matches what the bot sent; behaviour test 4/4.")
+    assert res["ok"] and "matches what the bot sent; behaviour test 4/4; capabilities:" in res["line"]
 
 
 def test_secrets_are_scrubbed_from_every_input(svc, home, monkeypatch):

@@ -1383,19 +1383,23 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         return out
 
     def _safe_defaults(self, profile: Any) -> Optional[str]:
-        """twin/profile_safety.py `apply_default` for a twin's profile (strict for a risky bot, standard otherwise,
-        never over the owner's own choice). -> a note only when it could not be applied."""
+        """twin/profile_safety.py `apply_default` for a twin's profile (parity with its Grok bot, twin#71; never over
+        the owner's own choice). -> a note: its capabilities, or a FAIL when the defaults could not be applied."""
         from . import profile_safety
         if not isinstance(profile, str) or not valid_id(profile) or profile == "default":
             return None
         try:
-            profile_safety.apply_default(profile, self._profile_home(profile))
+            got = profile_safety.apply_default(profile, self._profile_home(profile))
         except Exception as exc:  # noqa: BLE001  (fail closed: marked unsafe until `hermes twin safety` passes)
             with contextlib.suppress(Exception):
                 profile_safety.mark_unsafe(profile, type(exc).__name__)
             return (f"FAIL: safe profile defaults not applied to {profile} ({type(exc).__name__}): its routines "
                     f"and Telegram route stay off until hermes twin safety {profile} --apply passes")
-        return None
+        caps = got.get("capabilities") if isinstance(got, dict) else None
+        if not caps or got.get("preset") == "open":
+            return None
+        return (f"{profile} ({got['preset']}) capabilities: " + profile_safety.capability_words(caps)
+                + " (desktop app and Telegram alike)")
 
     def _refingerprint(self, profile: Any) -> None:
         from . import profile_safety

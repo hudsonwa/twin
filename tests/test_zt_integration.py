@@ -23,23 +23,24 @@ def _seen_before_test(world, monkeypatch):
     return seen
 
 
-def test_from_hermes_export_applies_strict_defaults_before_anything_runs(svc, world, stub, monkeypatch):
+def test_from_hermes_export_applies_safe_defaults_before_anything_runs(svc, world, stub, monkeypatch):
     seen = _seen_before_test(world, monkeypatch)
     risky = {**OWN, "body": "Connect over ssh to the build server and check the logs."}
     play(stub, ask_answer(fenced(export(skills=[risky]))))
     res = run(svc, stub)
     assert res["ok"], res["line"]
-    assert seen["preset"] == "strict"
-    assert ps.problems(seen["config"], "strict", ps.keep_mcp()) == []
+    assert seen["preset"] == "parity"  # twin#71: parity with the Grok bot; the risky words are named
+    assert ps.problems(seen["config"], "parity", ps.keep_mcp()) == []
     rec = ps.records()["acme-support"]
     assert rec["chosen_by"] == "rule" and "ssh" in rec["words"]
 
 
-def test_from_hermes_export_plain_bot_gets_standard(svc, world, stub):
+def test_from_hermes_export_plain_bot_gets_parity(svc, world, stub):
     play(stub, ask_answer(fenced(export())))
-    assert run(svc, stub)["ok"]
-    assert ps.records()["acme-support"]["preset"] == "standard"
-    assert ps.check("acme-support")["preset"] == "standard"
+    res = run(svc, stub)
+    assert res["ok"] and "capabilities: browser ✓, web ✓" in res["line"]
+    assert ps.records()["acme-support"]["preset"] == "parity"
+    assert ps.check("acme-support")["preset"] == "parity"
 
 
 def test_adopted_profile_keeps_the_owners_choice(svc, stub, monkeypatch):
@@ -60,7 +61,7 @@ def test_add_route_applies_defaults_when_it_makes_a_profile(rig):
     made = svc.create(["b-acme-0001"])["pairs"]
     prof = made[0]["hermes"]["profile"]
     rec = ps.records().get(prof)
-    assert rec and rec["chosen_by"] == "rule" and rec["preset"] in ("strict", "standard")
+    assert rec and rec["chosen_by"] == "rule" and rec["preset"] == "parity"
     from hermes_plugins.grok_bot_twin.twin import yamlio
     if yamlio.module() is not None:  # (the fake botport appends YAML lines; only a YAML module reads them back)
         assert ps.problems(ps.load_config(store.profile_home(prof)), rec["preset"], ps.keep_mcp()) == []

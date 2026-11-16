@@ -583,7 +583,10 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             # safe profile defaults by rule on what was just imported (twin#54), before the behaviour test or
             # anything else runs in this profile; the owner's own choice is kept. config.yaml is in the snapshot.
             from . import profile_safety
-            res["safety"] = profile_safety.apply_default(prof, home)["preset"]
+            got = profile_safety.apply_default(prof, home)
+            res["safety"] = got["preset"]
+            if got.get("capabilities") and got["preset"] != "open":  # twin#71: the PASS line names them
+                res["capabilities"] = profile_safety.capability_words(got["capabilities"])
             drift = eng.bundle_drift(prof, str(export_file), spec)
             res["drift"] = "clean" if drift.get("_rc") == 0 else "differs"
             test = _behaviour(svc, pid, export_file)
@@ -743,6 +746,8 @@ def _line(name: str, res: dict) -> str:
         moved = (f" Moved: {m['hermes_routines_on']} routine(s) on in Hermes; paused in Grok: "
                  f"{', '.join(m['grok_routines_paused']) or 'none'}.")
     scrubbed += _refs_note(res)
+    if res.get("capabilities"):
+        scrubbed += f"; capabilities: {res['capabilities']}"
     return (f"PASS: {name} {verb} Hermes (profile {res.get('profile')}): {what}; matches what the bot sent; {tested}{scrubbed}."
             + moved)
 

@@ -367,13 +367,36 @@ def run(svc: Any, open_port: bool = False, fetch: Optional[Fetch] = None, runner
         return 1, f"FAIL: hermes twin setup --auto: {step}: {exc}"
     from . import origin
     origin.refresh(svc)  # twin#64: the origin note in every twin follows this install's versions
+    moved = parity_note(svc, say)
     return 0, (f"PASS: hermes twin setup --auto: botport {bp['tag']} verified, engine ready (preset {eng['preset']}, "
                f"port {eng['port']}), reachable from profile {prof}"
                + (" (plugin linked and enabled there)" if how == "linked" else "")
                + ("" if how != "left alone" else " (the sticky profile was left alone)")
                + (", Grok settings unchanged " f"(Execution: {eng['permission']})" if eng["permission"] != "unknown"
                   else ", Grok's Execution setting not read (the port was closed; it is read and compared before "
-                       "and after every export instead)"))
+                       "and after every export instead)") + moved)
+
+
+def parity_note(svc: Any, say: Callable[[str], None] = print) -> str:
+    """twin#71, once: twins whose preset the rule chose before 0.5.1 move to parity with their Grok bot
+    (profile_safety.migrate_to_parity). -> "" when none moved, else the PASS line's note on what changed."""
+    from . import profile_safety
+    try:
+        got = profile_safety.migrate_to_parity(twin_profiles(svc))
+    except Exception as exc:  # noqa: BLE001  (never ends setup; named instead)
+        return f"; twins not moved to parity ({type(exc).__name__})"
+    if not got:
+        return ""
+    parts = []
+    for g in got:
+        if g.get("error"):
+            parts.append(f"{g['profile']} not moved ({g['error']}, still {g.get('from', 'as it was')})")
+        else:
+            on = ", ".join(g["turned_on"]) or "nothing new"
+            parts.append(f"{g['profile']} {g['from']} -> parity (turned on: {on})")
+            say(f"Twin {g['profile']} moved from {g['from']} to parity with its Grok bot: turned on {on}; risky "
+                "actions still ask first, in the chat they came from.")
+    return "; twins moved to parity with their Grok bot (risky actions still ask first): " + "; ".join(parts)
 
 
 BUILD_FILE = "BUILD"  # twin/BUILD: {"commit", "tree"}, written by tools/stamp_build.py into a release or a copy

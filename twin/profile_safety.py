@@ -1,7 +1,14 @@
 """Safe twin-profile defaults instead of mid-run questions (zero-touch issue 10).
 
-A twin's Hermes profile gets one of three tool presets, chosen by rule, never by asking:
+A twin's Hermes profile gets one of four tool presets, chosen by rule, never by asking:
 
+- ``parity`` (the default, twin#71): the twin can do what its Grok bot can do. Every Grok bot has a browser, web and
+  X search, a shell and computer use (Grok's "Execution on Local Computer"), files, code execution and image
+  generation (``GROK_CAPABILITIES``), so none of those toolsets is disabled, on any platform (the desktop app and
+  Telegram alike). Safety stays where it is cheap, the hard floors of every preset: approvals manual (a risky
+  action asks first, in the chat it came from: Telegram's buttons or /approve), and deny when nobody is there
+  (cron, unattended, single query); no agent scheduling and no delegation (the twin's routines come from its Grok
+  bot); no environment passed to a terminal. The owner narrows it with ``standard`` or ``strict``.
 - ``strict``: for a risky bot. Only knowledge, memory, session_search and todo on every platform; every other
   toolset disabled; approvals manual (and deny when nobody is there: cron, unattended, single query); no agent
   scheduling; no environment passed to a terminal; MCP servers limited to the names in the plugin setting
@@ -14,9 +21,12 @@ A twin's Hermes profile gets one of three tool presets, chosen by rule, never by
   widens one at a time: ``hermes twin safety TWIN standard --allow web`` (web, x_search, file, image_gen, mcp).
 - ``open``: the owner widened it on purpose. Nothing is enforced; the choice is recorded.
 
-The rule: a bot whose instructions, skills or routines mention shell, ssh, terminal, servers, trading, brokers,
-wallets or credentials (``RISKY``) gets ``strict``; any other bot gets ``standard``. Widening is one command:
-``hermes twin safety TWIN standard`` (``--allow TOOLSET``), or ``open``. Every write keeps a dated copy of the
+The rule: every twin gets ``parity`` (fast by default, safety opt-in). The risky words its instructions, skills
+or routines mention (shell, ssh, terminal, servers, trading, brokers, wallets or credentials: ``RISKY``) are
+recorded and named, never silently acted on; ``choose`` still says which narrower preset they suggest (``strict``
+for those words, else ``standard``). Narrowing or widening is one command: ``hermes twin safety TWIN strict|standard`` (``--allow TOOLSET``),
+``parity`` or ``open``. A twin whose preset the rule chose before 0.5.1 (standard or strict) is moved to parity
+once by ``hermes twin setup --auto`` (``migrate_to_parity``), which says what changed; an owner's choice is kept. Every write keeps a dated copy of the
 config next to it (the newest BACKUPS_KEPT), and the first one keeps ``.twin-pre-safety.yaml``, put back when
 twinning stops if nothing changed config.yaml since.
 
@@ -25,6 +35,7 @@ policy is recorded (``--model-policy any``), so the check never asks mid-run and
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
@@ -35,7 +46,20 @@ from typing import Any, Iterable, Optional
 
 from . import safe, store
 
-PRESETS = ("strict", "standard", "open")
+PRESETS = ("parity", "strict", "standard", "open")
+DEFAULT_PRESET = "parity"
+# twin#71: what every Grok bot can do, as Hermes toolsets, in the order the PASS line names them: (toolset, words,
+# note). Grok gives each bot a browser, web and X search, code execution, files and image generation, and a shell
+# and computer use through "Execution on Local Computer"; a risky action still asks first (approvals manual).
+GROK_CAPABILITIES = (("browser", "browser", ""), ("web", "web", ""), ("x_search", "X search", ""),
+                     ("terminal", "shell", "risky commands ask first"), ("file", "files", ""),
+                     ("code_execution", "code", "risky code asks first"), ("image_gen", "image generation", ""),
+                     ("computer_use", "computer use", "where this computer supports it; asks first"))
+PARITY_ON = [t for t, _w, _n in GROK_CAPABILITIES]
+# off in parity too (hard floors): the agent schedules nothing itself and starts no other agents; the twin's
+# routines are its Grok bot's, imported switched off and run by twin
+PARITY_OFF = ["cronjob", "delegation"]
+PARITY_OFF_WHY = "agent scheduling and delegation (hard floor: the twin's routines come from its Grok bot)"
 STRICT_ALLOWED = ["knowledge", "memory", "session_search", "todo"]
 # toolsets that open a shell or a socket: off in every preset but "open"
 SHELL_SOCKET = ["terminal", "code_execution", "delegation", "cronjob", "browser", "computer_use"]
@@ -239,9 +263,17 @@ def _standard_denied(allow: Iterable[str]) -> list:
     return [t for t in STANDARD_DENIED if t not in allow]
 
 
-def want(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str] = ()) -> dict:
+def grok_capabilities(home: Optional[Path] = None) -> list:
+    """The Hermes toolsets matching what the Grok bot can do (twin#71). Grok gives every bot the same tools, so
+    this is GROK_CAPABILITIES for every bot; `home` is the twin's profile, for a later per-bot map."""
+    return list(PARITY_ON)
+
+
+def want(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str] = (),
+         caps: Optional[Iterable[str]] = None) -> dict:
     """The config with the preset applied. Every key it does not name is kept (model, memory, display...).
-    `allow`: in standard, the WIDENABLE toolsets the owner let the twin keep."""
+    `allow`: in standard, the WIDENABLE toolsets the owner let the twin keep. `caps`: in parity, the toolsets
+    the Grok bot has (grok_capabilities); none of them is disabled, on any platform."""
     if preset not in PRESETS:
         raise ValueError("unknown preset")
     if preset == "open":
@@ -251,7 +283,17 @@ def want(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str
     a.update(mode="manual", cron_mode="deny", unattended_mode="deny", single_query_mode="deny")
     c.setdefault("cron", {})["allow_agent_scheduling"] = False
     c.setdefault("terminal", {})["env_passthrough"] = []
-    if preset == "strict":
+    if preset == "parity":
+        on = set(PARITY_ON if caps is None else caps)
+        agent["disabled_toolsets"] = sorted((set(agent.get("disabled_toolsets") or []) - on) | set(PARITY_OFF))
+        if isinstance(c.get("toolsets"), list):
+            c["toolsets"] = [t for t in c["toolsets"] if t not in PARITY_OFF]
+        pt = c.get("platform_toolsets")
+        if isinstance(pt, dict):  # (Telegram's hermes-telegram and the CLI's keep everything but the floors)
+            for k, v in list(pt.items()):
+                if isinstance(v, list):
+                    pt[k] = [t for t in v if t not in PARITY_OFF]
+    elif preset == "strict":
         c["toolsets"] = list(STRICT_ALLOWED)
         c["platform_toolsets"] = {p: list(STRICT_ALLOWED) for p in PLATFORMS}
         agent["disabled_toolsets"] = sorted(set(STRICT_DISABLED) | set(agent.get("disabled_toolsets") or []))
@@ -289,7 +331,15 @@ def problems(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable
         bad.append("cron.allow_agent_scheduling")
     if (c.get("terminal") or {}).get("env_passthrough"):
         bad.append("terminal.env_passthrough")
-    if preset == "strict":
+    if preset == "parity":
+        if set(PARITY_OFF) - disabled:
+            bad.append("disabled_toolsets")
+        on = list(c.get("toolsets") or [])
+        for v in (c.get("platform_toolsets") or {}).values():
+            on += list(v or [])
+        if set(on) & set(PARITY_OFF):
+            bad.append("toolsets (scheduling or delegation)")
+    elif preset == "strict":
         if list(c.get("toolsets") or []) != STRICT_ALLOWED:
             bad.append("toolsets")
         pt = c.get("platform_toolsets") or {}
@@ -403,13 +453,16 @@ def apply_default(profile: str, home: Optional[Path] = None) -> dict:
         preset, words, by = rec["preset"], list(rec.get("words") or []), "owner"
         allow = _allow_of(rec)
     else:
-        preset, words = choose(profile_texts(home))
+        if rec.get("preset") in ("strict", "standard"):  # chosen by the rule before 0.5.1: parity now (twin#71)
+            _migrate(profile, home, rec)
+            rec = records().get(profile) or {}
+        preset, words = DEFAULT_PRESET, choose(profile_texts(home))[1]
         by = "rule"
     path, extra = None, {}
     if preset != "open":
         before = home / "config.yaml"
         had = before.read_bytes() if before.is_file() else None
-        path = write_config(home, want(load_config(home), preset, keep_mcp(), allow))
+        path = write_config(home, want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home)))
         # what to put back when twinning stops (forget): only the first rule-applied write is kept as "before"
         if not rec.get("before_written") and by == "rule":
             keep = home / BACKUP_NAME
@@ -419,7 +472,82 @@ def apply_default(profile: str, home: Optional[Path] = None) -> dict:
         extra["wrote_sha"] = hashlib.sha256(path.read_bytes()).hexdigest()
         extra["wrote_owned"] = owned_sha(load_config(home))
     record(profile, preset=preset, words=words[:10], chosen_by=by, **extra)
-    return {"preset": preset, "words": words, "chosen_by": by, "path": str(path) if path else None}
+    return {"preset": preset, "words": words, "chosen_by": by, "path": str(path) if path else None,
+            "capabilities": capabilities(load_config(home), preset)}
+
+
+def capabilities(c: dict, preset: str) -> list:
+    """[{"toolset", "name", "on", "note"}] for every Grok capability, as this config holds it (twin#71)."""
+    disabled = set(((c.get("agent") or {}).get("disabled_toolsets")) or [])
+    out = []
+    for t, words, note in GROK_CAPABILITIES:
+        on = t not in disabled and preset != "strict"
+        why = note if on else ("off: the owner chose " + preset if preset in ("strict", "standard") and
+                               t in (STRICT_DISABLED if preset == "strict" else STANDARD_DENIED)
+                               else "off in this profile's config.yaml")
+        out.append({"toolset": t, "name": words, "on": on, "note": why})
+    return out
+
+
+def capability_words(caps: list) -> str:
+    """"browser ✓, web ✓, shell ✓ (risky commands ask first) ..., off: ..." for a PASS line."""
+    parts = [f"{c['name']} {'✓' if c['on'] else '✗'}" + (f" ({c['note']})" if c["note"] else "") for c in caps]
+    return ", ".join(parts) + f"; off: {PARITY_OFF_WHY}"
+
+
+def _migrate(profile: str, home: Path, rec: dict) -> list:
+    """A rule-chosen standard or strict twin (before 0.5.1) to parity: the toolset lists and MCP servers the old
+    preset narrowed come back from the copy kept before the first safe defaults (.twin-pre-safety.yaml), the
+    toolsets it disabled are enabled again (the owner's own disabled ones stay), and the hard floors are written.
+    -> the capability names turned on. The record keeps wrote_sha (stop still puts the pre-twin copy back)."""
+    old = rec.get("preset")
+    c = load_config(home)
+    before: dict = {}
+    keep = home / BACKUP_NAME
+    if rec.get("before_written") and rec.get("had_config") and keep.is_file():
+        with contextlib.suppress(Exception):
+            from io import StringIO
+            kind, y = _yaml()
+            text = keep.read_text(encoding="utf-8")
+            before = (y.load(StringIO(text)) if kind == "rt" else y.safe_load(text) if y is not None
+                      else _read_block(text)) or {}
+            before = before if isinstance(before, dict) else {}
+    was_off = set(((c.get("agent") or {}).get("disabled_toolsets")) or [])
+    ours = set(STRICT_DISABLED if old == "strict" else STANDARD_DENIED)
+    base = (was_off - ours) | set(((before.get("agent") or {}).get("disabled_toolsets")) or [])
+    c.setdefault("agent", {})["disabled_toolsets"] = sorted(base)
+    for key in ("toolsets", "platform_toolsets", "mcp_servers"):
+        if key in before:
+            c[key] = before[key]
+        elif old == "strict":  # (strict wrote these keys itself; standard only narrowed lists that were there)
+            c.pop(key, None)
+    caps = grok_capabilities(home)
+    c = want(c, "parity", keep_mcp(), (), caps)
+    path = write_config(home, c)
+    turned_on = [w for t, w, _n in GROK_CAPABILITIES if t in caps and t in was_off]
+    record(profile, preset="parity", chosen_by="rule", parity_migrated=True, migrated_from=old,
+           wrote_sha=hashlib.sha256(path.read_bytes()).hexdigest(), wrote_owned=owned_sha(load_config(home)))
+    return turned_on
+
+
+def migrate_to_parity(profiles: Iterable[str]) -> list:
+    """twin#71, run once by `hermes twin setup --auto`: every twin whose preset the rule chose before 0.5.1
+    (standard or strict) moves to parity. An owner's choice and a twin already on parity are left alone; a twin
+    that cannot be moved is named and left as it was. -> [{"profile", "from", "turned_on": [names]} | {"profile",
+    "error"}]."""
+    out = []
+    data = records()
+    for prof in profiles:
+        rec = data.get(prof)
+        if not isinstance(rec, dict) or rec.get("chosen_by") != "rule" or rec.get("preset") not in ("standard",
+                                                                                                    "strict"):
+            continue
+        try:
+            home = store.profile_home(prof)
+            out.append({"profile": prof, "from": rec["preset"], "turned_on": _migrate(prof, home, rec)})
+        except Exception as exc:  # noqa: BLE001  (named in setup's line; the twin keeps its narrower preset)
+            out.append({"profile": prof, "from": rec["preset"], "error": type(exc).__name__})
+    return out
 
 
 # The parts of config.yaml the safe defaults own (want() writes them); every other key (model, memory, display...)
@@ -507,7 +635,7 @@ def set_preset(profile: str, preset: str, home: Optional[Path] = None, allow: It
     home = home or store.profile_home(profile)
     extra = {}
     if preset != "open":
-        path = write_config(home, want(load_config(home), preset, keep_mcp(), allow))
+        path = write_config(home, want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home)))
         extra["wrote_sha"] = hashlib.sha256(path.read_bytes()).hexdigest()  # (stop still puts the old one back)
         extra["wrote_owned"] = owned_sha(load_config(home))
     return record(profile, preset=preset, chosen_by="owner", allow=sorted(set(allow)), **extra)
@@ -525,7 +653,7 @@ def check(profile: str, home: Optional[Path] = None) -> dict:
     home = home or store.profile_home(profile)
     rec = records().get(profile) or {}
     c = load_config(home)
-    preset = rec.get("preset") if rec.get("preset") in PRESETS else choose(profile_texts(home))[0]
+    preset = rec.get("preset") if rec.get("preset") in PRESETS else DEFAULT_PRESET
     bad = problems(c, preset, keep_mcp(), _allow_of(rec) if rec.get("chosen_by") == "owner" else [])
     local = model_is_local(c)
     policy = rec.get("model_policy") or "local"
@@ -534,11 +662,14 @@ def check(profile: str, home: Optional[Path] = None) -> dict:
         bad.append(f"model is {model}: record a model policy (hermes twin safety {safe.clean_name(profile, 60)} "
                    "--model-policy any) or point the twin at a local model")
     return {"ok": not bad, "preset": preset, "chosen_by": rec.get("chosen_by") or "rule", "problems": bad,
-            "model": model, "model_policy": policy, "words": list(rec.get("words") or [])}
+            "model": model, "model_policy": policy, "words": list(rec.get("words") or []),
+            "capabilities": capabilities(c, preset)}
 
 
 def line(profile: str, res: dict) -> str:
     who = safe.clean_name(profile, 60)
     if res["ok"]:
-        return f"PASS: twin {who} safety {res['preset']} ({res['chosen_by']}), model {res['model']}"
+        caps = res.get("capabilities")
+        return (f"PASS: twin {who} safety {res['preset']} ({res['chosen_by']}), model {res['model']}"
+                + (f"; capabilities: {capability_words(caps)}" if caps and res["preset"] != "open" else ""))
     return f"FAIL: twin {who} safety {res['preset']}: " + "; ".join(res["problems"][:6])

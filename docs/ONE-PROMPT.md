@@ -157,9 +157,11 @@ not opened), then carries on, so twinning stays one prompt. If setup FAILs, the 
 available" FAIL with setup's reason. A closed port is not "missing": no setup runs, run `botport grok launch`.
 
 **Safe profile defaults.** Every twin profile this makes or adopts gets the safe defaults by rule
-(`hermes twin safety`: `strict` for a bot whose instructions, skills or routines mention shell, ssh, servers and
-the like; `standard` otherwise), applied on what the import wrote and before the behaviour test or anything else
-runs in it. A choice you made with `hermes twin safety TWIN strict|standard|open` is kept. `hermes twin add` and the
+(`hermes twin safety`: `parity`, the twin can do what its Grok bot can do: browser, web and X search, shell, files,
+code, image generation and computer use, in the desktop app and Telegram alike; risky actions ask first in the chat
+they came from, and agent scheduling and delegation stay off), applied on what the import wrote and before the
+behaviour test or anything else runs in it. The PASS line lists the capabilities. A choice you made with
+`hermes twin safety TWIN parity|strict|standard|open` is kept. `hermes twin add` and the
 one prompt from Grok do the same when they make a profile. If `add` cannot apply them, its line is a FAIL and the
 twin's routines and Telegram route stay off until `hermes twin safety TWIN --apply` passes.
 
