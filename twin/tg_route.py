@@ -359,4 +359,5 @@ def handle(raw_args: str, platform: Any = None, source: Any = None, resolve: Opt
     if not res or not res.get("ok"):
         return f"The twin {safe.clean_name(prof, 60)} could not answer just now."
     reply = str(res.get("reply") or "").strip() or "(no reply)"
-    return f"[{safe.clean_name(prof, 60)}] " + safe.cap(reply, REPLY_CAP)
+    from .model_check import redact  # twin#66: no private address, local name or port reaches Telegram
+    return f"[{safe.clean_name(prof, 60)}] " + safe.cap(redact(reply), REPLY_CAP)

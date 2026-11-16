@@ -83,6 +83,7 @@ Advanced
   secret list|set|forget|share|pull [NAME]  secrets kept by reference in this computer's OS store
   telegram on|off|status [TWIN...]  reach twins through your existing Hermes Telegram bot (no BotFather)
   safety [TWIN] [strict|standard|open]  a twin's tool preset (chosen by rule; --apply, --model-policy)
+  check-model [TWIN]     the twin answers on its configured model, in Hermes and Telegram (no private addresses)
   import [TWIN] FILE     import the setup export a Grok bot wrote about itself (--request prints what to ask it)
   import-exports DIR     import every setup export in a folder, each into its bot's twin (--show)
   switch [TWIN]          move routines to Hermes: turn the copied routines on (--undo pauses them again)

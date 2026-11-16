@@ -77,6 +77,14 @@ the check until you record `--model-policy any`. Every write keeps a dated copy 
 Stopping a twin puts its config.yaml back as it was before the safe defaults when nothing changed it since;
 otherwise the stop names the kept copy (`.twin-pre-safety.yaml`).
 
+`hermes twin check-model [TWIN]` sends the twin one fixed message, "Reply with the model and endpoint you are
+configured to use", once through a Hermes turn and, when the twin is on the Telegram route, once through that
+route, and compares each reply with the model in the twin's config.yaml. PASS when every reply names that model;
+a FAIL names the channel that was wrong or silent. The terminal line may show the full endpoint address; anything
+meant for Telegram shows only the provider, the model and either a public hostname or "custom endpoint on your
+network", never a private address, a local or tailnet name, or a port. Replies of twins on the Telegram route get
+the same redaction.
+
 ## The sample tour
 
 The sample has invented bots: Acme Support (skills greet-visitors and fun-fact, routines "Morning summary" and

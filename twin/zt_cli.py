@@ -95,6 +95,21 @@ def cmd_safety(a: Any) -> int:
     return rc
 
 
+def cmd_check_model(a: Any) -> int:
+    """twin#66: one fixed message per channel (Hermes, and Telegram when the twin is on the route)."""
+    from . import model_check
+    svc = _svc()
+    prof = resolve_profile(svc, a.twin) if a.twin else _only(svc)
+    res = model_check.check(prof)
+    if getattr(a, "json", False):
+        import json
+        print(json.dumps({k: res[k] for k in ("ok", "line", "telegram_line", "configured") if k in res},
+                         ensure_ascii=False))
+    else:
+        print(res["line"])
+    return 0 if res["ok"] else 1
+
+
 def _only(svc: Any) -> str:
     from .cli import _one
     return profile_of(svc, _one(svc, None))
@@ -119,6 +134,12 @@ def setup(subs: Any) -> None:
     p.add_argument("--model-policy", choices=("local", "any"), help="Record the model policy (default local)")
 
 
+    p = subs.add_parser("check-model", help="Check the twin answers on its configured model, in Hermes and (when on "
+                                            "the Telegram route) in Telegram; Telegram never sees a private address")
+    p.add_argument("twin", nargs="?", metavar="TWIN")
+    p.add_argument("--json", action="store_true")
+
+
 def add_setup_flags(p: Any) -> None:
     p.add_argument("--auto", action="store_true",
                    help="No questions, no manual steps: fetch + verify the pinned botport, make hermes twin work "
@@ -133,4 +154,4 @@ def add_setup_flags(p: Any) -> None:
                    help="Print the pinned one-line install for this plugin version")
 
 
-HANDLERS = {"telegram": cmd_telegram, "safety": cmd_safety}
+HANDLERS = {"telegram": cmd_telegram, "safety": cmd_safety, "check-model": cmd_check_model}
