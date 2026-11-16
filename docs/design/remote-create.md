@@ -89,3 +89,20 @@ A throwaway `HERMES_HOME` cannot run Hermes: the Hermes install lives inside the
 So detect now tells "Hermes is there but does not run with HERMES_HOME=..." apart from "Hermes is missing". A fully
 isolated live test of steps 3-8 needs Hermes installed into the throwaway home itself, i.e. `--install-hermes` with a
 pinned installer.
+
+## Live test 2 (Linux test computer, 2026-11-17)
+
+Hermes 0.23.1 was installed with its own `install.sh --non-interactive` into a throwaway `HOME` (so its launcher, shell
+rc lines and `~/.hermes` all stayed inside the test folder); the computer's own Hermes (0.22.4) was not touched.
+remote-create then ran over real SSH with every command prefixed by that `HOME`:
+
+- `--plan`: 7 steps listed, 0 SSH calls.
+- An unknown host: one FAIL line ending in the paste line.
+- reach, detect (`Linux, Hermes 0.23.1`), plugin (pinned commit), setup: PASS. A re-run printed `plugin: already
+  done`. Fixed from this run: the plugin probe (Hermes prints `enabled  git pinned@... NAME`, name last) and the setup
+  probe (`setup --check` fails on a link target by design, so setup has no probe and simply runs again).
+- link: FAIL `no link code` as expected; a real link needs a sharing computer with twins (a Grok app), which the
+  test computer does not have. The check step's key count there was 0, so it would FAIL with "needs a key".
+- The CLI now hands a fresh local link code to the link step (never printed), and when the owner already shared
+  secrets with linked computers the check step runs `hermes twin secret pull` there (by reference over the link);
+  otherwise nothing secret is touched.

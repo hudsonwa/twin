@@ -98,10 +98,11 @@ def plan(t: Target, twin: str, *, ref: str, install_hermes: bool, link_code: str
                                     "--non-interactive", probe=_hermes(t, "--version"), timeout=600))
     steps += [
         Step("plugin", _hermes(t, f"plugins install hudsonwa/twin --ref {q(ref or '<commit>')} --enable"),
-             probe=_hermes(t, "plugins list --plain --no-bundled") + " | grep -q '^grok-bot-twin.*enabled'",
+             probe=_hermes(t, "plugins list --enabled --plain --no-bundled") + " | grep -qw grok-bot-twin",
              timeout=300),
-        Step("setup", _hermes(t, "twin setup --auto"), probe=_hermes(t, "twin setup --check") + " >/dev/null",
-             timeout=300),
+        # No probe: `setup --check` fails on a link target by design (no Grok app there), and `setup --auto` is
+        # idempotent, so a re-run simply runs it again (live test 2026-11-17).
+        Step("setup", _hermes(t, "twin setup --auto"), timeout=300),
         Step("link", _hermes(t, f"twin setup --link {q(link_code)} --yes"),
              probe=_hermes(t, "twin fleet --json") + " | grep -q '\"role\": *\"follower\"'", timeout=120),
         Step("instance", _hermes(t, f"twin instance create {q(twin)} --name {q(name)} --yes"),
