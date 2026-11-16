@@ -472,7 +472,7 @@ column says why. Watch its first runs.
 | Skill sync and Hermes → Grok through a sync bot in your Grok account | experimental | off; tested only against a pretend Grok. [Skill sync](#skill-sync-optional) |
 | A twin's whole conversations (archive and search) | experimental | off by default. [Archive](#a-twins-whole-conversations-archive-and-search) |
 | A same-named Telegram bot per twin (`telegram_bot_per_twin`) | experimental, not usable yet | new in 0.5.2; off by default, keep it off; tested only against a pretend Telegram, and the last step is not connected yet. [Telegram bot per twin](TERMINAL.md#a-telegram-bot-per-twin-experimental) |
-| A twin on another computer over SSH (`remote-create`) | experimental, hidden | new in 0.5.2; not in `--help`, prints `EXPERIMENTAL` first. The agent tool `twin_remote_create` shows the plan and waits for your yes; hidden `hermes twin instance create\|list` names copies "Name 2", "Name 3" across your computers. `--install-hermes` still refuses: the Hermes installer pin is empty in this release. [Design](design/remote-create.md) |
+| A twin on another computer over SSH (`remote-create`) | experimental, hidden | new in 0.5.2; not in `--help`, prints `EXPERIMENTAL` first. The agent tool `twin_remote_create` shows the plan and waits for your yes; hidden `hermes twin instance create` and `hermes twin instance list` name copies "Name 2", "Name 3" across your computers. `--install-hermes` still refuses: the Hermes installer pin is empty in this release. [Design](design/remote-create.md) |
 
 ## Pictures
 
