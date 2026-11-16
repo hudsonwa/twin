@@ -24,7 +24,10 @@ exported again, routine chat sync is at most hourly and shows its weekly cost fi
   kept 15 minutes.
 - Experimental, hidden `hermes twin remote-create COMPUTER TWIN --plan|--yes` (#70): sets a twin up on another
   computer over SSH, with the local link code and linked-shared secrets pulled by reference; design in
-  `docs/design/remote-create.md`.
+  `docs/design/remote-create.md`. Also experimental: the agent tool `twin_remote_create` (shows the plan first and
+  acts only on the owner's yes), hidden `hermes twin instance create|list` (the next free "Name N" across the fleet),
+  and pinned-installer plumbing for Hermes. The installer pin ships empty, so `--install-hermes` still refuses
+  (FAIL) instead of running an unpinned script.
 
 ### Changed
 
