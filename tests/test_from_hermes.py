@@ -143,7 +143,8 @@ def test_routine_mode_pass_is_checked_on_this_computer(svc, stub):
     assert res["ok"], res["line"]
     line = res["line"]
     assert line.startswith("PASS: Acme Support: twinned through the engine") and TWIN_LINE in line
-    assert f"routine \"{chat_sync.ROUTINE_NAME}\" every 360 min (the bot confirmed the routine)" in line
+    assert f"routine \"{chat_sync.ROUTINE_NAME}\" every 360 min (the bot confirmed the routine;" in line
+    assert "about 28 turns a week per bot" in line
     assert "first sync landed, 3 new message(s)" in line and "one-prompt log has the PASS" in line
     prompt = [a for a in stub.calls() if a[1] == "ask"][0][3]
     assert prompt.startswith("Clone yourself to Hermes") and chat_sync.command_for("Acme Support") in prompt
@@ -283,6 +284,29 @@ def test_routine_is_refused_unless_grok_reads_always_allow(svc, stub, perm, show
     assert not res["ok"] and f"Always allow, and it reads {shown}" in res["line"]
     assert "Hermes never changes that setting" in res["line"] and "chat_sync_mode pull" in res["line"]
     assert not any(a[1] == "ask" for a in stub.calls())  # refused before the bot is asked anything
+
+
+def test_routine_mode_refuses_less_than_an_hour_with_the_reason(svc, stub, tmp_path):
+    config.set_override({"botport_path": str(tmp_path / "no-botport-here"), "chat_sync_mode": "routine",
+                         "from_hermes_route": "shell", "chat_sync_minutes": 15})
+    stub.play(bots=[bots_answer(ACME)], ask=[GOOD_ASK])
+    res = run(svc, stub)
+    assert not res["ok"] and "chat sync by routine runs at most once an hour" in res["line"]
+    assert "chat_sync_minutes is 15" in res["line"] and "about 672 turns a week" in res["line"]
+    assert not any(a[1] == "ask" for a in stub.calls())  # refused before the bot is asked anything
+    assert chat_sync.routine_refusal(60) == "" and chat_sync.weekly_turns(60) == 168
+
+
+def test_enabling_routine_prints_the_weekly_estimate_first(svc, stub, monkeypatch, capsys):
+    import argparse
+    config.set_override({"botport_path": "/nonexistent", "chat_sync_mode": "routine", "from_hermes_route": "shell",
+                         "chat_sync_minutes": 60})
+    monkeypatch.setattr(from_hermes, "run", lambda *a, **kw: {"ok": True, "line": "PASS: done", "bots": []})
+    a = argparse.Namespace(bot="Acme Support", bots=None, only=None, all=False, wait=False, timeout=60, route=None,
+                           file=False, shared_skills=False, json=False)
+    assert from_hermes.cmd(a) == 0
+    out = capsys.readouterr().out
+    assert out.index("about 168 turns a week per bot") < out.index("PASS: done")
 
 
 def test_routine_prompt_sends_a_window_and_the_mac_tracks_what_is_new():
