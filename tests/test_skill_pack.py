@@ -165,3 +165,17 @@ def test_harmless_twin_with_the_pack_stays_standard_and_names_no_words(svc, home
     own.parent.mkdir(parents=True)
     own.write_text("Use ssh to check the server.", encoding="utf-8")
     assert ps.choose(ps.profile_texts(h))[0] == "strict"
+
+
+def test_hermes_bundled_skills_are_not_read_as_the_bots_text(svc, home):  # noqa: F811
+    from hermes_plugins.grok_bot_twin.twin import profile_safety as ps
+    h = _register(svc, "garden")
+    (h / "SOUL.md").write_text("Suggest what to plant this season.", encoding="utf-8")
+    assert skill_pack.install_home(h)
+    b = h / "skills" / "software-development" / "debug-notes" / "SKILL.md"  # a Hermes bundled skill (invented)
+    b.parent.mkdir(parents=True)
+    b.write_text("Open a terminal and run bash to inspect the server.", encoding="utf-8")
+    (h / "skills" / ".bundled_manifest").write_text("debug-notes:0123abcd\n", encoding="utf-8")
+    assert ps.choose(ps.profile_texts(h)) == ("standard", [])
+    (h / "skills" / ".bundled_manifest").write_text("", encoding="utf-8")  # not listed: read like the bot's own
+    assert ps.choose(ps.profile_texts(h))[0] == "strict"

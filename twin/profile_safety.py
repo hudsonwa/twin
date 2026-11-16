@@ -108,6 +108,15 @@ def choose(texts: Iterable[Any]) -> tuple:
     return ("strict", words) if words else ("standard", [])
 
 
+def _bundled_names(skills: Path) -> set:
+    """Folder names Hermes lists in skills/.bundled_manifest ("name:hash" per line); empty when absent."""
+    try:
+        raw = (skills / ".bundled_manifest").read_text(encoding="utf-8", errors="replace")[:TEXT_CAP]
+    except OSError:
+        return set()
+    return {ln.split(":", 1)[0].strip() for ln in raw.splitlines() if ln.strip() and not ln.startswith("#")}
+
+
 def profile_texts(home: Path) -> list:
     """What the rule reads in a twin's profile: its instructions (SOUL.md), its skills, its routines' prompts and
     the Grok tools named in them. Hermes' own config.yaml is not read (its default toolsets would make every twin
@@ -116,9 +125,12 @@ def profile_texts(home: Path) -> list:
     cands = [home / "SOUL.md", home / "cron" / "jobs.json"]
     skills = home / "skills"
     if skills.is_dir():
+        bundled = _bundled_names(skills)
         for p in sorted(skills.rglob("SKILL.md"))[:200]:
             if skill_pack.is_pack_dir(p.relative_to(skills).parts[0]):
                 continue  # twin#65: the plugin's own skill pack (twin-update names "terminal") is not the bot's
+            if p.parent.name in bundled:
+                continue  # Hermes' own bundled skills (listed in .bundled_manifest) are not the bot's either
             cands.append(p)
     total = 0
     for p in cands:
