@@ -25,7 +25,8 @@ Run = Callable[[list, float], tuple]  # (argv, timeout) -> (rc, stdout, stderr)
 RESTART_TIMEOUT_S = 180.0  # one `gateway restart` call (seen: over 90 s on a standalone twin profile)
 START_TIMEOUT_S = 120.0
 STATUS_TIMEOUT_S = 30.0
-WAIT_S = 120.0             # how long a gateway may take to say it is running after restart/start
+WAIT_S = 45.0              # how long a gateway may take to say it is running after restart/start
+TOTAL_S = 180.0            # review rc052 #9: no new twin is restarted after this long; the rest are left as they were
 POLL_S = 3.0
 _NOT_RUNNING = ("not running", "stopped", "inactive", "not loaded", "no gateway", "dead", "failed")
 # review rc052 #9: these count only as status words, never inside other text: "running, 0 failed" or
@@ -91,21 +92,27 @@ def restart_one(hermes: str, profile: str, run: Run = _run, wait_s: float = WAIT
 
 def restart_running(profiles: Iterable[str], hermes: Optional[str] = None, run: Run = _run, wait_s: float = WAIT_S,
                     sleep: Callable[[float], None] = time.sleep,
-                    clock: Callable[[], float] = time.monotonic) -> dict:
+                    clock: Callable[[], float] = time.monotonic, total_s: float = TOTAL_S) -> dict:
     """Every twin gateway that was running before is restarted and running again, or named offline.
-    -> {"restarted": [profiles], "offline": [profiles], "skipped": why-or-""}"""
+    Once `total_s` has passed, no further twin is touched (not checked, not stopped): those are named in
+    "left" with the command to restart them. The twin in progress when the cap passes is finished first.
+    -> {"restarted": [profiles], "offline": [profiles], "left": [profiles], "skipped": why-or-""}"""
     if hermes is None:
         from .behaviour import hermes_path
         hermes = hermes_path()
     if not hermes:
-        return {"restarted": [], "offline": [], "skipped": "Hermes' own command was not found"}
-    restarted, offline = [], []
+        return {"restarted": [], "offline": [], "left": [], "skipped": "Hermes' own command was not found"}
+    restarted, offline, left = [], [], []
+    end = clock() + max(0.0, float(total_s))
     for prof in dict.fromkeys(p for p in profiles if isinstance(p, str) and p and p != "default"):
+        if left or clock() >= end:
+            left.append(prof)  # (time cap: left exactly as it was)
+            continue
         if not is_running(hermes, prof, run):
             continue  # (not running before: left as it is)
         got = restart_one(hermes, prof, run, wait_s, sleep, clock)
         (offline if got["state"] == "offline" else restarted).append(prof)
-    return {"restarted": restarted, "offline": offline, "skipped": ""}
+    return {"restarted": restarted, "offline": offline, "left": left, "skipped": ""}
 
 
 def note(res: dict) -> str:
@@ -118,6 +125,10 @@ def note(res: dict) -> str:
     if res.get("offline"):
         out += ("; OFFLINE twin gateway(s), Telegram silent: " + ", ".join(res["offline"])
                 + " (start with: " + "; ".join(f"hermes -p {p} gateway start" for p in res["offline"]) + ")")
+    if res.get("left"):
+        out += ("; twin gateways NOT restarted (time cap reached, left as they were, may run the old version): "
+                + ", ".join(res["left"]) + " (restart with: "
+                + "; ".join(f"hermes -p {p} gateway restart" for p in res["left"]) + ")")
     return out
 
 

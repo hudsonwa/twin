@@ -119,7 +119,7 @@ def _restart(fake, profiles=("acme-support", "recipe-planner", "widget-desk")):
 def test_every_gateway_running_before_runs_again_and_stopped_ones_stay_stopped():
     fake = FakeHermes({"acme-support": True, "recipe-planner": True, "widget-desk": False})
     res = _restart(fake)
-    assert res == {"restarted": ["acme-support", "recipe-planner"], "offline": [], "skipped": ""}
+    assert res == {"restarted": ["acme-support", "recipe-planner"], "offline": [], "left": [], "skipped": ""}
     assert fake.running == {"acme-support": True, "recipe-planner": True, "widget-desk": False}
     assert ("widget-desk", "restart") not in fake.calls and ("widget-desk", "start") not in fake.calls
 
@@ -139,6 +139,58 @@ def test_a_gateway_that_will_not_start_is_named_offline_in_the_pass_line():
     words = gateways.note(res)
     assert "OFFLINE twin gateway(s)" in words and "recipe-planner" in words
     assert "hermes -p recipe-planner gateway start" in words
+
+
+class SlowHermes(FakeHermes):
+    """Every restart call takes `cost` seconds on the shared clock."""
+
+    def __init__(self, running, clock, cost):
+        super().__init__(running)
+        self.clock, self.cost = clock, cost
+
+    def __call__(self, argv, timeout):
+        if argv[4] == "restart":
+            self.clock.t += self.cost
+        return super().__call__(argv, timeout)
+
+
+def test_time_cap_leaves_the_remaining_twins_as_they_were_and_names_them():
+    c = Clock()
+    fake = SlowHermes({"acme-support": True, "recipe-planner": True, "widget-desk": True}, c, cost=100)
+    res = gateways.restart_running(("acme-support", "recipe-planner", "widget-desk"), hermes="/fake/hermes",
+                                   run=fake, wait_s=10, sleep=c.sleep, clock=c, total_s=150)
+    assert res["restarted"] == ["acme-support", "recipe-planner"] and res["left"] == ["widget-desk"]
+    assert not any(p == "widget-desk" for p, _ in fake.calls)  # not checked, not stopped
+    assert fake.running["widget-desk"] is True
+    words = gateways.note(res)
+    assert "time cap" in words and "hermes -p widget-desk gateway restart" in words
+
+
+def test_default_cap_and_shorter_per_twin_wait():
+    assert gateways.TOTAL_S == 180.0 and gateways.WAIT_S < 120.0
+
+
+def test_cap_zero_touches_nothing():
+    fake = FakeHermes({"acme-support": True})
+    c = Clock()
+    res = gateways.restart_running(("acme-support",), hermes="/fake/hermes", run=fake, sleep=c.sleep, clock=c,
+                                   total_s=0)
+    assert res["left"] == ["acme-support"] and fake.calls == []
+
+
+def test_setup_cli_passes_the_cap(monkeypatch):
+    seen = []
+    monkeypatch.setattr(zt_cli, "_svc", lambda: None)
+    monkeypatch.setattr(zt_cli, "twin_profiles", lambda svc: ("acme-support",))
+    monkeypatch.setattr(gateways, "restart_running", lambda profs, total_s: seen.append(total_s) or {})
+    monkeypatch.setattr(auto_setup, "run", lambda svc, open_port, link_profile, gateways: (gateways(), (0, "PASS"))[1])
+    p = argparse.ArgumentParser()
+    zt_cli.add_setup_flags(p)
+    for argv in ([], ["--gateway-restart-cap", "60"]):
+        a = p.parse_args(argv)
+        a.install_line = False
+        assert zt_cli.cmd_setup_auto(a) == 0
+    assert seen == [gateways.TOTAL_S, 60.0]
 
 
 def test_the_default_profile_is_never_restarted():
