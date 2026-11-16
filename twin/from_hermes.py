@@ -380,10 +380,19 @@ def _remember(exp: dict, res: dict) -> None:
     store.atomic_write_json(_fp_path(), st)
 
 
+SKIP_MAX_AGE_S = 7 * 24 * 3600  # review rc052 #8: a skip never lasts longer than this; then it is exported again
+
+
 def _unchanged(bot: dict, routines: Optional[list], last_key: Optional[str]) -> bool:
     rec = _fingerprints().get(bot["id"])
     if not isinstance(rec, dict) or rec.get("fp") != fingerprint(bot, routines, last_key):
         return False
+    at = parse_iso(rec.get("at"))
+    if at is None:
+        return False  # no readable export time: export again
+    age = (datetime.now(timezone.utc) - at).total_seconds()
+    if not 0 <= age <= SKIP_MAX_AGE_S:
+        return False  # older than 7 days (or from the future): export again
     prof = rec.get("profile")
     return not prof or store.profile_home(str(prof)).is_dir()  # a twin removed since is exported again
 
@@ -414,7 +423,9 @@ def export_one(eng: ge.GrokEngine, bot: dict, force_file: bool = False, timeout_
     if not force and _unchanged(bot, out["routines"], read_msgs[-1]["key"] if read_msgs else None):
         return {**out, "ok": True, "skipped": True,
                 "line": f"PASS: {name}: unchanged since its last export (name, routines and last activity read by "
-                        "the engine match); not asked, 0 turns. --force exports it again."}
+                        "the engine match; instructions, memory and skills edited without a chat message are not "
+                        "compared); not asked, 0 turns. It is exported again after 7 days; --force exports it "
+                        "now."}
     deadline = time.monotonic() + timeout_s
     asked = _drive(eng, bot["id"], bot_export.REQUEST_FILE if force_file else bot_export.REQUEST, None, deadline)
     if asked.exit != ge.DONE:

@@ -680,6 +680,24 @@ def test_second_all_over_unchanged_bots_takes_no_turn_and_says_why(svc, world, s
     assert res["ok"] and cmds(stub).count("ask") == 6  # --force exports again
 
 
+def test_an_unchanged_bot_is_exported_again_after_seven_days(svc, world, stub, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import from_hermes as fh, store as st
+    _record_imports(monkeypatch)
+    _three(stub, HISTORY)
+    assert run(svc, stub, names=None, all_bots=True)["ok"]
+    _three(stub, AFTER)
+    res = run(svc, stub, names=None, all_bots=True)
+    assert cmds(stub).count("ask") == 3 and "not compared" in res["bots"][0]["line"]
+    assert "exported again after 7 days" in res["bots"][0]["line"]
+    fps = fh._fingerprints()
+    for rec in fps.values():
+        rec["at"] = "2020-01-01T00:00:00Z"  # an export older than the 7-day limit
+    st.atomic_write_json(fh._fp_path(), fps)
+    _three(stub, AFTER)
+    res = run(svc, stub, names=None, all_bots=True)
+    assert res["ok"] and cmds(stub).count("ask") == 6 and "unchanged" not in res["line"]
+
+
 def test_a_bot_with_new_activity_or_routines_is_exported_again(svc, world, stub, monkeypatch):
     _record_imports(monkeypatch)
     _three(stub, HISTORY)
