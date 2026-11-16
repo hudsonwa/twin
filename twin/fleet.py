@@ -351,7 +351,7 @@ def wire_list(st: dict) -> dict:
     me = this_machine(st)
     lst = sh["list"]
     twins = [{"id": tid, "name": t["name"], "description": t["description"], "version": t["version"],
-              "updated_at": t["updated_at"]} for tid, t in sorted(lst["twins"].items())][:MAX_TWINS]
+              "updated_at": t["updated_at"], **_wire_number(t)} for tid, t in sorted(lst["twins"].items())][:MAX_TWINS]
     removed = [{"id": tid, "removed_at": at} for tid, at in sorted(lst["removed"].items())][:MAX_REMOVED]
     return {"schema": SCHEMA, "proto": PROTO, "changed": True, "sharing": True, "rev": lst["rev"],
             "generated_at": lst.get("generated_at") or now_iso(),
@@ -670,6 +670,25 @@ def forget_follower(st: dict, machine_id: str) -> Optional[dict]:
 
 
 # ---- what a follower does with a list ----------------------------------------------------------------------------------
+def _wire_number(t: dict) -> dict:
+    """{"n": N} for a twin that is instance N of its name in the fleet ("Acme Support 2", twin#69), so every
+    computer gives its bot the same number; nothing for the first instance. Only the number travels, never the
+    folder name."""
+    n = fp.instance_number(t.get("profile"), t.get("name"))
+    return {"n": n} if 2 <= n <= fp.MAX_INSTANCE else {}
+
+
+def _fleet_numbers(lst: dict, t: dict) -> set:
+    """Instance numbers the other listed twins of the same name hold in the fleet (1 = the plain name)."""
+    base = fp.slug(t.get("name"))
+    return {o.get("n") or 1 for o in lst["twins"] if o is not t and o.get("id") != t.get("id")
+            and fp.slug(o.get("name")) == base}
+
+
+def _new_profile(lst: dict, t: dict, taken: set) -> str:
+    return fp.unique_profile(t["name"], taken, number=t.get("n") or 0, fleet=_fleet_numbers(lst, t))
+
+
 def clean_list(raw: Any) -> Optional[dict]:
     """A list from the source reduced to the contract's fields, each checked, cleaned and capped again here.
     None when it is not a list answer at all."""
@@ -690,6 +709,9 @@ def clean_list(raw: Any) -> Optional[dict]:
         twins.append({"id": t["id"], "name": clean_text(t.get("name"), NAME_CAP, True) or "Twin",
                       "description": clean_text(t.get("description"), DESCRIPTION_CAP, False), "version": ver,
                       "updated_at": _iso_or_none(t.get("updated_at"))})
+        n = t.get("n")
+        if isinstance(n, int) and not isinstance(n, bool) and 2 <= n <= fp.MAX_INSTANCE:
+            twins[-1]["n"] = n  # (twin#69: the instance number the source gave it)
     removed = []
     for r in (raw.get("removed") if isinstance(raw.get("removed"), list) else [])[:MAX_REMOVED]:
         if isinstance(r, dict) and isinstance(r.get("id"), str) and REF_RE.match(r["id"]) and r["id"] not in seen:
@@ -931,7 +953,7 @@ def _plan_new(st: dict, lst: dict, taken: set) -> bool:
             continue
         if tid in comes_back or (tid not in held and len(held) >= MAX_TWINS):
             continue  # a kept bot is put back instead (a rename, done in a moment); or the list is full
-        prof = fp.unique_profile(t["name"], taken)
+        prof = _new_profile(lst, t, taken)
         taken.add(prof)
         held[tid] = {"name": t["name"], "description": t["description"], "version": t["version"],
                      "updated_at": t["updated_at"], "profile": prof, "synced_at": None, "state": "in_sync",
@@ -982,7 +1004,7 @@ def apply_list(st: dict, lst: dict, checkpoint: Optional[Callable[[dict], None]]
             elif entry is None or not entry.get("profile"):
                 prof = _bring_back_kept(st, tid, t["name"], taken) or _adopt_released(st, tid)
                 if prof is None:
-                    prof = fp.unique_profile(t["name"], taken)
+                    prof = _new_profile(lst, t, taken)
                     fp.create(prof, t["name"], t["description"], note)
                 else:
                     fp.update(prof, t["name"], t["description"], note)
