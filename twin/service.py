@@ -1403,7 +1403,9 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         from . import tg_bots  # twin#68: opt-in, off by default (then nothing here runs)
         if tg_bots.enabled():
             try:
-                asked = tg_bots.request(profile, tg_bots.default_api())
+                from .zt_cli import twin_profiles as _twin_profiles  # never a twin's own bot as the gateway
+                asked = tg_bots.request(profile, tg_bots.default_api(),
+                                        twin_profiles=tuple({*_twin_profiles(self), str(profile)}))
             except Exception as exc:  # noqa: BLE001
                 asked = f"FAIL: telegram bot: {type(exc).__name__}"
             note = f"{note}; {asked}" if note else asked

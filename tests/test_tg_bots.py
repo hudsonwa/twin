@@ -298,3 +298,31 @@ def test_token_command_never_prints_to_a_terminal(world):
     assert tg_bots.print_token(TWIN, t) == 1 and t.getvalue() == ""
     pipe = io.StringIO()
     assert tg_bots.print_token(TWIN, pipe) == 0 and pipe.getvalue() == f"TELEGRAM_BOT_TOKEN={SENTINEL}\n"
+
+
+# ---- review rc/0.5.2 -----------------------------------------------------------------------------------------------
+def test_strict_check_wants_manual_approvals_on_the_twins_own_bot(world):
+    ps.set_preset(TWIN, "strict")
+    ps.set_model_policy(TWIN, "any")
+    _made(world)
+    cfg = ps.load_config(world["twin"])
+    cfg["approvals"]["mode"] = "off"
+    assert "platforms.telegram.enabled" in ps.problems(cfg, "strict")
+
+
+def test_stop_forgets_the_token_even_when_the_config_is_odd(world):
+    _made(world)
+    (world["twin"] / "config.yaml").write_text("secrets: [odd]\n", encoding="utf-8")
+    assert "is off" in tg_bots.stop(TWIN)
+    assert world["mem"].data == {} and not tg_bots.has_bot(TWIN)
+
+
+def test_request_uses_the_routes_own_gateway(world, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import tg_route
+    _profile(world["home"], "helper", "", "TELEGRAM_BOT_TOKEN=1:x\nTELEGRAM_ALLOWED_USERS=999\nTELEGRAM_ALLOWED_USERS_X=1\n")
+    seen = []
+    real = tg_route.find_gateway
+    monkeypatch.setattr(tg_route, "state", lambda: {"gateway": "default"})
+    monkeypatch.setattr(tg_route, "find_gateway", lambda via=None, tp=(): seen.append(via) or real(via, tp))
+    assert tg_bots.request(TWIN, tg_bots.default_api()).startswith("PASS")
+    assert seen == ["default"]

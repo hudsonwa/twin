@@ -168,7 +168,8 @@ def request(profile: str, api: Api, title: Optional[str] = None, twin_profiles: 
         return (f"FAIL: telegram bot: this host runs one gateway per profile; a twin's bot needs the single host "
                 f"gateway: run {MIGRATE} yourself first (the gateway was not changed)")
     try:
-        gw = tg_route.find_gateway(None, twin_profiles)
+        # the same gateway the Bot API calls go through (_gateway_token: the route's own, else the usual pick)
+        gw = tg_route.find_gateway(tg_route.state().get("gateway") or None, twin_profiles)
     except LookupError as exc:
         return str(exc).replace("telegram:", "telegram bot:", 1)
     except ValueError as exc:
@@ -362,7 +363,7 @@ def stop(profile: str, reason: str = "") -> Optional[str]:
         home = store.profile_home(profile)
         if home.is_dir():
             cfg = ps.load_config(home)
-            if ((cfg.get("secrets") or {}).get("command") == token_command(profile)):
+            if isinstance(cfg.get("secrets"), dict) and cfg["secrets"].get("command") == token_command(profile):
                 cfg["secrets"].pop("command", None)
                 if not cfg["secrets"]:
                     cfg.pop("secrets")
@@ -372,7 +373,7 @@ def stop(profile: str, reason: str = "") -> Optional[str]:
             lines = [ln for ln in secret_ref._env_lines(path) if not ln.startswith(f"# {TOKEN_REF_KEY} by secrets.command")]
             if lines != secret_ref._env_lines(path):
                 store.atomic_write_text(path, "\n".join(lines) + ("\n" if lines else ""))
-    except (OSError, ValueError):
+    except Exception:  # noqa: BLE001  (an odd config never keeps the token: it is forgotten below in any case)
         pass
     secret_ref.forget(b.get("secret") or secret_name(profile))
     b["on"] = False
