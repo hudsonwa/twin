@@ -209,3 +209,12 @@ def test_owner_asker_is_none_outside_hermes(monkeypatch):
     import sys
     monkeypatch.setitem(sys.modules, "hermes_cli.plugin_choices", None)  # no Hermes: the route falls back to deny
     assert tg_route.owner_asker() is None
+
+
+def test_literal_key_never_overwrites_a_different_key_of_the_same_name(world, home, server, mem):
+    server(f"  api_key: {VALUE}\n")
+    mem.data["HOMEBOX_API_KEY"] = "another-key-entirely"
+    pid = TWINS[0][0]
+    res = world.set_model(pid, "local-model", endpoint="Homebox")
+    assert res["key"]["name"] == "HOMEBOX_API_KEY" and "different key" in res["key"]["not_kept"]
+    assert mem.data == {"HOMEBOX_API_KEY": "another-key-entirely"} and VALUE not in str(res)

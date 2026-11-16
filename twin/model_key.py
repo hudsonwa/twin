@@ -116,6 +116,10 @@ def carry(home: Path, base_url: str, twin: str, root: Optional[Path] = None) -> 
             value, frm = secret_ref.value_of(name), "secret store"
     if not value:
         return {"name": name, "not_kept": "it has no value in the source profile or the secret store"}
+    if frm == "model setup":
+        held = secret_ref.value_of(name)
+        if held is not None and held != value:  # never overwrite another key that happens to share the made-up name
+            return {"name": name, "not_kept": "the secret store already holds a different key under that name"}
     if frm != "secret store":
         try:
             secret_ref.keep(name, value, kind=KIND, twin=twin, item="model")
