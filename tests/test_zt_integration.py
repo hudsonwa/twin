@@ -99,6 +99,16 @@ def test_setup_fail_is_the_fallback_fail_with_its_reason(svc, world, stub, monke
     assert calls["n"] == 1  # no second engine attempt after a setup FAIL
 
 
+def test_no_grok_app_here_downloads_nothing(svc, world, stub, monkeypatch):
+    """Found on a fresh Linux computer: from-hermes there ran setup --auto, which downloaded botport, and setup
+    --check then called the computer "it has the Grok app" while also saying the app is not on it."""
+    calls = _missing(monkeypatch, stub.eng)
+    monkeypatch.setattr(type(svc), "grok_app_found", lambda self: False)
+    res = from_hermes.run(svc, ["Acme Support"], setup_first=lambda s: pytest.fail("no setup without the Grok app"))
+    assert not res["ok"] and res.get("fallback") and calls["n"] == 1
+    assert "the Grok app is not on this computer, so nothing was downloaded" in res["line"]
+
+
 def test_closed_port_does_not_run_setup(svc, stub):
     stub.play(bots=[{"rc": 5, "stdout": {}, "stderr": "FAIL: port closed"}])
     res = from_hermes.run(svc, ["Acme Support"], eng=stub.eng,

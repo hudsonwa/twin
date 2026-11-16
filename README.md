@@ -23,7 +23,7 @@ Just moving once? Hermes' own `hermes migrate grok-bot` does a one-time import. 
 - **[botport](https://github.com/hudsonwa/botport)** (free, same author): the engine that does the copying. Setup
   downloads a ready-made, checked copy for you; **no Rust needed**. How they fit: [docs/BOTPORT.md](docs/BOTPORT.md).
 - **Costs:** each one prompt is one Grok turn (your Grok plan's usage) plus a few short test chats on your Hermes
-  model; skill sync uses Grok on every run. **Time:** about 10 minutes the first time.
+  model; skill sync uses Grok on every run. **Time:** about 10 minutes ([Quickstart](docs/QUICKSTART.md)).
 
 ## Install
 
@@ -134,7 +134,7 @@ This table is for the Twins page. The one prompt copies more: memory and recent 
 
 ## More
 
-[One prompt](docs/ONE-PROMPT.md) · [Guide](docs/GUIDE.md) (Twins page, settings, troubleshooting, uninstall, words
+[Quickstart](docs/QUICKSTART.md) · [One prompt](docs/ONE-PROMPT.md) · [Guide](docs/GUIDE.md) (Twins page, settings, troubleshooting, uninstall, words
 used) · [Other computers](docs/SHARING.md) · [Every command](docs/TERMINAL.md) · [API keys](docs/SECRETS.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [For coding agents](AGENTS.md)
 
 ## Disclosure
