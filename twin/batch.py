@@ -282,9 +282,17 @@ class BatchMixin:
                               "Open the Twins page again; if it stays, stop twinning this bot and twin it again.")
         ep = _endpoint if _endpoint is not None else self._endpoint_choice(endpoint, m)
         providers = self._batch_models()[2] if _providers is None else _providers
+        key = None
+        if ep is not None:  # twin#76: the server's key goes with it, by reference (model_key.py)
+            from . import model_key
+            try:
+                key = model_key.carry(Path(home), ep["_base_url"], prof)
+            except Exception:
+                key = None
         with store.locked():
             if ep is not None:
-                state = self._write_model(Path(home), m, "custom", ep["_base_url"])
+                state = self._write_model(Path(home), m, "custom", ep["_base_url"],
+                                          model_key.ref(key["name"]) if key and key.get("from") else "")
             else:
                 state = self._write_model(Path(home), m, providers.get(m, ""))
         if state == "set":
@@ -294,10 +302,10 @@ class BatchMixin:
         self.invalidate()
         if state == "set":
             self.emit("model_set", pid, {"by": "batch" if _from == "batch" else "owner"})
-        return {"pair_id": pid, "model": m, "state": state}
+        return {"pair_id": pid, "model": m, "state": state, **({"key": key} if key else {})}
 
     @staticmethod
-    def _write_model(home: Path, m: str, provider: str, base_url: str = "") -> str:
+    def _write_model(home: Path, m: str, provider: str, base_url: str = "", api_key: str = "") -> str:
         """"set" or "same". The file is changed only in its `model` entry; it must read back as exactly what it had
         with that entry changed, or nothing is written."""
         cant = EngineError("unsafe_folder", "Hermes could not change the model in this twin's own folder. Nothing "
@@ -322,12 +330,16 @@ class BatchMixin:
                 new["provider"] = provider
             if base_url:
                 new["base_url"] = base_url
+            if api_key:
+                new["api_key"] = api_key
         elif provider:
-            new = {"default": m, "provider": provider, **({"base_url": base_url} if base_url else {})}
+            new = {"default": m, "provider": provider, **({"base_url": base_url} if base_url else {}),
+                   **({"api_key": api_key} if api_key else {})}
         else:
             new = m
         if hs._model_of(doc) == m and (not isinstance(old, dict) or not provider or old.get("provider") == provider) \
-                and (not base_url or (isinstance(old, dict) and old.get("base_url") == base_url)):
+                and (not base_url or (isinstance(old, dict) and old.get("base_url") == base_url)) \
+                and (not api_key or (isinstance(old, dict) and old.get("api_key") == api_key)):
             return "same"
         want = {**doc, "model": new}
         block = yaml.safe_dump({"model": new}, default_flow_style=False, sort_keys=True, allow_unicode=True)

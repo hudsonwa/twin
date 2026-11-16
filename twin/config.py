@@ -317,6 +317,16 @@ def chat_is_messaging() -> bool:
         return True
 
 
+def chat_asker() -> Any:
+    """Hermes' `ask_choice` for the chat a plugin command came from, when the gateway bound one around the handler
+    (hermes_cli/plugin_choices.py), else None. The caller carries its context to the thread that asks (twin#76)."""
+    try:
+        from hermes_cli.plugin_choices import asker_bound, ask_choice
+        return ask_choice if asker_bound() else None
+    except Exception:
+        return None
+
+
 def chat_not_local() -> bool:
     """Is the chat this runs in NOT known to be on this computer? FAILS CLOSED. Hermes names a chat's origin per chat
     (gateway.session_context.get_session_env): a messaging app, a webhook or the API server in

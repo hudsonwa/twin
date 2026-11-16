@@ -478,11 +478,12 @@ def find_or_create(svc: Any, name: str) -> tuple[str, bool]:
     return made[0], True
 
 
-def same_server_as_owner(svc: Any, pid: str, home: Path) -> bool:
+def same_server_as_owner(svc: Any, pid: str, home: Path, res: Optional[dict] = None) -> bool:
     """botport `twin create` gives a new twin the owner's model id and provider name but not the server it is on
     (`base_url`): a model on the owner's own server would not answer the twin (behaviour test 0/N). When the
     owner's default model is on such a server, point the twin at it the way the Twins page's model picker does
-    (`set_model` with that endpoint: provider "custom" + base_url; no key is copied). -> changed"""
+    (`set_model` with that endpoint: provider "custom" + base_url). A key that server needs goes with it by
+    reference (twin#76, model_key.py): `res["model_key"]` names it for the PASS line, never its value. -> changed"""
     from . import endpoints as _ep
     from . import hermes_side as hs
     m = hs.profile_model(home) or ""
@@ -490,6 +491,8 @@ def same_server_as_owner(svc: Any, pid: str, home: Path) -> bool:
     if not m or hit is None:
         return False
     got = svc.set_model(pid, m, _endpoint={"_base_url": hit["base_url"]})
+    if res is not None and isinstance(got.get("key"), dict):
+        res["model_key"] = got["key"]
     return got.get("state") == "set"
 
 
@@ -562,7 +565,7 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             res["converted"] = make_bot_driven(svc, pid, home)  # (only a twin made just now can still be owned)
             if made:
                 with contextlib.suppress(Exception):  # (a twin without it still syncs; its test then says so)
-                    res["model_server"] = same_server_as_owner(svc, pid, home)
+                    res["model_server"] = same_server_as_owner(svc, pid, home, res)
             snap = snapshot(pid, home, svc)
             export_file = store.ensure_dir(_folder() / "exports") / f"{pid}.json"
             store.atomic_write_json(export_file, doc)  # kept (0600): `botport drift` can be rerun by hand
@@ -587,6 +590,8 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             res["safety"] = got["preset"]
             if got.get("capabilities") and got["preset"] != "open":  # twin#71: the PASS line names them
                 res["capabilities"] = profile_safety.capability_words(got["capabilities"])
+            if got.get("headless"):
+                res["headless"] = got["headless"]
             drift = eng.bundle_drift(prof, str(export_file), spec)
             res["drift"] = "clean" if drift.get("_rc") == 0 else "differs"
             test = _behaviour(svc, pid, export_file)
@@ -746,8 +751,12 @@ def _line(name: str, res: dict) -> str:
         moved = (f" Moved: {m['hermes_routines_on']} routine(s) on in Hermes; paused in Grok: "
                  f"{', '.join(m['grok_routines_paused']) or 'none'}.")
     scrubbed += _refs_note(res)
+    from .model_key import note as _key_note
+    scrubbed += _key_note(res.get("model_key"))
     if res.get("capabilities"):
         scrubbed += f"; capabilities: {res['capabilities']}"
+    if res.get("headless"):
+        scrubbed += f"; {res['headless']}"
     return (f"PASS: {name} {verb} Hermes (profile {res.get('profile')}): {what}; matches what the bot sent; {tested}{scrubbed}."
             + moved)
 

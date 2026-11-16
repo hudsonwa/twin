@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+Fixes #76.
+
+- A new twin on a model server that needs a key gets the key by reference: the twin's `config.yaml` says
+  `api_key: ${NAME}`, the value goes through the OS secret store into the twin's own private `.env`, taken from the
+  model setup or the source profile; the PASS line names the key and where it came from, never its value. No OS
+  secret store: the line says the key was not kept and why.
+- A Hermes session with no screen (started over ssh on a Mac, no display on Linux) gives a twin's profile a headless
+  browser (`browser.headed` off), so its screenshots no longer time out; the PASS line says so.
+- `/twin use` and `/twin to` on the owner's existing Telegram bot ask for each approval in the owner's DM ("Approve
+  once" / "Deny", the step redacted like every reply), the same as a twin's own bot; no answer is a deny.
+
 ## 0.5.1 (17 November 2026)
 
 Grok Bot Twin 0.5.1 ↔ botport 0.3.3 (pins unchanged).
