@@ -35,8 +35,8 @@ DEFAULTS = {
     "chat_sync_window": "",  # "" = idle (botport launch --for --when-idle); idle | port (only an open port)
     "chat_sync_idle_minutes": 10,  # the Mac must have had no input this long before a window restarts the app
     "setup_from_messaging": False,  # let a messaging chat (Telegram...) start setup or twinning (twin_from_hermes)
-    "twin_safe_mcp": [],
-    "telegram_bot_per_twin": False,  # twin#68: each twin its own managed Telegram bot (twin/tg_bots.py)  # MCP server names a strict twin keeps (twin/profile_safety.py); none by default
+    "twin_safe_mcp": [],  # MCP server names a strict twin keeps (twin/profile_safety.py); none by default
+    "telegram_bot_per_twin": False,  # twin#68: each twin its own managed Telegram bot (twin/tg_bots.py)
 }
 MIN_INTERVAL = 5
 MAX_INTERVAL = 86400
