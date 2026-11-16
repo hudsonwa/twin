@@ -30,6 +30,7 @@ DEFAULTS = {
     "mirror_name": "",  # the sync bot's name in Grok, for the Auto-Review rule text (Hermes to Grok beta)
     "chat_sync_mode": "",  # "" = chat_sync.DEFAULT_MODE; routine | pull | off (twin/chat_sync.py)
     "from_hermes_route": "",  # "" = export (twin/from_hermes.py); export | shell
+    "grok_turn_budget_week": 0,  # the owner's weekly Grok turn budget for twin; status warns past it (0 = none)
     "chat_sync_minutes": 360,  # twin#52: one pull every 6 h by default
     "chat_sync_window": "",  # "" = idle (botport launch --for --when-idle); idle | port (only an open port)
     "chat_sync_idle_minutes": 10,  # the Mac must have had no input this long before a window restarts the app
@@ -168,6 +169,10 @@ def settings() -> dict:
         out["from_hermes_route"] = fhr.strip().lower()
     try:
         out["chat_sync_minutes"] = min(1440, max(15, int(raw.get("chat_sync_minutes", 360))))
+    except (TypeError, ValueError):
+        pass
+    try:
+        out["grok_turn_budget_week"] = max(0, int(raw.get("grok_turn_budget_week", 0)))
     except (TypeError, ValueError):
         pass
     csw = raw.get("chat_sync_window")
