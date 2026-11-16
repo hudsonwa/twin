@@ -147,9 +147,16 @@ class SlowHermes(FakeHermes):
     def __init__(self, running, clock, cost):
         super().__init__(running)
         self.clock, self.cost = clock, cost
+        self.timeouts = []
 
     def __call__(self, argv, timeout):
+        self.timeouts.append((argv[2], argv[4], timeout, self.clock.t))
         if argv[4] == "restart":
+            if self.cost > timeout:  # (cut short by its own limit, like subprocess.run: gateway left stopped)
+                self.clock.t += timeout
+                self.running[argv[2]] = False
+                self.calls.append((argv[2], "restart"))
+                raise subprocess.TimeoutExpired(argv, timeout)
             self.clock.t += self.cost
         return super().__call__(argv, timeout)
 
@@ -159,11 +166,32 @@ def test_time_cap_leaves_the_remaining_twins_as_they_were_and_names_them():
     fake = SlowHermes({"acme-support": True, "recipe-planner": True, "widget-desk": True}, c, cost=100)
     res = gateways.restart_running(("acme-support", "recipe-planner", "widget-desk"), hermes="/fake/hermes",
                                    run=fake, wait_s=10, sleep=c.sleep, clock=c, total_s=150)
-    assert res["restarted"] == ["acme-support", "recipe-planner"] and res["left"] == ["widget-desk"]
+    assert res["restarted"] == ["acme-support"] and res["offline"] == ["recipe-planner"]  # (cut at the cap)
+    assert res["left"] == ["widget-desk"]
     assert not any(p == "widget-desk" for p, _ in fake.calls)  # not checked, not stopped
     assert fake.running["widget-desk"] is True
     words = gateways.note(res)
     assert "time cap" in words and "hermes -p widget-desk gateway restart" in words
+
+
+def test_time_cap_is_a_hard_ceiling_every_call_gets_only_the_time_left():
+    c = Clock()
+    fake = SlowHermes({"acme-support": True, "recipe-planner": True, "widget-desk": True}, c, cost=100)
+    res = gateways.restart_running(("acme-support", "recipe-planner", "widget-desk"), hermes="/fake/hermes",
+                                   run=fake, wait_s=45, sleep=c.sleep, clock=c, total_s=150)
+    assert c.t <= 150  # never past the cap, even for the twin in progress
+    assert all(start + t <= 150 for _, _, t, start in fake.timeouts)
+    assert res["restarted"] == ["acme-support"] and res["offline"] == ["recipe-planner"]
+    assert res["left"] == ["widget-desk"] and fake.running["widget-desk"] is True
+
+
+def test_too_little_time_left_leaves_the_twin_untouched_rather_than_half_restarted():
+    c = Clock()
+    fake = SlowHermes({"acme-support": True, "recipe-planner": True}, c, cost=130)
+    res = gateways.restart_running(("acme-support", "recipe-planner"), hermes="/fake/hermes", run=fake, wait_s=10,
+                                   sleep=c.sleep, clock=c, total_s=150)
+    assert res["restarted"] == ["acme-support"] and res["left"] == ["recipe-planner"]
+    assert not any(p == "recipe-planner" for p, _ in fake.calls)
 
 
 def test_default_cap_and_shorter_per_twin_wait():

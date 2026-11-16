@@ -28,6 +28,7 @@ STATUS_TIMEOUT_S = 30.0
 WAIT_S = 45.0              # how long a gateway may take to say it is running after restart/start
 TOTAL_S = 180.0            # review rc052 #9: no new twin is restarted after this long; the rest are left as they were
 POLL_S = 3.0
+MIN_LEFT_S = 30.0          # review rc052 #9: with less time left than this, a twin is left as it was, not half-restarted
 _NOT_RUNNING = ("not running", "stopped", "inactive", "not loaded", "no gateway", "dead", "failed")
 # review rc052 #9: these count only as status words, never inside other text: "running, 0 failed" or
 # "restarts: 2 failed" is a running gateway: a word counts when it is a whole word and not a count (after a number).
@@ -49,11 +50,16 @@ def _text(b: Any) -> str:
     return b.decode("utf-8", "replace") if isinstance(b, (bytes, bytearray)) else str(b or "")
 
 
-def is_running(hermes: str, profile: str, run: Run = _run) -> bool:
+def _bound(timeout: float, end: Optional[float], clock: Callable[[], float]) -> float:
+    """review rc052 #9: a call's own limit, never past the overall deadline `end` (None = no deadline)."""
+    return timeout if end is None else max(0.0, min(timeout, end - clock()))
+
+
+def is_running(hermes: str, profile: str, run: Run = _run, timeout: float = STATUS_TIMEOUT_S) -> bool:
     """`hermes -p PROFILE gateway status`: running only when it exits 0 and its words say running (and not "not
     running", "stopped"...). A status that cannot be read counts as not running."""
     try:
-        rc, out, err = run([hermes, "-p", profile, "gateway", "status"], STATUS_TIMEOUT_S)
+        rc, out, err = run([hermes, "-p", profile, "gateway", "status"], timeout)
     except (OSError, subprocess.SubprocessError):
         return False
     words = (_text(out) + " " + _text(err)).casefold()
@@ -68,24 +74,32 @@ def _call(hermes: str, profile: str, verb: str, timeout: float, run: Run) -> Non
 
 
 def _wait_running(hermes: str, profile: str, run: Run, wait_s: float, sleep: Callable[[float], None],
-                  clock: Callable[[], float]) -> bool:
+                  clock: Callable[[], float], deadline: Optional[float] = None) -> bool:
     end = clock() + wait_s
+    if deadline is not None:
+        end = min(end, deadline)
     while True:
-        if is_running(hermes, profile, run):
+        left = _bound(STATUS_TIMEOUT_S, deadline, clock)
+        if left > 0 and is_running(hermes, profile, run, left):
             return True
         if clock() >= end:
             return False
-        sleep(POLL_S)
+        sleep(max(0.0, min(POLL_S, end - clock())))
 
 
 def restart_one(hermes: str, profile: str, run: Run = _run, wait_s: float = WAIT_S,
-                sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> dict:
-    """Restart one running gateway and make sure it runs again. -> {"profile", "state": restarted|started|offline}"""
-    _call(hermes, profile, "restart", RESTART_TIMEOUT_S, run)
-    if _wait_running(hermes, profile, run, wait_s, sleep, clock):
+                sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
+                deadline: Optional[float] = None) -> dict:
+    """Restart one running gateway and make sure it runs again. -> {"profile", "state": restarted|started|offline}
+    `deadline` (a `clock()` value): every call and wait is cut to the time left, so nothing runs past it."""
+    _call(hermes, profile, "restart", _bound(RESTART_TIMEOUT_S, deadline, clock), run)
+    if _wait_running(hermes, profile, run, wait_s, sleep, clock, deadline):
         return {"profile": profile, "state": "restarted"}
-    _call(hermes, profile, "start", START_TIMEOUT_S, run)
-    if _wait_running(hermes, profile, run, wait_s, sleep, clock):
+    t = _bound(START_TIMEOUT_S, deadline, clock)
+    if t <= 0:
+        return {"profile": profile, "state": "offline"}
+    _call(hermes, profile, "start", t, run)
+    if _wait_running(hermes, profile, run, wait_s, sleep, clock, deadline):
         return {"profile": profile, "state": "started"}
     return {"profile": profile, "state": "offline"}
 
@@ -95,7 +109,9 @@ def restart_running(profiles: Iterable[str], hermes: Optional[str] = None, run: 
                     clock: Callable[[], float] = time.monotonic, total_s: float = TOTAL_S) -> dict:
     """Every twin gateway that was running before is restarted and running again, or named offline.
     Once `total_s` has passed, no further twin is touched (not checked, not stopped): those are named in
-    "left" with the command to restart them. The twin in progress when the cap passes is finished first.
+    "left" with the command to restart them. `total_s` is a hard ceiling: every status/restart/start call and wait
+    is given only the time left, so the twin in progress when the cap passes is cut short (named offline if not
+    running by then).
     -> {"restarted": [profiles], "offline": [profiles], "left": [profiles], "skipped": why-or-""}"""
     if hermes is None:
         from .behaviour import hermes_path
@@ -105,12 +121,12 @@ def restart_running(profiles: Iterable[str], hermes: Optional[str] = None, run: 
     restarted, offline, left = [], [], []
     end = clock() + max(0.0, float(total_s))
     for prof in dict.fromkeys(p for p in profiles if isinstance(p, str) and p and p != "default"):
-        if left or clock() >= end:
+        if left or end - clock() < min(MIN_LEFT_S, float(total_s)) or clock() >= end:
             left.append(prof)  # (time cap: left exactly as it was)
             continue
-        if not is_running(hermes, prof, run):
+        if not is_running(hermes, prof, run, _bound(STATUS_TIMEOUT_S, end, clock)):
             continue  # (not running before: left as it is)
-        got = restart_one(hermes, prof, run, wait_s, sleep, clock)
+        got = restart_one(hermes, prof, run, wait_s, sleep, clock, deadline=end)
         (offline if got["state"] == "offline" else restarted).append(prof)
     return {"restarted": restarted, "offline": offline, "left": left, "skipped": ""}
 
