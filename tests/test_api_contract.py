@@ -446,6 +446,8 @@ BY_DESIGN = (
     # `action` says what the owner can do about a check that does not pass (choose a model, bring the instructions
     # over); it is there only on such a check, and the two worlds list their checks in different orders
     "parity.checks[0].action",
+    # twin#71: a real twin's create names its capabilities in `notes` (optional); a sample twin has no profile
+    "create.notes",
 )
 # MISMATCH, parent to fix: differences that are NOT by design. Listed here only so the suite stays green while
 # they are open; test_the_open_mismatch_list_is_still_true fails as soon as one is fixed, so the line is deleted.
