@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import safe, secret_ref, secrets, store
+from . import safe, secret_ref, secrets, skill_pack, store
 from .engine import EngineError
 
 INPUT_CAP = 2 * 1024 * 1024
@@ -289,9 +289,12 @@ def sync_bot(svc: Any, pid: str, given: Any, runner: Optional[Runner] = None, wr
         applied = run(["apply", *common, "--adopt"])
         run(["sync", *common, "--direction=h2g"])
         facts, skills = _bundle(folder / "hermes-out")
+        skills = [s for s in skills if not skill_pack.is_pack_name(s["name"])]  # twin#65: never sent to Grok
         have = {s["name"] for s in skills}
         for i in conflicts:  # the Hermes edit won: it goes back to Grok
             n = _skill_name(i)
+            if skill_pack.is_pack_item(i) or skill_pack.is_pack_name(n):
+                continue
             text = _read_hermes_skill(home, i) if n and n not in have else None
             if text is not None:
                 skills.append({"name": n, "text": text})
@@ -323,7 +326,8 @@ def _verdict(proof: dict, lost: list, sent: set, n_facts: int) -> dict:
     """PASS when drift is clean both ways, or every difference left is one the bundle for Grok carries."""
     g2h = [i for i in _pending(proof.get("items")) if _skill_name(i) not in lost]  # (a conflict Hermes won: in the bundle)
     h2g = _pending((proof.get("h2g") or {}).get("items"))
-    unsent = [i for i in h2g if _skill_name(i) not in sent and str(i.get("area")) not in ("memory", "cron")]
+    unsent = [i for i in h2g if _skill_name(i) not in sent and str(i.get("area")) not in ("memory", "cron")
+              and not skill_pack.is_pack_item(i) and not skill_pack.is_pack_name(_skill_name(i))]
     if g2h or unsent:
         left = len(g2h) + len(unsent)
         return {"ok": False, "line": f"FAIL: drift is not clean ({left} item{'s' if left != 1 else ''} differ that "

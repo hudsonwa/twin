@@ -1148,6 +1148,9 @@ class SkillSyncMixin:
         pid = self.require_pair(pid)
         if not (isinstance(add, (list, tuple)) and isinstance(remove, (list, tuple)) and every in (None, True, False)):
             raise BadInput("That request was not understood.")
+        from . import skill_pack
+        if any(skill_pack.is_pack_name(n) for n in add):  # twin#65: the plugin's pack never comes from Grok
+            raise BadInput("That name belongs to the plugin's own twin skill pack; skill sync leaves it out.")
         if pid in self.demo.pair_ids():
             raise BadInput("The sample has no sync bot.")
         try:

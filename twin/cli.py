@@ -1682,6 +1682,10 @@ def cmd_syncs(a) -> int:
 
 
 def cmd_doctor(a) -> int:
+    if getattr(a, "repair_pack", False):
+        from . import origin
+        origin.refresh(_svc(), repair_pack=True)
+        _out("Twin skill pack put back in every twin.")
     doc = _svc().doctor()
     checks = doc["checks"]
     linked = doc.get("linked_to")
@@ -1944,7 +1948,9 @@ def setup(parser: argparse.ArgumentParser) -> None:
     g.add_argument("--on", action="store_true")
     g.add_argument("--off", action="store_true")
     p.add_argument("--titles", action="store_true", help="Also send short titles (separate opt-in)")
-    subs.add_parser("doctor", help="Check the setup and say what to fix")
+    p = subs.add_parser("doctor", help="Check the setup and say what to fix")
+    p.add_argument("--repair-pack", action="store_true",
+                   help="put back the plugin's twin skill pack in every twin, deleted pack skills included")
     _fleet_cli.setup(subs)
     _tasks_cli.setup(subs)
     _transcripts_cli.setup(subs)

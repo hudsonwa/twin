@@ -140,15 +140,18 @@ def owned_profiles(svc: Any) -> tuple:
     return tuple(out)
 
 
-def refresh(svc: Any = None, profiles: Optional[Iterable[str]] = None) -> int:
-    """Refresh every owned twin profile; returns how many files were written. Never raises."""
-    from . import store
+def refresh(svc: Any = None, profiles: Optional[Iterable[str]] = None, repair_pack: bool = False) -> int:
+    """Refresh every owned twin profile; returns how many SOUL.md files were written. Never raises. The same trigger
+    refreshes the twin skill pack (twin#65, skill_pack.py) in each profile."""
+    from . import skill_pack, store
     try:
         if profiles is None:
             if svc is None:
                 from .service import get_service
                 svc = get_service()
             profiles = owned_profiles(svc)
+        profiles = tuple(profiles)
+        skill_pack.refresh(profiles, repair=repair_pack)
         n = 0
         for prof in profiles:
             try:

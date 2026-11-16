@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from . import config, h2g, importer, safe, store, watch
+from . import config, h2g, importer, safe, skill_pack, store, watch
 from . import hermes_side as hs
 from . import secrets as _secrets
 from .connect import CAUSE_ERROR_CODES, BadInput, ConnectMixin
@@ -1691,8 +1691,9 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         # the same reading of the twin's own settings that decides `setup_left`
         has_model = bool(mine) and "model" not in mine.get("setup_left", []) and bool(
             hs.profile_model(self._profile_home(mine.get("hermes", {}).get("profile"))))
+        dropped = [c for c in raw[:200] if skill_pack.is_pack_item(c)]  # twin#65: never counted as the bot's skills
         for c in raw[:200]:
-            if not isinstance(c, dict):
+            if not isinstance(c, dict) or skill_pack.is_pack_item(c):
                 continue
             row = {"id": safe.clean_name(c.get("id"), 140), "name": safe.clean_name(c.get("name"), 100),
                    "pass": c.get("pass") is True, "detail": safe.clean_summary(c.get("detail"), 200)}
@@ -1706,6 +1707,9 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             row["why"] = parity_why(row)
             checks.append(row)
         passed, total = data.get("passed"), data.get("total")
+        if dropped and isinstance(passed, int) and isinstance(total, int):
+            passed = max(0, passed - sum(1 for c in dropped if c.get("pass") is True))
+            total = max(0, total - len(dropped))
         if eng is not self.demo:
             # instructions are the owner's own: one check, failing only while they still have to be brought over.
             # (When botport itself tracks instructions for this twin, its own check stands.)
@@ -1894,7 +1898,8 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         pack = data.get("pack") if isinstance(data.get("pack"), dict) else {}
         skills = data.get("skills")
         if skills is None:
-            skills = sum(1 for p in pairs for a in p["applied"] if a["kind"] == "skill" and a.get("direction") == "h2g")
+            skills = sum(1 for p in pairs for a in p["applied"] if a["kind"] == "skill" and a.get("direction") == "h2g"
+                         and not skill_pack.is_pack_item(a))  # twin#65: the plugin's pack is never the bot's
         if eng is not self.demo:
             for r in pairs:
                 if r["restore_point"]:

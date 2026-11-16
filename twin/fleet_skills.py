@@ -36,6 +36,7 @@ from typing import Any, Optional
 
 from . import fleet, fleet_io as fio, fleet_items, fleet_profiles as fp, store
 from . import osflags as _osflags
+from . import skill_pack
 from . import secrets as _secrets
 from .engine import EngineError
 from .model import REF_RE, iso, now_dt, now_iso, parse_iso, plural
@@ -304,8 +305,8 @@ def skill_dirs(profile: Any) -> Optional[dict]:
         return None
     for name in top:
         d = root / name
-        if not _seg_ok(name) or not fio.is_real_dir(d):
-            continue
+        if not _seg_ok(name) or not fio.is_real_dir(d) or skill_pack.is_pack_dir(name):
+            continue  # (twin#65: the plugin's own skill pack is never copied between computers)
         if is_skill(d):
             add(name, d)
             continue
