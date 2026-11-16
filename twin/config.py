@@ -29,6 +29,7 @@ DEFAULTS = {
     "machine_name": "",
     "mirror_name": "",  # the sync bot's name in Grok, for the Auto-Review rule text (Hermes to Grok beta)
     "chat_sync_mode": "",  # "" = chat_sync.DEFAULT_MODE; routine | pull | off (twin/chat_sync.py)
+    "import_test_failing": "keep",  # twin#74: keep | rollback, when only model-behaviour test cases fail twice
     "from_hermes_route": "",  # "" = export (twin/from_hermes.py); export | shell
     "chat_sync_minutes": 360,  # twin#52: one pull every 6 h by default
     "chat_sync_window": "",  # "" = idle (botport launch --for --when-idle); idle | port (only an open port)
@@ -163,6 +164,9 @@ def settings() -> dict:
     csm = raw.get("chat_sync_mode")
     if isinstance(csm, str) and csm.strip().lower() in ("routine", "pull", "off"):
         out["chat_sync_mode"] = csm.strip().lower()
+    itf = raw.get("import_test_failing")
+    if isinstance(itf, str) and itf.strip().lower() in ("keep", "rollback"):
+        out["import_test_failing"] = itf.strip().lower()
     fhr = raw.get("from_hermes_route")
     if isinstance(fhr, str) and fhr.strip().lower() in ("export", "shell"):
         out["from_hermes_route"] = fhr.strip().lower()

@@ -507,6 +507,19 @@ def _behaviour(svc: Any, pid: str, export_file: Path) -> dict:
     return res
 
 
+def keeps_failing_import(test: dict, cases: list) -> bool:
+    """twin#74: a behaviour test that still fails after its retry keeps the import (the twin marked "test failing")
+    when every failed case is a model-behaviour one and the setting `import_test_failing` is "keep" (the default).
+    A data case (persona, instructions, skills, the gateway turn), an unknown failure or "rollback" rolls back."""
+    from . import config
+    if config.get("import_test_failing") == "rollback" or not cases:
+        return False
+    total, passed = test.get("total"), test.get("passed")
+    if not (isinstance(total, int) and isinstance(passed, int)) or total - passed != len(cases):
+        return False  # (every failure must be accounted for by a listed case)
+    return all(c.get("kind") == "behaviour" for c in cases)
+
+
 def twin_from_grok(svc: Any, allowed: list, bot_name: Any, *args: Any, **kwargs: Any) -> dict:
     """The whole call. -> {"ok", "line", ...details}. Never raises for a FAIL; the line says what happened. After a
     PASS the origin note (twin#64) in every twin follows this install's versions."""
@@ -590,8 +603,13 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             drift = eng.bundle_drift(prof, str(export_file), spec)
             res["drift"] = "clean" if drift.get("_rc") == 0 else "differs"
             test = _behaviour(svc, pid, export_file)
+            cases = [c for c in test.get("failed_cases") or [] if isinstance(c, dict)]
+            still = {c.get("id") for c in cases}
             res["test"] = {"passed": test.get("passed"), "total": test.get("total"),
-                           "retried": len(test.get("retried") or [])}
+                           "retried": len([i for i in test.get("retried") or [] if i not in still])}
+            if cases:
+                res["test"]["failed"] = [f"{c.get('id')} ({c.get('reason')})" for c in cases]
+            kept_failing = not test.get("ok") and keeps_failing_import(test, cases)
             with contextlib.suppress(EngineError, Refused):
                 par = svc.parity(pid)
                 res["compare"] = {"passed": par.get("passed"), "total": par.get("total")}
@@ -599,8 +617,9 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             fails = []
             if res["drift"] != "clean":
                 fails.append("the Hermes bot does not match what the Grok bot sent (botport drift)")
-            if not test.get("ok"):
-                fails.append(f"behaviour test {test.get('passed')}/{test.get('total')}")
+            if not test.get("ok") and not kept_failing:
+                fails.append(f"behaviour test {test.get('passed')}/{test.get('total')}"
+                             + (f" (failed twice: {', '.join(res['test']['failed'])})" if cases else ""))
             if res.get("conflicts"):
                 fails.append(f"botport left {res['conflicts']} conflict(s): edited in both Hermes and Grok since the "
                              "last run; make the two the same, then try again")
@@ -610,6 +629,11 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
                 fails.append(f"{res['routines']['not_added']} routine(s) could not be added")
             if fails:
                 raise Refused("; ".join(fails))
+            if kept_failing:  # twin#74: kept, and the twin marked "test failing" (only model-behaviour cases failed)
+                res["test"]["kept_failing"] = True
+                after.append(lambda: note_bot(svc, pid, {"test_failing": [c.get("id") for c in cases]}))
+            elif test.get("ok"):
+                after.append(lambda: note_bot(svc, pid, {"test_failing": []}))
             _no_secret_in(res)  # before anything is turned on: a blanked answer must be a restoring FAIL
             res["secrets"] = srefs.report()
             if move:
@@ -734,6 +758,9 @@ def _line(name: str, res: dict) -> str:
     test = res.get("test")
     tested = f"behaviour test {test['passed']}/{test['total']}" + (
         f" ({test['retried']} case(s) passed only on a retry)" if test.get("retried") else "")
+    if test.get("kept_failing"):
+        tested += (f", test failing: {', '.join(test.get('failed') or [])} (model behaviour; the import is kept, "
+                   "run hermes twin test again)")
     what = (f"{c.get('skills', 0)} skills, {c.get('memory', 0)} memories, "
             f"{(res.get('routines') or {}).get('added', 0)} routines added switched off")
     scrubbed = f"; {c['scrubbed_lines']} line(s) left out as password-like" if c.get("scrubbed_lines") else ""

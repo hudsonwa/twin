@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterator, Optional
 
-from . import botlock, safe, store
+from . import botlock, safe, secrets, store
 from .engine import TEST_TIMEOUT_S, EngineError
 from .model import now_iso
 
@@ -44,6 +44,44 @@ MODEL_FLAKY_FAMILIES = frozenset({"live", "memory"})
 
 def model_flaky(result: dict) -> bool:
     return result.get("family") in MODEL_FLAKY_FAMILIES or str(result.get("id", "")).startswith(("live-", "memory-"))
+
+
+# twin#74: why a case failed, in a few fixed words made here from botport's reasons, never the reasons themselves
+# (they can quote the bot's own data: "no match for 09"). Checked in order; the first that matches is used.
+_REASONS = (("expected one of", "expected tool not called"), ("no tool call", "no tool call"),
+            ("timed out", "timed out"), ("timeout", "timed out"), ("rc=", "the chat command failed"),
+            ("error", "the chat command failed"))
+
+
+def reason_words(result: dict) -> str:
+    why = " ".join(w for w in (result.get("why") or []) if isinstance(w, str)).casefold()
+    return next((words for key, words in _REASONS if key in why), "answer did not match")
+
+
+def case_kind(result: dict) -> str:
+    """"behaviour": the case depends on what the model chose to do (call a tool, quote a memory); "data": it checks
+    the twin's content or the bot's own command (persona, instructions, skills, the gateway turn)."""
+    return "behaviour" if model_flaky(result) else "data"
+
+
+def failed_cases(results: list) -> list:
+    """[{"id", "kind", "reason"}] of each failed case: ids and fixed words only, no bot content."""
+    return [{"id": safe.clean_name(r.get("id"), 80), "kind": case_kind(r), "reason": reason_words(r)}
+            for r in results if r.get("pass") is not True][:FAILED_IDS_MAX]
+
+
+def keepable(result: dict) -> dict:
+    """One result as this plugin keeps or shows it (the botport 0.3.3 rule, twin#74): a model answer or a reason that
+    looks like a credential is dropped, its verdict kept, so a look-alike never refuses or hides the whole report."""
+    r = dict(result)
+    for key in ("answer", "reply", "output"):
+        if isinstance(r.get(key), str) and secrets.has_secret(r[key]):
+            r[key] = "(not kept: the answer looks like it holds a secret)"
+    why = r.get("why")
+    if isinstance(why, list):
+        r["why"] = [w if not (isinstance(w, str) and secrets.has_secret(w)) else "(a reason that looks like a secret)"
+                    for w in why]
+    return r
 
 
 # The budget of one `botport test` call. botport asks each case in turn (a pause of the battery's gap_s between
@@ -238,8 +276,9 @@ class BehaviourTestMixin:
         passed = data.get("pass") if isinstance(data.get("pass"), int) else sum(1 for r in results if r.get("pass") is True)
         failed = [r for r in results if r.get("pass") is not True]
         retried: list = []
-        if failed and all(model_flaky(r) for r in failed):
-            # Each such case once more, scored exactly as before: a case passes only if its retry passes.
+        if failed:
+            # twin#74: every failed case once more (a slow local model passes and fails single cases between runs),
+            # scored exactly as before: a case passes only if its retry passes, so it fails only when it failed twice.
             retried = [str(r.get("id")) for r in failed]
             again = eng.behaviour_test(profile, use, hermes, out, only=retried,
                                        timeout=call_budget(len(retried), gap, per_case))
@@ -247,6 +286,7 @@ class BehaviourTestMixin:
             results = [redo.get(str(r.get("id")), r) if r.get("pass") is not True else r for r in results]
             passed = sum(1 for r in results if r.get("pass") is True)
             total = len(results)
+        results = [keepable(r) for r in results]
         rec = {"at": now_iso(), "passed": max(0, min(passed, total)), "total": max(0, total),
                "failed": [str(r.get("id")) for r in results if r.get("pass") is not True][:FAILED_IDS_MAX]}
         if retried:
@@ -261,6 +301,7 @@ class BehaviourTestMixin:
         shown = summary(rec) or {}
         if retried:
             shown["retried"] = rec["retried"]
+        shown["failed_cases"] = failed_cases(results)
         shown["budget"] = {"per_case_s": round(per_case), "first_answer_s": None if first is None else round(first, 1)}
         shown["results"] = [{"id": safe.clean_name(r.get("id"), 80), "pass": r.get("pass") is True,
                              "why": safe.clean_summary("; ".join(w for w in (r.get("why") or []) if isinstance(w, str)),

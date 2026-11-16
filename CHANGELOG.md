@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- twin#74: a from-hermes / one-prompt import whose behaviour test fails names each failed case and a short fixed
+  reason (`failed twice: memory-2 (no tool call)`), never bot content. Every failed case is retried once; a case
+  fails only when it fails twice. When only model-behaviour cases (memory, live tool calls) still fail, the import
+  is kept and the twin marked "test failing" (setting `import_test_failing: rollback` rolls back instead); a data
+  case (persona, instructions, skills, gateway) still rolls back. `hermes twin test` drops a model answer or reason
+  that looks like a credential from its report (its verdict kept) instead of refusing, the botport 0.3.3 rule.
+
 ## 0.5.1 (17 November 2026)
 
 Grok Bot Twin 0.5.1 ↔ botport 0.3.3 (pins unchanged).

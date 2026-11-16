@@ -211,6 +211,49 @@ def test_failed_behaviour_test_fails_and_restores(svc, home, monkeypatch):
     assert Path(seen["from_export"]).parts[-3:] == ("one-prompt", "exports", "acme-support.json")
 
 
+def _failing(monkeypatch, svc, home, cases):
+    monkeypatch.setattr(svc, "behaviour_test", lambda pid, **kw: {
+        "passed": 6 - len(cases), "total": 6, "ok": False, "retried": [c["id"] for c in cases],
+        "failed_cases": cases})
+    monkeypatch.setattr(svc, "_battery_path", lambda pid: home / "nope.json")
+
+
+FLAKY = {"id": "memory-2", "kind": "behaviour", "reason": "no tool call"}
+DATA = {"id": "persona", "kind": "data", "reason": "answer did not match"}
+
+
+def test_one_flaky_behaviour_case_keeps_the_import_marked_test_failing(svc, home, monkeypatch):
+    """twin#74: a model-behaviour case that failed twice keeps the import; the twin is marked "test failing"."""
+    w = World(svc, monkeypatch, twinned=True)
+    _failing(monkeypatch, svc, home, [FLAKY])
+    res = call(svc)
+    assert res["ok"] and not res["restored"]
+    assert "behaviour test 5/6, test failing: memory-2 (no tool call)" in res["line"]
+    assert w.reg["acme-support"]["test_failing"] == ["memory-2"]
+
+
+def test_a_data_gap_case_rolls_back_and_the_fail_line_lists_case_ids(svc, home, monkeypatch):
+    World(svc, monkeypatch, twinned=True)
+    _failing(monkeypatch, svc, home, [FLAKY, DATA])
+    res = call(svc)
+    assert not res["ok"] and res["restored"]
+    assert ("behaviour test 4/6 (failed twice: memory-2 (no tool call), persona (answer did not match))"
+            in res["line"])
+    assert "Acme widgets" not in res["line"]  # (no bot content in the line)
+
+
+def test_rollback_setting_rolls_back_a_behaviour_case_too(svc, home, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import config
+    World(svc, monkeypatch, twinned=True)
+    _failing(monkeypatch, svc, home, [FLAKY])
+    config.set_override({"import_test_failing": "rollback"})
+    try:
+        res = call(svc)
+    finally:
+        config.set_override(None)
+    assert not res["ok"] and res["restored"] and "failed twice: memory-2 (no tool call)" in res["line"]
+
+
 def test_passing_behaviour_test_is_in_the_line(svc, home, monkeypatch):
     World(svc, monkeypatch)
     monkeypatch.setattr(svc, "behaviour_test", lambda pid, **kw: {"passed": 4, "total": 4, "ok": True},
