@@ -1033,7 +1033,14 @@ def cmd_finish(a) -> int:
         for r in res.get("results") or []:
             name = names.get(r.get("pair_id"), safe.clean_name(r.get("name"), 100) or "?")
             state = r.get("state")
-            if state == "set":
+            key = r.get("key") if isinstance(r.get("key"), dict) else None
+            if key and not key.get("from"):  # the server's key did not go with it: its first chat would fail
+                rc = 1
+                _out(f" × {name}: model set to {shown_model}, but its server's key was not kept"
+                     f" ({safe.clean_summary(key.get('not_kept') or 'unknown', 120)}), so it may not answer."
+                     f" Fix: unlock the Keychain (or open a terminal on this computer) and run this again;"
+                     f" check: hermes twin check-model")
+            elif state == "set":
                 _out(f" {name}: model set to {shown_model} ✓")
             elif state == "same":
                 _out(f" {name}: already uses {shown_model} ✓")

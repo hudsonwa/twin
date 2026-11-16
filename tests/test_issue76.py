@@ -232,3 +232,12 @@ def test_set_preset_says_the_browser_went_headless_and_how_to_undo_it(home, monk
     monkeypatch.setattr(gui, "has_gui", lambda *a, **k: True)
     (prof / "config.yaml").write_text("browser:\n  headed: true\n", encoding="utf-8")
     assert profile_safety.set_preset("acme-support", "standard", home=prof)["headless"] == ""
+
+
+def test_batch_models_names_a_key_that_was_not_kept(world, home, server):  # conftest: no OS store
+    """Rehearsal 17 Nov: `finish` reads batch_models, which dropped set_model's key result, so a key that was not
+    kept was never said. Each result now carries the key's name and why (never its value)."""
+    server("  key_env: HOMEBOX_KEY\n", env=f"HOMEBOX_KEY={VALUE}\n")
+    got = world.batch_models([TWINS[0][0]], "local-model", "Homebox")["results"][0]
+    assert got["state"] == "set" and got["key"]["name"] == "HOMEBOX_KEY" and got["key"]["not_kept"]
+    assert VALUE not in str(got)

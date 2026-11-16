@@ -475,12 +475,18 @@ def test_the_plugins_own_twin_skill_listed_as_shared_is_left_out_not_a_fail(svc,
     assert [s["name"] for s in BE.split_skills(clean, take_shared=True)[0]] == ["widget-faq"]
 
 
-def test_a_skill_the_bot_says_it_made_named_twin_to_hermes_is_still_checked(svc, world, stub, home):
-    doc = export(skills=[OWN, {"name": "twin-to-hermes", "description": "x", "body": TWIN_SKILL_BODY, "mine": True}])
+def test_a_twin_to_hermes_skill_the_bot_says_it_made_is_left_out_not_a_fail(svc, world, stub):
+    """Rehearsal 17 Nov: after the one-prompt setup the bot made twin-to-hermes itself (mine: true), and its text
+    (random-looking words, the plugin's own commands) failed every export. The name is reserved: never imported,
+    never checked, also with --shared-skills."""
+    body = TWIN_SKILL_BODY + "\nref 9f2c4e1a7b3d5f60a8c2e4b6d8f0a1c3e5b7d9f1\nQm9vdHN0cmFwS2V5Rm9yVGVzdDEyMzQ1Njc4OTA\n"
+    doc = export(skills=[OWN, {"name": "twin-to-hermes", "description": "x", "body": body, "mine": True}])
     play(stub, ask_answer(fenced(doc)))
     res = run(svc, stub)
-    assert not res["ok"] and "own commands" in res["line"]
-    nothing_written(world, home)
+    assert res["ok"], res["line"]
+    assert not (store.profile_home("acme-support") / "skills" / "grok" / "twin-to-hermes").exists()
+    clean = BE.validate(doc, "Acme Support")
+    assert [s["name"] for s in BE.split_skills(clean, take_shared=True)[0]] == ["widget-faq"]
 
 
 def test_earlier_export_turns_never_land_in_hermes_chats(svc, world, stub):
