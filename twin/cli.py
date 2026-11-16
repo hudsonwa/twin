@@ -1037,8 +1037,9 @@ def cmd_finish(a) -> int:
             if key and not key.get("from"):  # the server's key did not go with it: its first chat would fail
                 rc = 1
                 _out(f" × {name}: model set to {shown_model}, but its server's key was not kept"
-                     f" ({safe.clean_summary(key.get('not_kept') or 'unknown', 120)}), so this twin cannot chat yet."
-                     f" Fix: unlock the Keychain (or open a terminal on this computer) and run this again.")
+                     f" ({safe.clean_summary(key.get('not_kept') or 'unknown', 120)}), so it may not answer."
+                     f" Fix: unlock the Keychain (or open a terminal on this computer) and run this again;"
+                     f" check: hermes twin check-model")
             elif state == "set":
                 _out(f" {name}: model set to {shown_model} ✓")
             elif state == "same":

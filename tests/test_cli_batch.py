@@ -385,5 +385,5 @@ def test_finish_says_when_the_model_servers_key_was_not_kept(svc, monkeypatch):
     rc, out, _ = run(["finish", "--all", "--model", "grok-4.7-mini", "--yes"])
     assert rc == 1
     assert ("× Acme Helper: model set to grok-4.7-mini, but its server's key was not kept (the Keychain refused to "
-            "keep it (is it locked?)), so this twin cannot chat yet.") in out
+            "keep it (is it locked?)), so it may not answer.") in out
     assert " Recipe Planner: model set to grok-4.7-mini ✓" in out
