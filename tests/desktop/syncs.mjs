@@ -217,10 +217,10 @@ const LABELS = ['Name', 'Description', 'Instructions', 'Skills', 'Routines', 'Co
 const KEYS = ['name', 'description', 'instructions', 'skills', 'routines', 'transcripts']
 const WAYS = ['grok_to_hermes', 'hermes_to_grok', 'both', 'off']
 const WAY_WORDS = ['Grok → Hermes', 'Hermes → Grok', 'Both ways', 'Off']
-const MIRROR_WHY = 'Needs the Mirror, with your permission to change this bot.'
+const MIRROR_WHY = 'Needs the sync bot, with your permission to change this bot.'
 const NOT_YET_WHY = 'Not in this version yet.'
 const SKILLS_WHY = 'To change this, open Skill sync… and turn it off first.'
-const MIRROR_SENTENCE = 'The Mirror is not set up yet: it is the small bot in your Grok account that carries changes.'
+const MIRROR_SENTENCE = 'The sync bot is not set up yet: it is the small bot in your Grok account that carries changes.'
 const G2H = 'Changes made in Grok reach this twin; a change made in Hermes stays in Hermes.'
 const OFF = 'Nothing moves either way.'
 const BOTH = 'Skills changed on either side reach the other.'
@@ -250,7 +250,7 @@ const TRANSCRIPT_WAYS = ['grok_to_hermes', 'off']
 const transcriptsItem = (over = {}) => item('transcripts', { choices: TRANSCRIPT_WAYS.map(d => choice(d, 'ok', `Choosing ${WAY_WORDS[WAYS.indexOf(d)]} would do what it says.`)), direction: 'off', private: true, sentence: OFF, ...over })
 const waysOf = k => (k === 'transcripts' ? TRANSCRIPT_WAYS : WAYS)
 const acmeItems = (over = {}) => [
-  // name: Off can be chosen too, the two ways back need the Mirror; it last moved three minutes ago
+  // name: Off can be chosen too, the two ways back need the sync bot; it last moved three minutes ago
   item('name', { choices: choices([['ok'], ['needs_mirror', MIRROR_WHY], ['needs_mirror', MIRROR_WHY], ['ok']]), last_direction: 'grok_to_hermes', last_synced_at: AT, state: 'needs_mirror', ...over.name }),
   item('description', { choices: choices([['ok'], ['needs_mirror', MIRROR_WHY], ['needs_mirror', MIRROR_WHY], ['not_yet', NOT_YET_WHY]]), note: 'A change made on both sides is held until you choose.', state: 'needs_mirror', ...over.description }),
   item('instructions', { choices: choices([['ok'], ['needs_mirror', MIRROR_WHY], ['needs_mirror', MIRROR_WHY], ['not_yet', NOT_YET_WHY]]), last_synced_at: AT, state: 'needs_mirror', ...over.instructions }),
@@ -314,24 +314,24 @@ ok((markup.match(/<input[^>]*checked=""[^>]*>/g) ?? []).length === 6, 'the marku
   ok(row.direction === 'grok_to_hermes' && JSON.stringify(row.choices.map(c => c.direction)) === JSON.stringify(TRANSCRIPT_WAYS), `test_ARCH_1: a saved "both" transcripts row reads as Grok → Hermes, with no way to Grok (${JSON.stringify(row)})`)
 }
 // a way that cannot be chosen is switched off, and why is said in words under the group
-ok(option('name', 'hermes_to_grok').disabled && option('name', 'both').disabled && !option('name', 'off').disabled && !option('name', 'grok_to_hermes').disabled, 'Name: the two ways back wait for the Mirror; Off can be chosen')
+ok(option('name', 'hermes_to_grok').disabled && option('name', 'both').disabled && !option('name', 'off').disabled && !option('name', 'grok_to_hermes').disabled, 'Name: the two ways back wait for the sync bot; Off can be chosen')
 ok(option('routines', 'grok_to_hermes').disabled && option('routines', 'both').disabled && !option('routines', 'off').disabled, 'not in this version: switched off')
 ok(between('gbt-sync-name-label', 'gbt-sync-description-label').includes(`Hermes → Grok, Both ways: ${MIRROR_WHY}`), `why, in words, for the eye and the ear (${text(between('gbt-sync-name-label', 'gbt-sync-description-label'))})`)
 ok(text(between('gbt-sync-description-label', 'gbt-sync-instructions-label')).includes(`Hermes → Grok, Both ways: ${MIRROR_WHY}`) && text(between('gbt-sync-description-label', 'gbt-sync-instructions-label')).includes(`Off: ${NOT_YET_WHY}`), 'two reasons: a line each')
 ok(text(between('gbt-sync-skills-label', 'gbt-sync-routines-label')).includes(`Grok → Hermes, Hermes → Grok, Off: ${SKILLS_WHY}`), "the backend's own reason, as it came")
 ok(/id="gbt-sync-name-hermes_to_grok"/.test(markup) && /<input aria-describedby="gbt-sync-name-why-0"[^>]*id="gbt-sync-name-hermes_to_grok"/.test(markup) && markup.includes(`id="gbt-sync-name-why-0">Hermes → Grok, Both ways: ${MIRROR_WHY}</p>`), 'a way that cannot be chosen is described by its reason')
-ok(!/title="[^"]*Needs the Mirror/.test(markup), 'the reason is never only a hover text')
+ok(!/title="[^"]*Needs the sync bot/.test(markup), 'the reason is never only a hover text')
 // the row states
-ok((markup.match(/<span class="shrink-0 rounded-\[3px\][^"]*">Needs the Mirror<\/span>/g) ?? []).length === 0, 'a row that syncs one way carries no "Needs the Mirror" tag: its why line says what waits')
+ok((markup.match(/<span class="shrink-0 rounded-\[3px\][^"]*">Needs the sync bot<\/span>/g) ?? []).length === 0, 'a row that syncs one way carries no "Needs the sync bot" tag: its why line says what waits')
 {
   const offHtml = render(afterOff)
   const offMarkup = markup
-  ok((offMarkup.match(/<span class="shrink-0 rounded-\[3px\][^"]*">Needs the Mirror<\/span>/g) ?? []).length === 1 && /Needs the Mirror/.test(offHtml), 'Needs the Mirror: a small tag on a row where nothing moves until the Mirror is there')
+  ok((offMarkup.match(/<span class="shrink-0 rounded-\[3px\][^"]*">Needs the sync bot<\/span>/g) ?? []).length === 1 && /Needs the sync bot/.test(offHtml), 'Needs the sync bot: a small tag on a row where nothing moves until the sync bot is there')
   html = render(base)
 }
 ok((markup.match(/<span class="shrink-0 rounded-\[3px\][^"]*">Not in this version yet<\/span>/g) ?? []).length === 1, 'Not in this version yet: a tag on routines (full transcripts can be switched on)')
-// the Mirror, once for the panel
-ok(button('Skill sync…').length === 1 && (html.match(new RegExp(MIRROR_SENTENCE.replace(/[.:]/g, '.'), 'g')) ?? []).length === 1 && button('Skill sync…')[0].describedBy === 'gbt-sync-mirror' && button('Skill sync…')[0].variant === 'secondary', `the Mirror: one sentence and one button for the whole panel (${JSON.stringify(H.buttons.map(b => b.text))})`)
+// the sync bot, once for the panel
+ok(button('Skill sync…').length === 1 && (html.match(new RegExp(MIRROR_SENTENCE.replace(/[.:]/g, '.'), 'g')) ?? []).length === 1 && button('Skill sync…')[0].describedBy === 'gbt-sync-mirror' && button('Skill sync…')[0].variant === 'secondary', `the sync bot: one sentence and one button for the whole panel (${JSON.stringify(H.buttons.map(b => b.text))})`)
 {
   let pressed = 0
 

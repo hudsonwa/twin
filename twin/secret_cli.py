@@ -100,11 +100,6 @@ def pull() -> int:
 
 
 # ---- terminal ---------------------------------------------------------------------------------------------------------
-def _owner_terminal() -> bool:
-    from .tasks_api import _owner_terminal as owner
-    return owner()
-
-
 def _read_value(a: Any) -> str:
     if a.stdin:
         return sys.stdin.readline().rstrip("\r\n")
@@ -132,13 +127,13 @@ def _share(c: Any, a: Any) -> int:
         c._out("FAIL: say where: --to-grok or --linked")
         return 1
     on = not a.off
-    if on and not _owner_terminal():
-        c._out("FAIL: only you can share a secret, in your own terminal (a command a chat started cannot)")
-        return 1
-    if on and switch == "to_grok":
-        c._out("Warning: " + secret_ref.TO_GROK_WARNING.format(name=a.name))
-        if not a.yes and (not is_terminal(sys.stdin) or input("Type yes to share it: ").strip().lower() != "yes"):
-            c._out("FAIL: not shared")
+    if on:  # asked at the controlling terminal itself: a chat, a bot or a script is refused, and --yes skips nothing
+        from . import tasks
+        if switch == "to_grok":
+            c._out("Warning: " + secret_ref.TO_GROK_WARNING.format(name=a.name))
+        where = "the Grok bot (xAI)" if switch == "to_grok" else "your linked computers"
+        if not tasks.owner_confirms(f"Share {a.name} with {where}?"):
+            c._out(f"FAIL: not shared. {tasks.OWNER_ONLY}")
             return 1
     try:
         secret_ref.set_switch(a.name, switch, on)
@@ -186,7 +181,8 @@ def setup(subs: Any) -> None:
     p.add_argument("--to-grok", action="store_true", help="share: let this one value go to the Grok bot (xAI)")
     p.add_argument("--linked", action="store_true", help="share: let your linked computers fetch it")
     p.add_argument("--off", action="store_true", help="share: take the share back")
-    p.add_argument("--yes", action="store_true", help="share --to-grok: do not ask (you read the warning)")
+    p.add_argument("--yes", action="store_true", help="share: no longer skips the question, which is asked at "
+                                                    "your own terminal (kept so older lines still parse)")
 
 
 HANDLERS = {"secret": cmd_secret}

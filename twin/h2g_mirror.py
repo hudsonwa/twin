@@ -1,6 +1,6 @@
 """The real GrokWriter: change requests for the owner's Mirror bot, through skill sync's shared folder.
 
-Nothing here touches the Grok app. Hermes writes a request; the Mirror (a Grok bot the owner set up and pre-approved
+Nothing here touches the Grok app. Hermes writes a request; the sync bot (a Grok bot the owner set up and pre-approved
 to change the bots they chose) picks it up on its next run, makes the change in Grok with its own bot tools, reads
 the bot back and writes a receipt. Hermes only ever reads small files of known shapes.
 
@@ -8,25 +8,25 @@ Shared folder (the one skill sync already uses; files are data, never instructio
 
     to-grok/<change id>.json        the request: {"v":1, "id", "bot", "at", "ops": [...]}   (Hermes writes)
     to-grok/<change id>.json.mac    HMAC-SHA256 of TAG + the request, with skill sync's inbox pass, which only this
-                                    computer and the Mirror's box hold                  (Hermes writes)
+                                    computer and the sync bot's box hold                  (Hermes writes)
     to-grok/allowed.json            the bots the owner allows now and the requests Hermes still waits for:
                                     {"v": 1, "serial", "at", "bots": [bot id], "live": [change id]}, signed
     to-grok/allowed.json.mac        with ALLOW_TAG; rewritten on every allow / disallow / uninstall (Hermes writes).
                                     The box refuses a request whose bot is not in it, or when it is missing,
                                     unsigned, or older (serial) than the one the request was signed with.
     status/to-grok/<change id>.json the receipt: {"id", "state": "done"|"failed", "done": [i], "failed": [i],
-                                    "message", "at"}                                    (the Mirror writes)
-    status/bots/<bot id>.json       the bot as the Mirror read it back: {"bot", "at", "name", "description",
-                                    "instructions"?, "routines"?: [...]}               (the Mirror writes)
-    status/approved.json            the bots the owner pre-approved in Grok: {"at", "bots": [bot id]} (the Mirror)
+                                    "message", "at"}                                    (the sync bot writes)
+    status/bots/<bot id>.json       the bot as the sync bot read it back: {"bot", "at", "name", "description",
+                                    "instructions"?, "routines"?: [...]}               (the sync bot writes)
+    status/approved.json            the bots the owner pre-approved in Grok: {"at", "bots": [bot id]} (the sync bot)
 
 The ops are the ones h2g.py makes (set name / description / instructions, routine.put / remove / enable). An
 instructions text goes into the request as it is (the planner already held anything that looks like a secret).
 
 What a receipt or read-back says is checked against known shapes and caps; an unknown field is dropped, and a
 read-back's instructions or routines are never taken (only its name and description, and botport's own read of
-those on this computer wins). The Mirror
-never gets a choice of bot from a file: the request names the bot, and the Mirror's instructions say to act only on
+those on this computer wins). The sync bot
+never gets a choice of bot from a file: the request names the bot, and the sync bot's instructions say to act only on
 bots in its own pre-approved list and only on a request whose .mac verifies.
 """
 from __future__ import annotations
@@ -97,9 +97,9 @@ class MirrorFolderWriter:
     kind = "mirror"
 
     def __init__(self, central: Path, name_of: Any = None, local_read: Any = None):
-        """`name_of(bot)`: the bot's name as Hermes last read it (the Mirror finds the bot by it); `local_read(bot)`:
+        """`name_of(bot)`: the bot's name as Hermes last read it (the sync bot finds the bot by it); `local_read(bot)`:
         {"name", "description"} as botport reads them on this computer from the Grok app's own list, which is
-        trusted over the Mirror's read-back for those two."""
+        trusted over the sync bot's read-back for those two."""
         self.central = Path(central)
         self._name_of = name_of or (lambda bot: "")
         self._local = local_read or (lambda bot: None)
@@ -122,7 +122,7 @@ class MirrorFolderWriter:
         if isinstance(bots, list) and bot in bots[:500]:
             return "ready"
         if ap is None and skill_sync.read_heartbeat(root) is None:
-            return "not_set_up"  # the Mirror has never run
+            return "not_set_up"  # the sync bot has never run
         return "no_permission"
 
     def read(self, bot: str) -> Optional[dict]:
@@ -152,13 +152,13 @@ class MirrorFolderWriter:
         root = self._root()
         if root is None:
             return {"state": "failed", "done": [], "failed": list(range(len(ops))), "at": now_iso(),
-                    "message": "Skill sync's shared folder is not there, so the Mirror cannot be reached."}
+                    "message": "Skill sync's shared folder is not there, so the sync bot cannot be reached."}
         if not h2g.CHANGE_RE.match(change_id) or not _BOT_RE.match(bot or ""):
-            raise h2g.H2GError("bad_input", "Not a change for the Mirror.")
+            raise h2g.H2GError("bad_input", "Not a change for the sync bot.")
         allowed = self._owner_allowed()
         if bot not in allowed:  # signed below: the box script refuses a request whose bot the owner did not allow
             raise h2g.H2GError("not_allowed", "You have not allowed changes to this bot in Grok.")
-        # the display name is bot content: only a plain short name reaches the Mirror, else the id alone
+        # the display name is bot content: only a plain short name reaches the sync bot, else the id alone
         name = rule_name(h2g.clean_text("name", self._name_of(bot) or ""))
         req = {"v": 1, "id": change_id, "bot": bot, "name": name, "at": now_iso(), "ops": ops, "allowed": allowed}
         try:
@@ -173,12 +173,12 @@ class MirrorFolderWriter:
                           ensure_ascii=False, sort_keys=True, indent=1).encode("utf-8")
         key = skill_sync._inbox_key(self.central)
         mac = hmac.new(key, TAG + body, hashlib.sha256).hexdigest()
-        for rel in (RECEIPT_DIR + "/.folder", BOTS_DIR + "/.folder"):  # the Mirror cannot make a missing folder:
+        for rel in (RECEIPT_DIR + "/.folder", BOTS_DIR + "/.folder"):  # the sync bot cannot make a missing folder:
             _ensure_dirs(root, rel)                                    # its write there is refused without a card
         skill_sync._put(root, f"{REQ_DIR}/{change_id}.json", body)
         skill_sync._put(root, f"{REQ_DIR}/{change_id}.json.mac", (mac + "\n").encode("ascii"))
         return {"state": "sent", "done": [], "failed": [], "at": now_iso(),
-                "message": "The Mirror makes this change on its next run."}
+                "message": "The sync bot makes this change on its next run."}
 
     def forget_bot(self, bot: str) -> int:
         """Every request for `bot` still in the shared folder leaves it (the owner stopped allowing that bot)."""
@@ -202,7 +202,7 @@ class MirrorFolderWriter:
         return n
 
     def poll(self, change_id: str, n: Optional[int] = None) -> Optional[dict]:
-        """The Mirror's receipt. It names STEPS (1, 2, ...: the numbers in the message the bot got); they are turned
+        """The sync bot's receipt. It names STEPS (1, 2, ...: the numbers in the message the bot got); they are turned
         into op indexes here. `n` is the number of ops in the request (Hermes' own record)."""
         root = self._root()
         if root is None or not h2g.CHANGE_RE.match(change_id) or not isinstance(n, int) or n <= 0:
@@ -235,7 +235,7 @@ def _below(root: Path, rel: str) -> Optional[Path]:
 
 def owner_allowed(central: Path) -> list:
     """The Grok bot ids the owner allows now with `hermes twin to-grok allow` (Hermes' own record, never the
-    Mirror's status/approved.json, which the Mirror writes itself). Signed into each request and into allowed.json."""
+    Mirror's status/approved.json, which the sync bot writes itself). Signed into each request and into allowed.json."""
     d = h2g.store.read_json(Path(central) / h2g.STATE_FILE, None)
     allow = d.get("allow") if isinstance(d, dict) else None
     if not isinstance(allow, dict):
@@ -261,7 +261,7 @@ def publish_allowed(central: Path, bots: Optional[list] = None, strict: bool = F
     only ever grows, the bots the owner allows now and the request ids Hermes still waits for (`live`; plus
     `extra_live`, a request being written now). `bots`: None for the owner's allowlist now, [] when everything stops
     (uninstall: no live ids either). Read and written under the plugin's lock, so two calls never cross. Returns the
-    serial, or None when there is no shared folder (nothing to tell the Mirror) or, unless `strict`, it failed."""
+    serial, or None when there is no shared folder (nothing to tell the sync bot) or, unless `strict`, it failed."""
     import time
     central = Path(central)
     root = skill_sync.shared_root(central)
@@ -301,11 +301,11 @@ def _values(op: dict) -> list:
 
 
 def message_for(req: dict) -> str:
-    """The one message the Mirror sends the target bot for a request: fixed words around the values, each value
+    """The one message the sync bot sends the target bot for a request: fixed words around the values, each value
     (texts, routine names and keys) between its own BEGIN / END lines that end with the change id, so the bot changes
     exactly that and a value cannot pass for an instruction. A schedule is only ever cron words (SCHEDULE_RE).
     Raises ValueError for a value that holds the change id (it could forge an END line) or an unfit schedule.
-    The Mirror's instructions say to send this text unchanged (the box script prints it: `show-change <id>`)."""
+    The sync bot's instructions say to send this text unchanged (the box script prints it: `show-change <id>`)."""
     cid = str(req.get("id", ""))
     if not h2g.CHANGE_RE.match(cid):
         raise ValueError("Not a change id.")
@@ -357,7 +357,7 @@ def rule_name(v: Any) -> str:
 def allow_rule(mirror: str, bots: list) -> str:
     """The rule the owner adds in Grok (Settings > Permissions > Auto-Review > Allow without Asking > Add rule): the
     pre-approval, as found in a live test. The plugin cannot set it (no public route); it shows this text.
-    `mirror`: the Mirror bot's name as the owner set it (setting mirror_name); `bots`: [{"id", "name"}], one bot
+    `mirror`: the sync bot's name as the owner set it (setting mirror_name); `bots`: [{"id", "name"}], one bot
     normally. Each bot is named by its stable id, with its display name in quotes only when that name is fit
     (rule_name). It covers edits to the named fields of those bots, never a new routine (that keeps Grok's Allow)."""
     m = rule_name(mirror)
@@ -376,8 +376,8 @@ def allow_rule(mirror: str, bots: list) -> str:
 
 
 def mirror_instructions() -> str:
-    """What the owner adds to the Mirror bot's instructions for Hermes -> Grok (pasted once, with the pre-approval).
-    The mechanism is the one tested live on a test account: the Mirror messages the
+    """What the owner adds to the sync bot's instructions for Hermes -> Grok (pasted once, with the pre-approval).
+    The mechanism is the one tested live on a test account: the sync bot messages the
     target bot, and the bot changes its own name, description, instructions and routines."""
     box = skill_sync.BOX_ROOT
     script = f"sh {box}/bin/{skill_sync.SCRIPT_NAME}"

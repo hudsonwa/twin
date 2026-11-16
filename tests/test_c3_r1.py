@@ -39,7 +39,7 @@ def test_R1_apply_and_status_on_two_threads_never_deadlock(real, tmp_path, monke
     svc.h2g_test_writer = w
     svc.to_grok_allow(PID, "all")
     svc.h2g_test_writer = None
-    _shared(svc, tmp_path)  # a real twin now reads Grok through the Mirror's writer (whose read asks the service)
+    _shared(svc, tmp_path)  # a real twin now reads Grok through the sync bot's writer (whose read asks the service)
     svc._lock = _BoundedRLock()
     a_holds_lock, b_holds_store = threading.Event(), threading.Event()
     reads, errors = [], []

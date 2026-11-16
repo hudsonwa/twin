@@ -137,11 +137,13 @@ def test_share_to_grok_fills_only_the_bundle(mem, twin, monkeypatch):
                        proof={"in_sync": True, "items": [], "h2g": {"items": []}})
     sync_both.sync_bot(twin, "acme-support", {"instructions": "Be kind."}, runner=fake)
     name = next(iter(secret_ref.load()))
-    monkeypatch.setattr(secret_cli, "_owner_terminal", lambda: False)
+    from hermes_plugins.grok_bot_twin.twin import tasks
+    monkeypatch.setenv("HERMES_SESSION_ID", "a-chat-0001")  # a command a chat started
     rc, out = run_cli("secret", "share", name, "--to-grok", "--yes")
     assert rc == 1 and "own terminal" in out
-    monkeypatch.setattr(secret_cli, "_owner_terminal", lambda: True)
-    rc, out = run_cli("secret", "share", name, "--to-grok", "--yes")
+    monkeypatch.delenv("HERMES_SESSION_ID")
+    monkeypatch.setattr(tasks, "_open_terminal", lambda: (io.StringIO("yes\n"), io.StringIO()))  # the owner types yes
+    rc, out = run_cli("secret", "share", name, "--to-grok")
     assert rc == 0 and "xAI" in out and OTHER not in out
     res = sync_both.sync_bot(twin, "acme-support", {"instructions": "Be kind."}, runner=fake)
     bundle = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text()

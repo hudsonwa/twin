@@ -176,8 +176,8 @@ def test_setup_all_never_prints_a_bot_name(with_botport, monkeypatch):
 
 
 def test_what_is_left_says_whether_it_is_the_instructions_or_a_model(svc, monkeypatch):
-    def facts(no_text, no_model):
-        monkeypatch.setattr(onboard, "_twin_facts", lambda s: (["a", "b"], set(), no_text, no_model))
+    def facts(no_text, no_model, unchecked=0):
+        monkeypatch.setattr(onboard, "_twin_facts", lambda s: (["a", "b"], set(), no_text, no_model, unchecked))
         return steps(["setup", "--check"])["by"]["finish"]
     st = facts(2, 0)
     assert st["state"] == "you" and st["title"] == "2 twins still wait for their instructions."
@@ -189,6 +189,9 @@ def test_what_is_left_says_whether_it_is_the_instructions_or_a_model(svc, monkey
     assert st["title"] == "1 twin still waits for its instructions and 2 twins still wait for a model."
     assert st["how"].endswith("Nobody but you can do this.")
     assert facts(0, 0)["state"] == "done"
+    st = facts(1, 0, 1)
+    assert st["state"] == "you" and st["title"] == "1 twin still waits for its instructions and 1 twin not checked yet."
+    assert st["how"].startswith("hermes twin shows whether it waits") and st["how"].endswith("Nobody but you can do this.")
 
 
 def test_a_bot_that_does_not_exist_stops_setup_and_changes_nothing(with_botport):
@@ -293,8 +296,8 @@ from twin_testlib import ROOT, plugin  # noqa: E402
 from hermes_plugins.grok_bot_twin.twin import fleet_profiles as fp  # noqa: E402
 
 SKILL = ROOT / "skills" / "set-up-grok-bot-twin" / "SKILL.md"
-WAYS_IN = ("AGENTS.md", "CLAUDE.md", "skills/set-up-grok-bot-twin/SKILL.md", "docs/SETUP-ORIGINS.md",
-           "docs/MIRROR-SELF-SETUP.md")
+WAYS_IN = ("AGENTS.md", "CLAUDE.md", "skills/set-up-grok-bot-twin/SKILL.md", "docs/design/SETUP-ORIGINS.md",
+           "docs/design/MIRROR-SELF-SETUP.md")
 # what Hermes' own scanner of a plugin's files takes for an attack on the model: never in these texts, not even
 # as an example of what not to do (the words are put together here so that this file does not hold them either)
 SCANNER_WORDS = ("ignore " + "previous instructions", "ignore " + "all previous", "you are " + "now",
@@ -401,13 +404,13 @@ def test_the_skill_is_one_hermes_can_load_and_the_plugin_registers_it(home):
 
 
 def test_the_designs_say_that_they_are_designs_and_what_is_unverified():
-    origins = (ROOT / "docs" / "SETUP-ORIGINS.md").read_text(encoding="utf-8")
+    origins = (ROOT / "docs" / "design" / "SETUP-ORIGINS.md").read_text(encoding="utf-8")
     flat = " ".join(origins.split())
     for must in ("DESIGN ONLY", "Nothing in sections 3a and 3b has been run against the real Grok app",
                  "needs the owner's OK", "Test Scout", "Test Sync", "It never types a secret", "UNVERIFIED",
                  "Stop on anything unexpected", "spends Grok credit", "Decisions the owner has to make"):
         assert must in flat, must
-    bot = (ROOT / "docs" / "MIRROR-SELF-SETUP.md").read_text(encoding="utf-8")
+    bot = (ROOT / "docs" / "design" / "MIRROR-SELF-SETUP.md").read_text(encoding="utf-8")
     flat = " ".join(bot.split())
     for must in ("It is a DESIGN: it has not been run on the real Grok app yet", "The pass is a file, never text.",
                  "Create or edit your own routine | Unknown | UNVERIFIED", "spends Grok credit",

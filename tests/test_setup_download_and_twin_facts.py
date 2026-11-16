@@ -8,14 +8,16 @@ that is never executed.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import pytest
 
-from twin_testlib import central, config, fake_key, home, service  # noqa: F401
+from twin_testlib import central, cli, config, fake_key, home, service  # noqa: F401
 from test_ux_flows import FAKE, P, PROGRAM, _archive, _client, _job, _pair, _svc, _write_exe, fake  # noqa: F401
 from hermes_plugins.grok_bot_twin.twin import connect, hermes_side as hs, importer, pins
 from hermes_plugins.grok_bot_twin.twin import engine as E
@@ -334,6 +336,68 @@ def test_use_it_verifies_the_found_download(home, monkeypatch):
     assert r["ready"] is True and r["check"]["method"] == "pinned"
     assert r["download"]["found"] is None  # looked for only while there is something to connect
     assert c.post(P + "/engine/path", json={"from_downloads": "yes"}).status_code == 400
+
+
+# =====================================================================================================================
+# ASM-1: `setup --check` never reports a twin as finished that the remembered status has not seen
+# =====================================================================================================================
+def _check(home) -> dict:
+    """`hermes twin setup --check --json` in this process, and whether it ran botport."""
+    before = len(calls(home))
+    out, er = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(er):
+        rc = cli.main(["setup", "--check", "--json"])
+    assert er.getvalue() == ""
+    plan = json.loads(out.getvalue())
+    return {**plan, "rc": rc, "by": {s["id"]: s for s in plan["steps"]}, "botport_runs": len(calls(home)) - before}
+
+
+def test_asm_1_a_new_process_after_setup_yes_does_not_call_the_new_twin_finished(fake, home, monkeypatch):
+    fake.svc.trust_botport(True)
+    profile(home)
+    real = service.TwinService.grok_list
+
+    def untwinned(self):
+        data = real(self)
+        for b in data["bots"]:
+            b["twinned_pair_id"] = None if not self.pair_ids() else b.get("twinned_pair_id")
+        return data
+    monkeypatch.setattr(service.TwinService, "grok_list", untwinned)
+    out = io.StringIO()
+    with redirect_stdout(out), redirect_stderr(io.StringIO()):
+        rc = cli.main(["setup", "--yes", "--bot", "Acme Support"])
+    assert rc == 0 and "1 bot now has a twin." in out.getvalue()
+    assert "Setup is complete on this computer." not in out.getvalue()  # the run's own summary knows too
+    cache = json.loads((central(home) / "status-cache.json").read_text())  # the run remembered the status
+    assert [p["pair_id"] for p in cache["status"]["pairs"] if not p.get("demo")] == ["acme-support"]
+    service.reset_service()  # a new process
+    plan = _check(home)
+    assert plan["by"]["finish"]["state"] == "you" and plan["complete"] is False and plan["rc"] == 1
+    assert plan["by"]["finish"]["title"] == "1 twin still waits for its instructions and 1 twin still waits for a model."
+    assert plan["botport_runs"] == 0  # --check stays botport-free
+
+
+def test_asm_1_a_twin_the_remembered_status_has_not_seen_is_not_checked_yet(twin, home):
+    (central(home) / "status-cache.json").unlink(missing_ok=True)
+    service.reset_service()  # a new process: nothing remembered about the twin in pairs.json
+    plan = _check(home)
+    st = plan["by"]["finish"]
+    assert st["state"] == "you" and st["title"] == "1 twin not checked yet."
+    assert st["how"] == "hermes twin shows whether it waits for instructions or a model."
+    assert plan["complete"] is False and plan["rc"] == 1 and plan["botport_runs"] == 0
+
+
+def test_asm_1_a_remembered_status_that_covers_every_twin_is_done(twin, home):
+    prof = profile(home)
+    (prof / "config.yaml").write_text("model:\n  default: example-model\n", encoding="utf-8")
+    twin.set_instructions("acme-support", "You are Acme Support.")
+    assert twin.status(fresh=True) and twin.save_status() is None
+    service.reset_service()
+    plan = _check(home)
+    st = plan["by"]["finish"]
+    assert st["state"] == "done" and st["title"] == "No twin waits for its instructions or for a model (hermes twin " \
+        "shows each one)."
+    assert plan["complete"] is True and plan["rc"] == 0 and plan["botport_runs"] == 0
 
 
 # =====================================================================================================================

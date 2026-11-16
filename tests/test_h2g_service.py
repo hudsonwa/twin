@@ -72,7 +72,7 @@ def test_real_twin_without_the_mirror_says_so_and_changes_nothing(real):
     svc.to_grok_allow(PID, ["name"])
     (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."))
     p = svc.to_grok_preview(PID)
-    assert p["blocked"] == "The Mirror is not set up for this bot yet."
+    assert p["blocked"] == "The sync bot is not set up for this bot yet."
     with pytest.raises(EngineError) as e:
         svc.to_grok_apply(PID, p["change_id"])
     assert e.value.code == "no_permission"
@@ -168,7 +168,10 @@ def test_empty_hermes_instructions_never_clear_grok(svc):  # noqa: F811
     assert svc.to_grok_preview("acme-support")["nothing"] is True
 
 
-def test_cli_to_grok(svc, capsys):  # noqa: F811
+def test_cli_to_grok(svc, capsys, monkeypatch):  # noqa: F811
+    import io
+    from hermes_plugins.grok_bot_twin.twin import tasks
+    monkeypatch.setattr(tasks, "_open_terminal", lambda: (io.StringIO("yes\n"), io.StringIO()))  # the owner types yes
     parser = cli.build_parser()
     a = parser.parse_args(["to-grok", "Acme Support", "apply", "c-0123456789abcdef"])
     assert a.twin_command == "to-grok" and a.args == ["Acme Support", "apply", "c-0123456789abcdef"]
@@ -205,7 +208,7 @@ def test_real_twin_uses_the_mirror_once_skill_sync_has_a_shared_folder(real, tmp
     skill_sync.save_state(svc.central, st)
     w = svc._h2g_writer(PID)
     assert type(w).__name__ == "MirrorFolderWriter" and w.kind == "mirror"
-    assert svc.to_grok_info(PID)["permission"] == "not_set_up"  # the Mirror never ran
+    assert svc.to_grok_info(PID)["permission"] == "not_set_up"  # the sync bot never ran
 
 
 # ---- per-twin opt-in: off for every twin until the owner allows it (there is no plugin-wide switch any more) ------
@@ -324,7 +327,7 @@ def test_undo_and_runner_move_recheck_allow_and_permission(real, monkeypatch):
     assert e.value.code == "not_allowed" and w.read(BOT)["name"] == "Acme Helper Pro"
     svc.to_grok_allow(PID, "all")
     data = w._load()
-    data["allowed"] = []  # the Mirror lost its permission in Grok
+    data["allowed"] = []  # the sync bot lost its permission in Grok
     w._save(data)
     with pytest.raises(EngineError) as e:
         svc.to_grok_undo(PID, r["change_id"])

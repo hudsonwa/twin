@@ -2,88 +2,106 @@
 
 **Try Hermes without leaving Grok. Move over when your twin is ready.**
 
-For people who built bots in the Grok desktop app and want to try Hermes without giving them up. Grok Bot
-Twin gives each Grok bot a **twin**: a second home for the bot in Hermes that keeps its name and description
-in step with Grok. You paste its instructions once. Nothing changes in Grok. A **Twins** page in Hermes
-Desktop shows each twin in one line, asks you to choose when something changed in both places, keeps earlier
-versions for undo, and walks you through the day you move its routines.
+A plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research, an open-source agent
+that runs on your own computer with the model you choose. It gives each bot
+you built in the Grok desktop app a **twin**: a Hermes bot that follows it. Your Grok bot keeps working as
+before. When you are happy with the twin, move the bot's scheduled prompts (its *routines*) to Hermes. Change
+your mind, and bring it back. New words: [Words used](docs/GUIDE.md#words-used).
 
-> **Needs Hermes 0.22.7 or newer.** Check with `hermes --version`; `hermes update` brings it up to date.
-
-> **Which version you get.** The **Plugins** button in Hermes Desktop, and installing by the catalog name
-> `grok-bot-twin`, give the Hermes catalog version, 0.2.1, which is older than what this README describes. To get
-> this version, install it from the `next` branch in a terminal (Hermes warns "custom (unreviewed) source", because
-> it is not the catalog):
->
-> ```sh
-> hermes plugins install hudsonwa/twin --ref "$(git ls-remote https://github.com/hudsonwa/twin refs/heads/next | cut -f1)" --enable
-> ```
->
-> `--ref` takes only a full 40-character commit, not a branch name; the `git ls-remote` part prints the newest one.
-> In Windows PowerShell, run `git ls-remote https://github.com/hudsonwa/twin refs/heads/next` alone and put the
-> first column after `--ref`.
-
-## Install
-
-- **In a terminal:** paste the line above. Plain `hermes twin` then prints your twins and the one next step.
-- **In Hermes Desktop:** after that line, open **Capabilities → Plugins** and check that **Grok Bot Twin** is on
-  (if it shows two switches, turn on both). Installing it from that page instead gives the catalog version.
-- **On your other computers:** the same line; they need no Grok app and no botport.
-
-Your real bots also need [botport](https://github.com/hudsonwa/botport) (MIT), a separate small, free app by the
-same author that reads your bot list from the Grok desktop app. You download it yourself (step 2 shows how); the
-plugin never downloads it, and verifies it before it ever runs. The sample does not need it. Unofficial; not
-affiliated with xAI.
-
-## First steps
-
-Want one prompt to do a whole job (twin, sync, move, back)? See [docs/ONE-PROMPT.md](docs/ONE-PROMPT.md): the bot
-runs one command on your computer per prompt. The steps below set a twin up by hand.
-
-Open **Twins** in the Hermes Desktop sidebar.
-
-1. **See a sample first.** One sample twin with invented data: no Grok account, no botport, nothing of yours
-   touched. Press **Change the bot in Grok** and watch the twin follow; **End sample** removes it. In a
-   terminal: `hermes twin demo` ([the sample tour](docs/TERMINAL.md#the-sample-tour)).
-2. **Connect my Grok bots.** Two rows tick themselves, once, in about a minute: the Grok desktop app (signed
-   in on this computer) and botport (**Download botport**; Hermes finds the download and checks it). Then
-   choose your bots and press **Twin this bot**. Nothing changes in Grok.
-3. **Finish each twin.** Paste its instructions, or let the bot write its setup export and drop that file on
-   the sheet, and choose a model. The row then says "Follows Grok · ready", and **Open in Hermes** starts a
-   chat with the twin.
-
-On a computer without the Grok app, press **Link this computer** instead ([docs/SHARING.md](docs/SHARING.md)).
-The same setup from a terminal, a Hermes chat or a coding agent: [docs/GUIDE.md](docs/GUIDE.md#start-from-wherever-you-are).
+**Who it is for:** people with bots in the Grok desktop app who want to try Hermes without giving them up.
+Just moving once? Hermes' own `hermes migrate grok-bot` does a one-time import. Unofficial; not affiliated with xAI.
 
 ![The Twins page: one line per twin, and one button only when something needs you](docs/screenshots/twins-page.png)
 
-## What is ready and what is experimental
+## You need
 
-**Ready** means it ships in this version, its tests run on every change, and it waits on no part that is not
-built or not yet run on the real Grok app. **Experimental** means it ships and is tested too, but it is off until
-you switch it on and is newer or has more moving parts (some of it needs the sync bot in your Grok account, which the
-tests here can run only in a pretend box): watch its first runs.
+- **Hermes 0.22.7 or newer**, with a model that works. Hermes Desktop is optional: everything also works in a terminal.
+  Check with `hermes --version`; `hermes update` brings it up to date.
+- **A Mac with the Grok desktop app** (called Grok Bot, 1.0.1 or newer), signed in. Your other computers (Mac, Linux, Windows) can hold copies of
+  the twins, but only the Mac reads Grok.
+- **git**, for the install line.
+- **[botport](https://github.com/hudsonwa/botport)**, a small free app by the same author that reads your bot
+  list from the Grok app. Setup asks you to download it and checks it before it runs. The sample needs none of this.
+- **Costs:** each one prompt is one Grok turn (your Grok plan's usage) plus a few short test chats on your Hermes
+  model; skill sync uses Grok on every run. **Time:** about 10 minutes the first time.
 
-| Feature | State | Read more |
+## Install
+
+**Do not use the Plugins button yet.** It, and the catalog name `grok-bot-twin`, give the older catalog version
+of the plugin (plugin 0.2.1). For this version, paste this line in a terminal (it installs the newest release,
+from the `next` branch):
+
+```sh
+hermes plugins install hudsonwa/twin --ref "$(git ls-remote https://github.com/hudsonwa/twin refs/heads/next | cut -f1)" --enable
+```
+In Windows PowerShell:
+```powershell
+hermes plugins install hudsonwa/twin --ref ((git ls-remote https://github.com/hudsonwa/twin refs/heads/next) -split '\s+')[0] --enable
+```
+
+- Hermes warns "custom (unreviewed) source". That is expected: it is not the catalog. `--ref` needs a full
+  40-character commit; the `git ls-remote` part looks up the newest one.
+- **Already have plugin 0.2.1, or updating later:** run the same line with `--force` added. If Hermes refuses,
+  run `hermes plugins remove grok-bot-twin` first (your twins and data stay), then the line again.
+- Hermes Desktop: **Capabilities → Plugins** → turn **Grok Bot Twin** on (and its Twins-page switch, if shown).
+- **On your other computers:** the same line; they need no Grok app and no botport ([SHARING.md](docs/SHARING.md)).
+- **Check it worked:** `hermes twin setup --check`; its first lines say the plugin is on. An error such as
+  `'twin' is not a` means it is off ([Troubleshooting](docs/GUIDE.md#troubleshooting)).
+
+## Your first twin
+
+**1. Try the sample (2 minutes, nothing of yours touched).** Open **Twins** in the Hermes Desktop sidebar and
+press **See a sample first**, then **Change the bot in Grok** and watch the twin follow. In a terminal:
+`hermes twin demo`, `hermes twin demo grok-edit`, then `hermes twin check`. **End sample** removes it.
+
+**2. Twin a real bot.** Our recommendation: **one prompt in Grok** if you want everything (memory and skills
+included) or plan to move the bot; **the Twins page** if you only want a twin that follows the bot while it stays
+in Grok. Both are below; the table says how they differ.
+
+| | **One prompt in Grok** | **The Twins page** |
 |---|---|---|
-| The Twins page, the sample, connecting your Grok bots | ready | [Guide](docs/GUIDE.md#connect-your-grok-bots) |
-| Name and description follow Grok, in seconds | ready | [How fast](docs/GUIDE.md#how-fast-is-it) |
-| Instructions by paste or setup export; routines arrive switched off | ready | [Import](docs/GUIDE.md#import-setup-export) |
-| Changed in both places, earlier versions (undo), password-and-key check | ready | [Everyday use](docs/GUIDE.md#everyday-use) |
-| Move routines to Hermes, Uninstall | ready | [Guide](docs/GUIDE.md#uninstall) |
-| Twins on your other computers: names, descriptions, settings (Mac shares; Mac, Linux, Windows link) | ready | [Sharing](docs/SHARING.md) |
-| Skills, routines and memory between your computers | experimental | [Sharing](docs/SHARING.md#skills-between-your-computers) |
-| Ask a twin on another computer | experimental | [Sharing](docs/SHARING.md#ask-a-twin-on-another-computer) |
-| Up to date while Hermes is closed (terminal only) | experimental | [Sharing](docs/SHARING.md#in-the-terminal) |
-| Skill sync through a sync bot in your Grok account | experimental | [Skill sync](docs/GUIDE.md#skill-sync-optional) |
-| Hermes → Grok (needs the sync bot) | experimental | [What syncs](docs/GUIDE.md#what-syncs-and-hermes--grok) |
-| A twin's whole conversations (archive and search) | experimental | [Archive](docs/GUIDE.md#a-twins-whole-conversations-archive-and-search) |
-| Hermes clicking in the Grok app for you; a Grok bot setting itself up | design only, not built | [SETUP-ORIGINS](docs/SETUP-ORIGINS.md) |
+| What comes over | Instructions, skills, memory, routines (off), recent conversations | Name, description; instructions and routines from a setup export |
+| Keeps in step | Each time you say the prompt | Name and description in seconds, by itself |
+| Bot size | Up to about 6 KB of instructions, skills and memory (a long command is refused by Grok) | Any |
+| State | Experimental (new) | Ready ([what that means](docs/GUIDE.md#ready-or-experimental)) |
+
+> **Pick one per bot.** The first one-prompt run makes that bot's twin *bot-driven* for good
+> ([what that means](docs/ONE-PROMPT.md#before-you-start)). A bot you already twinned on the Twins page needs
+> one step of yours first, in your own terminal: `hermes twin bot-driven "Acme Support"`, then type yes.
+> Coming back to Grok, the bot gets Hermes-side memory and skills only when you allowed Hermes → Grok for that twin.
+
+**One prompt** (full steps: [ONE-PROMPT.md](docs/ONE-PROMPT.md#set-it-up-once-per-bot)):
+
+1. Terminal: `hermes twin setup`, download botport when it asks, then run `hermes twin setup` again and answer yes.
+   `hermes twin setup --check` then shows botport with ✓; "No twins yet" is expected (the prompt makes the twin).
+2. Grok app: open the bot, **Skills** tab → **Add new skill**. Run `hermes twin skill-text --name` (add `| pbcopy`
+   to copy it) and paste into Name; the same with `--description` into Description, `--body` into the large box.
+   **Save skill**. Also check `zsh -lc 'command -v hermes'` prints a path ([if not](docs/ONE-PROMPT.md#before-you-start)).
+3. Grok app: **Settings → Bot → Execution on Local Computer**. For the first prompt keep **Ask every time** and
+   press **Allow once** only if the command is the bot's own `from-grok` line and its JSON, nothing else
+   ([exactly what to check](docs/ONE-PROMPT.md#set-it-up-once-per-bot)).
+   If you trust every bot in your Grok app with this computer, then switch to **Always allow**: no click per
+   prompt, but any bot may run any command ([Safety](docs/ONE-PROMPT.md#safety)).
+4. In the bot's chat: "Clone yourself to Hermes". It answers with a line such as
+   `PASS: Acme Support twinned to Hermes (profile acme-support): 3 skills, 12 memories, ...`.
+
+**The Twins page** (full steps: [GUIDE.md](docs/GUIDE.md#connect-your-grok-bots)):
+
+1. Hermes Desktop → **Twins** → **Connect my Grok bots**; download botport when it asks.
+2. Choose your bots → **Twin this bot**.
+3. Paste each bot's instructions (or drop its setup export) and choose a model. (Steps 1 and 2 can also be
+   one line in a Hermes chat, "twin my Acme Support bot"; the instructions still come from step 3.)
+
+**3. Check it.** `hermes twin` prints your twins and the one next step. **Open in Hermes** on the Twins page
+starts a chat with the twin. Something wrong? [Troubleshooting](docs/GUIDE.md#troubleshooting).
 
 ## What copies over, honestly
 
-The Twins page shows the same table (a twin's **…** menu, **Details…**, **The whole table**), and so does
-`hermes twin copies` in a terminal.
+This table is for the Twins page. The one prompt copies more: memory and recent conversations
+([what it sends](docs/ONE-PROMPT.md#what-the-bot-sends)). The same table is in **Details…** and `hermes twin copies`.
+
+<details>
+<summary>The whole table, for twins kept by the Twins page</summary>
 
 <!-- what-copies:begin (written by twin/copies.py: change the table there) -->
 
@@ -94,7 +112,7 @@ The Twins page shows the same table (a twin's **…** menu, **Details…**, **Th
 | Instructions, routines and connections | With Import setup export: the bot writes a file about itself when you ask it in Grok. Instructions are filled in, routines arrive switched off, and connections arrive as a list of names. Logins are never copied. With skill sync set up, instructions also follow Grok's every 15 minutes by themselves, unless you switch that off. When it is unsure which to keep, you are asked. |
 | Skills | With skill sync, which is optional: a sync bot in your own Grok account carries them. Without it you copy them yourself. |
 | Conversations | Off until you switch full transcripts on for a twin. Then conversations from a Grok export can become Hermes chats of the twin; full transcripts are set up in the terminal. |
-| Grok memory | Does not copy: memory is the most private thing a bot holds, so none is taken. |
+| Grok memory | Does not copy: memory is the most private thing a bot holds, so none is taken unless you ask the bot itself with the one prompt. |
 | Grok model setting | Does not copy: nothing Hermes reads from Grok names the bot's model, so the twin uses the model you choose in Hermes. |
 | **From Hermes back to Grok** | |
 | Name, description and instructions | Off for every twin until you allow it. Then, with skill sync set up, you see a preview of each change and apply it. A bot in your own Grok account makes it there, and you can undo it. Otherwise you make the same change in Grok yourself. |
@@ -111,13 +129,13 @@ The Twins page shows the same table (a twin's **…** menu, **Details…**, **Th
 
 <!-- what-copies:end -->
 
+</details>
+
 ## More
 
-- [docs/GUIDE.md](docs/GUIDE.md): everyday use, setup exports, skill sync, how fast it is, settings, uninstall.
-- [docs/SHARING.md](docs/SHARING.md): your twins on your other computers, their memory, and asking them.
-- [docs/TERMINAL.md](docs/TERMINAL.md): every command, the setup command and the sample tour.
-- [docs/ROADMAP.md](docs/ROADMAP.md): what comes next.
-- [AGENTS.md](AGENTS.md): for a coding agent that sets it up for you.
+[One prompt](docs/ONE-PROMPT.md) · [Guide](docs/GUIDE.md) (Twins page, settings, troubleshooting, uninstall, words
+used) · [Other computers](docs/SHARING.md) · [Every command](docs/TERMINAL.md) · [API keys](docs/SECRETS.md) ·
+[Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [For coding agents](AGENTS.md)
 
 ## Disclosure
 
@@ -125,11 +143,7 @@ Everything the plugin reads, writes, runs or sends is in [docs/DISCLOSURE.md](do
 
 ## Credits
 
-- [botport](https://github.com/hudsonwa/botport) (MIT): the sync engine this plugin runs.
-- Moving a bot once and for all? Nous Research's official **agent-importers** plugin
-  (`hermes import-agent grok-bot`) does a one-time import from a bot export. Grok Bot Twin is for the time in
-  between: it keeps the twin up to date while you try Hermes. Reading the Grok app's local files is botport's own code.
-- Hermes Agent by Nous Research: the plugin API, skill scanner and Desktop SDK.
+[botport](https://github.com/hudsonwa/botport) (MIT), the sync engine this plugin runs.
 
 ## License
 

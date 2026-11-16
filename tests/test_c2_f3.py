@@ -1,7 +1,7 @@
 """F3 (C2): Stop twinning forgets the twin's Hermes -> Grok allow.
 
 remove() forgot the twin's panel choices, briefs, transcripts and memory-facts records, but never h2g.json: its
-`allow` entry stayed, so h2g_mirror.owner_allowed (the signed list the Mirror checks) kept naming the bot after the
+`allow` entry stayed, so h2g_mirror.owner_allowed (the signed list the sync bot checks) kept naming the bot after the
 twin was gone. Now remove() forgets it (allow, base, runner, record of changes; its waiting requests leave). The
 leftover scan guards every other twin-keyed file under the plugin's data folder. Invented bots only.
 """
@@ -40,7 +40,7 @@ def _no_panel_choice(monkeypatch):
 
 @pytest.fixture
 def allowed(twin):  # noqa: F811
-    """A real twin whose Grok bot Hermes -> Grok may change, with one change still waiting for the Mirror."""
+    """A real twin whose Grok bot Hermes -> Grok may change, with one change still waiting for the sync bot."""
     w = h2g.FakeGrokWriter(delay=True)
     w.put_bot(BOT, name="Acme Support", description="An older description in Grok.", instructions="Be brief.")
     twin.h2g_test_writer = w
@@ -81,7 +81,7 @@ def test_F3_stop_twinning_forgets_the_hermes_to_grok_allow(allowed):
     d = json.loads((svc.central / h2g.STATE_FILE).read_text())
     assert all(PID not in d.get(k, {}) for k in ("allow", "base", "runner", "keep_grok"))
     assert not any(c.get("pid") == PID for c in d.get("changes") or [])
-    assert w._load()["requests"] == {}  # the change still waiting left the Mirror's box: it is never made
+    assert w._load()["requests"] == {}  # the change still waiting left the sync bot's box: it is never made
 
 
 def test_F3_dry_run_changes_nothing_and_says_so(allowed):
@@ -122,4 +122,4 @@ def test_F3_forget_republishes_the_signed_list_and_writes_nothing_for_a_stranger
     x.allow(PID, "all")
     calls.clear()
     x.forget(PID)
-    assert calls == [("forget_bot", BOT), ("publish", [])]  # the Mirror's signed list no longer names the bot
+    assert calls == [("forget_bot", BOT), ("publish", [])]  # the sync bot's signed list no longer names the bot

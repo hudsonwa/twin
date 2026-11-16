@@ -2,7 +2,7 @@
 
 Everything on the Twins page has a command. Plain `hermes twin` prints your twins and the one next step.
 
-Install with the `next` line at the top of the [README](../README.md) (the catalog name gives the older 0.2.1).
+Install with the line in the [README's Install section](../README.md#install).
 
 ```sh
 hermes twin            # your twins and what to do next
@@ -12,16 +12,16 @@ hermes twin demo       # a sample twin with invented data; hermes twin demo remo
 On a computer without the Grok app, plain `hermes twin` names the one next step there, the link:
 `hermes twin link CODE` (see [SHARING.md](SHARING.md)).
 
-To update later: `hermes plugins update grok-bot-twin`. Your twins, links and settings stay as they are. (An
-install pinned with `--ref` is moved with the line Hermes prints then: the same install line with `--force` and
-the new `--ref`.)
+To update later, run the install line from the README again with `--force` added (it looks up the newest
+commit). Your twins, links and settings stay as they are.
 
 Without `--enable` Hermes asks whether to switch the plugin on; over a remote shell it cannot ask and leaves it
 off, and `hermes plugins enable grok-bot-twin` switches it on.
 
 ## One setup command
 
-`hermes twin setup` sets up the computer it runs on, from wherever that computer stands.
+`hermes twin setup` sets up the computer it runs on, from wherever that computer stands. Its marks: `✓` done,
+`→` this run will do it, `!` yours to do, `·` waits for an earlier step, `–` optional or not needed here.
 
 ```sh
 hermes twin setup --check                        # where this computer stands and who does what is left; changes nothing
@@ -83,6 +83,9 @@ hermes twin doctor
 Hermes keeps its own copy of botport and verifies it before it is ever run. A botport you already have on your
 `PATH` (or in `~/.local/bin`) works too: just run `hermes twin setup`.
 
+<details>
+<summary>How botport is checked (for the careful)</summary>
+
 `hermes twin setup` checks that botport and its folders are owned by you (or root) and not writable by
 others, keeps a private copy and verifies that copy: its SHA-256 must be on the list of release files that
 ships with this plugin version, so no other program and no network is needed. Only then does it run botport
@@ -105,6 +108,8 @@ refuses to run if any folder from the Hermes root down to its data folder is a s
 or writable by others. The model sees a twin only as an internal id (`t-` plus a keyed hash with a random
 per-install secret), never by name unless you turn on "Let the model see names" (`share_names_with_model`).
 
+</details>
+
 Then:
 
 ```sh
@@ -116,68 +121,138 @@ hermes twin
 
 ## Commands
 
-`hermes twin --help` lists them in five groups:
+`hermes twin --help` lists them in the same groups. `TWIN` is a twin's name in quotes ("Acme Support") or its
+short name (`acme-support`); with exactly one twin you can leave it out, except for `stop`, which always needs it. Most commands take `--json`.
 
-Removed in 0.3.6: `facts`, `briefs` and `transcripts to-grok-on|to-grok-off` (they never synced anything; see
-CHANGELOG.md).
+**Everyday**
 
-- **Everyday**: `status` (also plain `hermes twin`), `add`, `quick`, `finish`, `import-exports`, `stop` (also `remove`).
-- **Your other computers**: `share on|off|code`, `link CODE`, `unlink`, `fleet` (also `fleet remove NAME`,
-  `fleet name NAME`, `fleet once`, `fleet run`, `fleet settings`, `fleet skills`, `fleet memory`), `routines`
-  (`on|off`, `move ROUTINE COMPUTER`, `run-here on|off`, `restore`), `background on|off`; each takes `--json`.
-- **Ask another computer**: `ask COMPUTER "TEXT"`, `requests` (the log), `requests on|off`,
-  `requests approve|deny ID`, `requests mode [here|safe]`.
-- **Fix things**: `conflicts`, `resolve`, `versions`, `restore`, `doctor`, `setup`.
-- **Advanced**: `check`, `list-grok`, `recent`, `compare`, `test`, `copies`, `checklist`, `syncs`, `import`, `switch`, `approve`,
-  `skip`, `send-to-grok`, `skill-sync`, `digest`, `verify`, `demo`, `uninstall`.
+| Command | What it does |
+|---|---|
+| `hermes twin` / `status` | Your twins and the one next step. |
+| `add --bot NAME` (or `--all`) | Give a Grok bot a twin; shows what copies, then asks. `--hermes-profile NAME` names its Hermes profile. |
+| `quick NAME --model MODEL` | One twin start to finish (see [quick](#quick)). |
+| `finish [TWIN ...] [--all] [--model MODEL]` | Give new twins a model and print what to ask each bot for. |
+| `stop TWIN` (also `remove`) | Stop twinning one bot; its Hermes bot and chats stay. Keeps full transcripts and What syncs choices unless `--remove-data`; `--dry-run` shows what it would do. |
 
-Also: `check` (sync) and `move` (switch). The older names still work: `restore-points` (versions), `parity`
-(compare), `mirror` (skill-sync), `attest` (verify).
+**Your other computers** (details in [SHARING.md](SHARING.md#in-the-terminal))
 
-Each twin's Hermes bot is its own Hermes profile (default: named after the bot; a name that is taken gets a
-number). The option is `--hermes-profile`, because `hermes` itself reads `--profile`/`-p` anywhere on the
-command line. Commands take the twin as `[TWIN]` (its name in quotes, such as "Acme Support", or its short name `acme-support`); with exactly one twin you
-can leave it out. `hermes twin skill-sync [TWIN] --folder DIR | --off | --new-pass | --status` turns skill sync on (a later
-twin needs no folder: it uses the same one; `--again` makes the set-up folder once more), turns it off (asks first), replaces the twin's pass (the small
-file the sync bot needs; the new one goes to the sync bot through the shared folder), or says when the sync
-bot last ran. `hermes twin switch
-[TWIN]` turns on the switched-off routine copies a twin holds, if it holds any; `--undo` pauses them again.
-`hermes twin import [TWIN] FILE`
-imports the setup export a bot wrote about itself (it shows the plan and asks first; `--yes` skips the
-question, `--show` prints the instructions and prompts whole before it, `--request` prints the text to paste
-into the bot's chat, `--bot NAME` picks one bot of a file that holds several). The command refuses when it is
-started from the chat turn of a request another computer sent.
-`hermes twin finish [TWIN ...] [--all] [--model MODEL]` gives the named twins (or, with `--all`, every twin
-with something left) one model, the model your other Hermes chats use unless you name one, and prints the
-request to paste into each bot's chat in Grok. `hermes twin import-exports DIR` matches every setup export
-file in DIR to its twin by the bot's name (or id) and imports them all after one question (`--yes` skips it,
-`--show` prints the text first, `--twin NAME` limits it); it refuses in a request's chat turn too.
-`hermes twin quick "Acme Support" --model MODEL --yes` does one twin start to finish: `add`, the request to paste
-into the bot's chat in Grok, a wait for the answer file in Downloads (files saved up to an hour before count;
-`--wait MIN`, 15 by default, at most 120), `import-exports`, `finish`, `compare`, then one summary line per step
-and PASS or FAIL (exit status 0 or 1). It only calls those commands, so each asks as it always does unless
-`--yes` (`--show` prints the text before the import). Run it again when the wait ran out: a twin that exists and
-instructions that are in are skipped. It refuses in a request's chat turn. With `--from-file FILE` or `--stdin`
-the bot's setup export (a `grok-bot-export` JSON document) is handed over directly, so there is no paste step
-and no wait: with `--yes` an agent, or the Grok bot itself through its shell, runs it in one command. The import
-is the same as `hermes twin import` (instructions, routines switched off, connector names; memories, facts about
-you and skills are counted and left out). The last line is always `PASS: ...` or `FAIL: ...`.
-`hermes twin quick --all --model MODEL --yes` runs `quick` for every Grok bot in turn and ends with one verdict
-(`PASS: quick setup of 2 of 2 bots`). `hermes twin link-computer` (`--wait MIN`) turns sharing on, prints a link code
-and the line for the other computer, and waits (at most 10 minutes, the code's life) until a computer used it, then
-PASS or FAIL; Hermes serves the link from that command while it waits. `hermes twin stop "Acme Support"` needs the
-twin named, keeps its full transcripts and What syncs choices unless `--remove-data`, and ends with PASS or FAIL.
-`hermes twin test "Acme Support" --from-export FILE` (or `--battery FILE`) runs botport's behaviour test on the twin's
-Hermes bot: botport asks it each case (`hermes -p PROFILE chat`) and checks the answer, so every run costs what
-those chats cost. `--from-export FILE` makes the cases from a setup export once and keeps them; `--battery FILE`
-uses your own. It prints passed of total and one line per case, exits 1 when a case fails, and the twin's line
-in `hermes twin status` then shows "test 5/6 ✗" with when it ran.
+| Command | What it does |
+|---|---|
+| `share on\|off\|code\|status` | Share your twins with your other computers; `code` shows the link code. |
+| `link CODE` | On another computer: link it to the one that shares. |
+| `link-computer [--wait MIN]` | Share, print a link code, and wait until another computer has used it (PASS or FAIL). |
+| `unlink` | Stop following; this computer's twins leave it (kept 30 days). |
+| `fleet` | Which computers hold your twins, and how up to date each is. Also `fleet once\|run\|remove\|name\|memory\|skills\|settings\|routines` ([SHARING.md](SHARING.md#in-the-terminal)). |
+| `routines [on\|off]` | Copy each twin's routines to your other computers (`move ROUTINE COMPUTER`, `run-here on\|off`, `restore`). |
+| `background on\|off` | Keep this computer's twins up to date while Hermes is closed. |
+
+**Ask another computer**: `ask COMPUTER "TEXT"`, `requests` (the log), `requests on|off`, `requests approve|deny ID`,
+`requests mode [here|safe]` ([SHARING.md](SHARING.md#ask-a-twin-on-another-computer)).
+
+**Only you, at your own terminal.** `requests on`, `to-grok TWIN allow`, `to-grok TWIN apply`,
+`secret share NAME --to-grok|--linked` and `bot-driven TWIN` ask at the terminal itself (`/dev/tty`; `CONIN$` on
+Windows) and go ahead only on a `yes` typed there. `--yes` does not skip that question, and a command with no
+terminal (a chat, a bot's shell, a script, `setsid`) or one a chat started is refused: "Only you can do this,
+typing yes in your own terminal; a command without one (a chat, a bot, a script) is refused." The Twins page asks
+nothing more.
+
+**Fix things**
+
+| Command | What it does |
+|---|---|
+| `conflicts [TWIN]` / `resolve [TWIN] ITEM --keep hermes\|grok` | What changed in both places; keep one version. |
+| `instructions [TWIN]` | Grok's instructions kept in step: `check`, `on\|off`, `keep grok\|hermes`, `downloads on\|off`, `request`. |
+| `versions [TWIN]` / `restore [TWIN] NUMBER` | Earlier versions kept for undo; put one back. |
+| `doctor` | Check the setup and say what to fix. |
+| `setup` | Set up this computer or finish what is left ([below](#one-setup-command)). |
+
+**One prompt in Grok** ([ONE-PROMPT.md](ONE-PROMPT.md))
+
+| Command | What it does |
+|---|---|
+| `skill-text` | Print the skill to give a Grok bot once. |
+| `from-grok --bot NAME` / `back-to-grok --bot NAME` | Run by the Grok bot itself, with its state as JSON on stdin. You do not run these by hand. |
+| `git on\|off\|status [TWIN\|--all]` | Optional git history of a twin (`--remote URL` to push, `--with-history`). |
+| `bot-driven [TWIN]` | Your own step, once, for a twin made on the Twins page before its first one prompt ([below](#bot-driven)); `--dry-run` shows what changes. |
+| `mcp --bot NAME` | The same two calls as a local MCP server, for a later Grok app; not used today. |
+
+**Advanced**
+
+| Command | What it does |
+|---|---|
+| `check [TWIN]` (also `sync`) | Check Grok now. `sync TWIN --from-file FILE` or `--stdin` brings a bot and its twin level both ways from the bot's own state. |
+| `list-grok` | The bots in your Grok app. |
+| `recent [TWIN]` | Recent activity (when and what kind; never content). |
+| `compare [TWIN]` | Compare with Grok, item by item. |
+| `test [TWIN]` | botport's behaviour test (see [test](#test)). |
+| `copies` | What copies over and how: the whole table. |
+| `checklist [TWIN]` | What you do yourself, and what moving routines to Hermes takes. |
+| `syncs [TWIN]` | What syncs with Grok, which way, and when it last did. |
+| `secret list\|set\|forget\|share\|pull [NAME]` | Keys kept by reference in this computer's OS store ([SECRETS.md](SECRETS.md)). |
+| `import [TWIN] FILE` | Import a bot's setup export. Asks first (`--yes` skips); `--show` prints it whole; `--request` prints what to ask the bot; `--bot NAME` picks one bot of a file with several. |
+| `import-exports DIR` | Import every setup export in a folder, each into its bot's twin, after one question (`--yes`, `--show`, `--twin NAME`). |
+| `switch [TWIN]` (also `move`) | Move routines to Hermes: turn the copied routines on; `--undo` pauses them again. |
+| `approve [TWIN] ITEM` / `skip [TWIN] ITEM` | Let one waiting change go ahead; keep a changed skill in Hermes only (`--undo`). |
+| `send-to-grok [TWIN]` | Send approved skill changes to Grok (needs skill sync). |
+| `skill-sync [TWIN]` | Skill sync: `--folder DIR` on, `--off`, `--status`, `--new-pass`, `--again`. |
+| `digest [TWIN]` | The optional activity digest to Grok: preview, `--on`, `--off`. |
+| `transcripts ACTION [TWIN]` | Whole conversations, encrypted and searchable (off by default): `on`, `off`, `add-grok`, `refresh`, `search`, `export`, `to-hermes`, `forget`. |
+| `to-grok [TWIN]` | Changes made in Hermes, made in Grok by the sync bot: preview, `allow`, `disallow`, `apply`, `undo`, `resolve`, `runner`, `give-up` (each is in its `--help`). |
+| `verify` | Check botport against GitHub's signed build record. |
+| `demo [ACTION]` | A sample twin with invented data (`demo remove` ends it). |
+| `uninstall` | Remove Grok Bot Twin: every twin and its records; Hermes bots and chats stay. |
+
+Reading only, safe to run any time: `status`, `recent`, `compare`, `copies`, `checklist`, `syncs`, `fleet`.
+
+Every flag of a command is in its `--help` (for example `quick --endpoint`, `finish --endpoint`, `requests
+--step`, `demo start|hermes-edit`).
+
+Older names that still work: `restore-points` (versions), `parity` (compare), `mirror` (skill-sync), `attest`
+(verify). Removed in 0.3.6: `facts`, `briefs` and `transcripts to-grok-on|to-grok-off`.
+
+Each twin's Hermes bot is its own Hermes profile. The option is `--hermes-profile`, because `hermes` itself
+reads `--profile`/`-p` anywhere on the command line. `import`, `import-exports` and `quick` refuse when started
+from the chat turn of a request another computer sent.
+
+### quick
+
+`hermes twin quick "Acme Support" --model MODEL --yes` does one twin start to finish: `add`, prints the request to
+paste into the bot's chat in Grok, waits for the answer file in Downloads (`--wait MIN`, 15 by default, at most
+120; files saved up to an hour before count), then `import-exports`, `finish` and `compare`. The last line is
+`PASS: ...` or `FAIL: ...`. Each step asks as usual unless `--yes`. Run it again after a timeout: what is done is
+skipped. `--from-file FILE` or `--stdin` takes the setup export directly, with no paste and no wait.
+`quick --all --model MODEL --yes` does every Grok bot in turn. No model is called.
+
+### test
+
+`hermes twin test "Acme Support" --from-export FILE` (or `--battery FILE`) runs botport's behaviour test on the
+twin: botport asks the twin each case and checks the answer, so each run costs what those chats cost.
+`--from-export` makes the cases from a setup export once and keeps them; `--battery` uses your own. It prints
+passed of total and one line per case, exits 1 when a case fails, and `hermes twin status` then shows
+"test 5/6 ✗". Every one-prompt run also runs it.
+
+### bot-driven
+
+`hermes twin bot-driven "Acme Support"` is your own step for the one-prompt route ([ONE-PROMPT.md](ONE-PROMPT.md)):
+a twin that follows its Grok bot through botport is never switched by the bot's prompt (`from-grok` FAILs on it,
+nothing written, and names this command). It copies botport's parts of the twin's Hermes folder to
+`plugin-data/grok-bot-twin/one-prompt/converted/` and runs `botport twin remove` (the Hermes bot, its chats and
+everything in it stay); from then on the bot keeps the twin in step with each prompt, and the twin no longer follows
+renames and edits made in Grok between prompts. `--dry-run` shows that and changes nothing; otherwise it asks at
+your own terminal and goes ahead only on a `yes` typed there; a twin already bot-driven is left as it is.
 
 Slash command: `/twin [status | check [TWIN] | conflicts [TWIN] | recent [TWIN] | ask COMPUTER: TEXT | requests | demo ...]`.
 Anything but status and recent works only in a chat that Hermes names as one of its own local surfaces (its
 terminal, terminal UI or Desktop); a messaging app, or a caller that names no surface, gets status only.
-Agent tools: `twin_status` (plain language: state, last check, what to do yourself in Grok and in Hermes,
-changes waiting, items changed in both places, skill sync, and the two things never copied from Grok),
-`twin_recent`. Both say "your Grok twin" and an
-internal id unless "Let the model see names" is on, and both say so when the twin is the sample. No tool asks
+Agent tools (what a Hermes chat model can call):
+
+| Tool | What it does |
+|---|---|
+| `twin_status` | Plain-language state: last check, what to do yourself in Grok and in Hermes, changes waiting, items changed in both places, skill sync, the two things never copied from Grok. Reads only. |
+| `twin_recent` | Recent activity (when and what kind). Reads only. |
+| `twin_transcripts_search` | Searches a twin's whole conversations, when you switched those on for it. Reads only. |
+| `twin_make` | Makes or syncs the twin of **one** Grok bot you named ("twin my Acme Support bot"): the steps of `quick` without asking (add, model, compare), then the behaviour test when the twin has cases, which calls the twin's model. Never deletes, never waits for a setup export, refused for requests from another computer. |
+
+`twin_status` and `twin_recent` say "your Grok twin" and an internal id unless "Let the model see names" is on,
+and say so when the twin is the sample. No tool asks
 another computer: only you do (see [Ask a twin on another computer](SHARING.md#ask-a-twin-on-another-computer)).

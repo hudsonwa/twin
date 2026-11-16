@@ -6,7 +6,10 @@ is everything that call does; the MCP server only decodes the call and prints th
 
 It is the existing code path, in order, nothing new:
 1. the twin: an existing one of this bot (pairs.json, by the bot's name), else `TwinService.create` for the one
-   Grok bot of that name in the Grok app's own list (botport `twin create`), exactly as `hermes twin add` does;
+   Grok bot of that name in the Grok app's own list (botport `twin create`), exactly as `hermes twin add` does.
+   Only a twin made in this call is made bot-driven here (`make_bot_driven`); an existing twin that botport's
+   twin pairing keeps is a FAIL before anything is written, and the owner converts it with
+   `hermes twin bot-driven TWIN` (mcp_server.cmd_bot_driven), never this call;
 2. a snapshot of what the next steps can change in that twin's Hermes folder;
 3. botport `sync` with the bot's words as a `grok-bot-export` file (instructions, skills, memory; `--no-cron`),
    and the routines through `import_setup` (each made switched off, as an imported export's are);
@@ -161,7 +164,8 @@ def check_name(bot_name: Any, allowed: list) -> str:
         raise Refused("bot_name must be the bot's own name")
     keys = {" ".join(str(a).split()).casefold() for a in allowed or []}
     if name.casefold() not in keys:
-        raise Refused("this connector is not set up for a bot of that name (hermes twin mcp --bot NAME)")
+        raise Refused("the bot's name in the JSON is not the one after --bot (or the one this connector is set up for); "
+                      "use your name exactly as Grok shows it in both")
     return name
 
 
@@ -341,6 +345,16 @@ def written_secrets(home: Path, snap: Optional[Path] = None) -> int:
     return hits
 
 
+FROM_HERMES_TAG = "(from hermes)"  # the bot tags a fact Hermes handed it (sync_both.HOW); the same fact on its way back
+
+
+def _memory_key(note: str) -> str:
+    """A memory note as compared for the union: spaces and case ignored, and a leading '(from Hermes)' tag too, so a
+    fact that went Hermes -> Grok -> Hermes is not added a second time."""
+    key = " ".join(note.split()).casefold()
+    return key[len(FROM_HERMES_TAG):].lstrip() if key.startswith(FROM_HERMES_TAG) else key
+
+
 def merge_memory(home: Path, notes: list) -> dict:
     """The bot's memory, where the twin's own `memory` tool reads it: Hermes' MEMORY.md (its separator and its
     lock, through xs_memory's helpers). botport carries memory only as a skill the model rarely opens. A union:
@@ -355,10 +369,10 @@ def merge_memory(home: Path, notes: list) -> dict:
         have = xm._read(path)
         if have is None:
             raise Refused("this twin's memory file cannot be read safely, so it was not changed")
-        known = {" ".join(e.split()).casefold() for e in have}
+        known = {_memory_key(e) for e in have}
         out, left = list(have), 0
         for n in notes:
-            key = " ".join(n.split()).casefold()
+            key = _memory_key(n)
             if not key or key in known or xm.why_held(n):
                 continue
             if len(xm.DELIM.join(out + [n])) > limit:
@@ -375,14 +389,29 @@ def merge_memory(home: Path, notes: list) -> dict:
 # ---- bot-driven twins (botport v0.2.1 has no "apply this export" call for a profile its twin pairing owns) -------
 MIRROR_STATE = "botport.mirror.json"  # in a profile: botport's twin pairing owns it; apply/sync/drift refuse it
 CONVERT_PARTS = SNAPSHOT_PARTS + (MIRROR_STATE, "botport-mirror-conflicts.md", "botport")
+CONVERT_HOW = "hermes twin bot-driven"  # the owner's own step (mcp_server.cmd_bot_driven); a call never converts
+
+
+def follows_botport(home: Path) -> bool:
+    """Does botport's twin pairing (or the owner's own `botport mirror`) keep this Hermes folder?"""
+    return (home / MIRROR_STATE).exists()
+
+
+def refuse_botport_paired(name: str, home: Path) -> None:
+    """An existing twin that follows its Grok bot through botport is the owner's to convert, once, by choice: the
+    one-prompt calls FAIL on it before anything is written (no `botport twin remove`, no snapshot, no pairs.json)."""
+    if follows_botport(home):
+        raise Refused(f"this twin follows its Grok bot through botport, so nothing was changed. To keep it in step "
+                      f"with one prompt instead, the owner runs {CONVERT_HOW} \"{name}\" in their own terminal")
 
 
 def make_bot_driven(svc: Any, pid: str, home: Path) -> bool:
     """Make this twin one the Grok bot keeps in step itself (driver "bot"): once, a full copy of its Hermes folder's
     botport parts (one-prompt/converted/PID/STAMP, never put back by itself), then `botport twin remove`, which keeps
     the profile, its chats and everything it holds as a normal profile, so botport's apply/sync/drift (the path the
-    bot's own words go through) accept it. Idempotent: a twin already bot-driven is only marked. -> converted now."""
-    owned = (home / MIRROR_STATE).exists()
+    bot's own words go through) accept it. Idempotent: a twin already bot-driven is only marked. -> converted now.
+    Called by `twin_from_grok` for a twin it made in the same call, and by the owner's `hermes twin bot-driven`."""
+    owned = follows_botport(home)
     if owned:
         snapshot(pid, home, None, CONVERT_PARTS, "converted")
         try:
@@ -496,6 +525,8 @@ def twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = N
             home = svc._profile_home(prof) if isinstance(prof, str) and prof != "default" else None
             if home is None or not valid_id(prof):
                 raise Refused("this twin has no Hermes bot of its own")
+            if not made:  # (before pair_id is in res: a refusal leaves pairs.json as it was too)
+                refuse_botport_paired(name, home)
             res.update(pair_id=pid, profile=prof, created=made)
             store.ensure_dir(home)
             srefs = secret_ref.Refs(pid)  # keys by reference (docs/SECRETS.md): the bot's words again, for this twin
@@ -504,7 +535,7 @@ def twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = N
             eng = svc.engine_for(pid)
             if not hasattr(eng, "bundle_sync"):
                 raise Refused("this twin is the sample; twin a real Grok bot")
-            res["converted"] = make_bot_driven(svc, pid, home)
+            res["converted"] = make_bot_driven(svc, pid, home)  # (only a twin made just now can still be owned)
             if made:
                 with contextlib.suppress(Exception):  # (a twin without it still syncs; its test then says so)
                     res["model_server"] = same_server_as_owner(svc, pid, home)
@@ -539,8 +570,8 @@ def twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = N
             if not test.get("ok"):
                 fails.append(f"behaviour test {test.get('passed')}/{test.get('total')}")
             if res.get("conflicts"):
-                fails.append(f"botport left {res['conflicts']} conflict(s): edited on both sides; run hermes twin "
-                             "sync to settle them")
+                fails.append(f"botport left {res['conflicts']} conflict(s): edited in both Hermes and Grok since the "
+                             "last run; make the two the same, then try again")
             if leaks:
                 fails.append(f"{leaks} written file(s) look like they hold a password or key")
             if res.get("routines", {}).get("not_added"):
@@ -638,6 +669,11 @@ def _finish(tool: str, shown_name: str, res: dict, snap: Optional[Path], home: O
         for step in after or []:
             with contextlib.suppress(Exception):  # (each is reported in its own way; none undoes the PASS)
                 step()
+        hist = res.get("history")
+        if isinstance(hist, dict) and hist.get("conversations"):
+            res["line"] += (f" Conversations: {hist.get('conversations', 0)} sent, {hist.get('new_messages', 0)} new "
+                            "message(s) in Hermes chats \"From Grok: …\""
+                            + (f", {hist['failed']} not imported" if hist.get("failed") else "") + ".")
         from .git_mirror import after_pass  # optional git history (off by default)
         kind = "back" if tool == BACK_TOOL else "move" if res.get("move") else "twin" if res.get("created") else "sync"
         note = after_pass(res.get("pair_id"), home, kind)
@@ -677,7 +713,7 @@ def _line(name: str, res: dict) -> str:
         moved = (f" Moved: {m['hermes_routines_on']} routine(s) on in Hermes; paused in Grok: "
                  f"{', '.join(m['grok_routines_paused']) or 'none'}.")
     scrubbed += _refs_note(res)
-    return (f"PASS: {name} {verb} Hermes (profile {res.get('profile')}): {what}; drift clean; {tested}{scrubbed}."
+    return (f"PASS: {name} {verb} Hermes (profile {res.get('profile')}): {what}; matches what the bot sent; {tested}{scrubbed}."
             + moved)
 
 
@@ -711,7 +747,10 @@ def _move_routines(svc: Any, pid: str, refs: list) -> dict:
 def twin_back_to_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = None, skills: Any = None,
                       memory: Any = None) -> dict:
     """Bring a moved bot back: `sync_bot` both ways, `switch --undo` (Hermes routines paused), and the bundle the
-    Grok bot applies itself (UpdateMemory, UpdateSkill, UpdateRoutine to re-enable). -> {"ok", "line", "bundle"}"""
+    Grok bot applies itself (UpdateMemory, UpdateSkill, UpdateRoutine to re-enable). Hermes-side memory and skills
+    are in the bundle only when the owner allowed Hermes -> Grok for this twin (`hermes twin to-grok TWIN allow`);
+    otherwise they stay in Hermes and the bundle carries only `routines_to_enable` (the bot's own routines it paused
+    when it moved). -> {"ok", "line", "bundle"}"""
     from .sync_both import HOW, sync_bot
     started = time.monotonic()
     stack, after = contextlib.ExitStack(), []
@@ -732,11 +771,12 @@ def twin_back_to_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any 
             home = svc._profile_home(prof) if isinstance(prof, str) and prof != "default" else None
             if home is None or not valid_id(prof):
                 raise Refused("this twin has no Hermes bot of its own")
+            refuse_botport_paired(name, home)  # (never converted here: the owner's hermes twin bot-driven does)
             res.update(pair_id=pid, profile=prof)
             srefs = secret_ref.Refs(pid)
             doc, counts = build_export(name, instructions, skills, memory, None, srefs)
             res["counts"] = counts
-            make_bot_driven(svc, pid, home)
+            note_bot(svc, pid, {"driver": "bot"})
             snap = snapshot(pid, home, svc)
             synced = sync_bot(svc, pid, doc, write_env=False)  # (.env: only on the final PASS)
             res["drift"] = "clean" if synced.get("ok") else "differs"
@@ -745,7 +785,11 @@ def twin_back_to_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any 
             moved = store.read_json(_moved_file(pid), {}) if _moved_file(pid).is_file() else {}
             refs = [r for r in (moved.get("grok_routines") or []) if isinstance(r, str)][:ROUTINES_MAX]
             fg = synced.get("for_grok") or {}
-            res["bundle"] = {"memory": fg.get("memory") or [], "skills": fg.get("skills") or [],
+            mem, skl = fg.get("memory") or [], fg.get("skills") or []
+            if not _to_grok_allowed(svc, pid):  # the owner's one Hermes -> Grok switch; off: nothing is handed over
+                res["kept_in_hermes"] = {"memory": len(mem), "skills": len(skl)}
+                mem, skl = [], []
+            res["bundle"] = {"memory": mem, "skills": skl,
                              "routines_to_enable": refs, "how": HOW,
                              **({"secrets_needed": fg["secrets_needed"], "secrets_how": fg.get("secrets_how")}
                                 if fg.get("secrets_needed") else {})}
@@ -774,6 +818,16 @@ def twin_back_to_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any 
         stack.close()
 
 
+def _to_grok_allowed(svc: Any, pid: str) -> bool:
+    """Whether the owner allowed Hermes -> Grok for this twin (anything at all on `hermes twin to-grok TWIN allow`).
+    Read only, from the same state the to-grok commands keep; a state that cannot be read counts as not allowed."""
+    from . import h2g
+    try:
+        return bool(h2g.H2G(svc.central, None, hermes=lambda p: {}, bot=lambda p: "").allowed(pid))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _back_line(name: str, res: dict) -> str:
     if not res["ok"]:
         tail = " The twin was put back as it was before this call." if res.get("restored") else ""
@@ -782,8 +836,11 @@ def _back_line(name: str, res: dict) -> str:
         return f"FAIL: {name}: {res.get('why') or 'not brought back'}.{tail}"
     b = res["bundle"]
     enable = ", ".join(b["routines_to_enable"]) or "none"
-    return (f"PASS: {name} back to Grok: {len(b['memory'])} memories and {len(b['skills'])} skills to write with "
-            f"UpdateMemory/UpdateSkill; {res['hermes_routines_paused']} routine(s) paused in Hermes; re-enable in "
+    kept = res.get("kept_in_hermes")
+    what = (f"{kept['memory']} memories and {kept['skills']} skills stay in Hermes: Hermes → Grok is off for this "
+            f"twin (the owner turns it on with hermes twin to-grok {res['pair_id']} allow)" if kept else
+            f"{len(b['memory'])} memories and {len(b['skills'])} skills to write with UpdateMemory/UpdateSkill")
+    return (f"PASS: {name} back to Grok: {what}; {res['hermes_routines_paused']} routine(s) paused in Hermes; re-enable in "
             f"Grok with UpdateRoutine: {enable}{_refs_note(res)}"
             + (f"; set up in Grok by name only: {', '.join(b['secrets_needed'])}" if b.get("secrets_needed") else "")
             + ".")

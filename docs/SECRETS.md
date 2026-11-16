@@ -1,8 +1,37 @@
 # Secrets by reference
 
-A twin has to keep working when a bot's skills, instructions or memory need an API key. The key itself must never
-travel: not in an export, a bundle, a git commit, a log, a chat or an answer of a tool, and never to Grok's cloud
-unless the owner says so for that one key.
+What happens when a bot's skills, instructions or memory hold an API key (an `OPENAI_API_KEY=…` line, say).
+
+## What this means for you
+
+- **Where this applies:** the [one prompt](ONE-PROMPT.md) and `hermes twin sync`. On the Twins page (a paste or
+  a setup export) a line with a key is still left out. To give such a twin the key, keep the key in the bot's
+  text in Grok and use the one prompt, or add it by hand: open `~/.hermes/profiles/<profile>/.env` in a text
+  editor (`<profile>` is the twin's Hermes profile, for example `acme-support`), add a line
+  `OPENAI_API_KEY=your-key`, save, run `chmod 600 ~/.hermes/profiles/<profile>/.env`, and write
+  `${OPENAI_API_KEY}` where the twin's skill needs it. (Typing the key into an `echo` command would leave it in
+  your shell history.)
+- **On a Mac, Windows, or Linux desktop**, the key is moved into your computer's own secret store (Keychain,
+  Credential Manager, Secret Service). The twin's text gets a placeholder (`${OPENAI_API_KEY}`), and the twin's
+  Hermes bot gets the value in its own private `.env` file, so the skill keeps working.
+- **The answer tells you** which keys were kept, by name, never the value: "1 key(s) kept by reference
+  (OPENAI_API_KEY)".
+- **No secret store** (a Linux server without one, a locked keyring): the key is not kept; it is blanked, and
+  the answer says `kept by reference: 0 (no OS secret store on this computer: …)`. Unlock the keyring and run the
+  prompt again, or put the key in the twin's `.env` yourself as above.
+- **See and manage them:** `hermes twin secret list` (names only), `secret set NAME` (stores a value in the OS
+  store under that name only; it does not write a twin's `.env`), `secret forget NAME`.
+  `secret share NAME --linked` lets your linked computers fetch it; `secret share NAME --to-grok` lets that one
+  value go to the Grok bot (with a warning). Both ask in your own terminal and go ahead only on a `yes` typed
+  there; `--yes` does not skip it, and a chat, a bot or a script is refused.
+- **Where a key has already been:** on the [one-prompt](ONE-PROMPT.md) route the Grok bot puts the key in the
+  command it runs, so it is in that Grok chat (and in the approval box, if you see one). It came from Grok in the
+  first place. While the command runs it is also in the Grok app's own shell process on your computer. From then on, it is kept by reference and does not travel again: not in an export, a
+  bundle, a git commit, a log or a tool's answer, and never back to Grok unless you share it with `--to-grok`.
+- Passwords you sign in with, cookies and logins are never kept: the bot is told to leave them out, and the
+  plugin blanks any it finds. The check looks for patterns and can miss one, so do not rely on it alone.
+
+The rest of this page is the detail, for reviewers.
 
 ## The idea
 
@@ -11,7 +40,8 @@ was blanked (the line was hidden, or the fact left out) and the twin lost it. No
 secret store, the value is **kept by reference**:
 
 1. The value goes into the OS secret store on this computer, under a NAME, as service `grok-bot-twin`.
-2. The text keeps a stable placeholder in its place: `{{secret:NAME}}`.
+2. The text keeps a stable placeholder in its place: `${NAME}` in what Hermes reads, `{{secret:NAME}}` in what
+   goes to Grok.
 3. A list of names (`plugin-data/grok-bot-twin/secrets.json`) says where each name is used and which switches are on.
    It never holds a value.
 
@@ -53,11 +83,11 @@ them in the OS store only, and no snapshot ever holds one). The answer names the
 reference (OPENAI_API_KEY)"), never a value; `back-to-grok` passes `secrets_needed` on to the bot. The bot's skill (`grok/SKILL-twin.md`) tells it to
 pass an API key or token a skill needs as it is (it only travels to the owner's own computer, in the one command
 the owner approves) and to leave out sign-in passwords, cookies and logins. The other paths
-(the Mirror bot's `to-grok`, finish) keep the older policy, hold back or blank, until they are moved over.
+(the sync bot's `to-grok`, finish) keep the older policy, hold back or blank, until they are moved over.
 
 ## Hermes → Grok
 
-What goes to the Grok bot (`for-grok.json`, the CLI output, the Mirror bot's bundle) carries only placeholders and
+What goes to the Grok bot (`for-grok.json`, the CLI output, the sync bot's bundle) carries only placeholders and
 names. A Grok connector signs in with Grok's own auth, so the bundle tells the bot which NAME to set up there:
 `"secrets_needed": ["OPENAI_API_KEY"]` with the sentence "Set these up in Grok's own connector or secret settings;
 this bundle holds only their names."
@@ -66,13 +96,16 @@ this bundle holds only their names."
 
     hermes twin secret share NAME --to-grok
 
-which warns that the value will then live on xAI's service, asks once (`--yes` for scripts), and marks that one
-name. Only then does the next bundle carry that value in place of its placeholder. `--off` turns it back.
-A command a chat started (the MCP tools, the slash command) cannot turn it on.
+which warns that the value will then live on xAI's service, asks once at the terminal itself, and marks that one
+name only on a `yes` typed there. `--yes` does not skip the question (it is still accepted, and ignored), and a
+command with no terminal (a chat, a bot's shell, a script) or one a chat started (the MCP tools, the slash
+command) is refused. Only then does the next bundle carry that value in place of its placeholder. `--off` turns
+it back.
 
 ## The owner's other computers
 
-Off by default, per secret: `hermes twin secret share NAME --linked` on the computer that shares. A linked
+Off by default, per secret: `hermes twin secret share NAME --linked` on the computer that shares, asked at the
+terminal the same way. A linked
 computer fetches the values marked so with `hermes twin secret pull`, over the link it already has, on a route of
 its own (`POST /v1/xs/secrets`), signed and counted like every call, inside the same sealed box as a twin's memory
 (`xs_memory.seal`), with a key of its own made from the link's key. It keeps each value in its own OS store and
@@ -85,15 +118,16 @@ refuses when it has none. Nothing of a value is logged.
 | `hermes twin secret list` | Names, where each is used, which switches are on. Never a value. |
 | `hermes twin secret set NAME` | Asks for the value without echo (or reads one line from stdin with `--stdin`) and keeps it in the store. |
 | `hermes twin secret forget NAME` | Takes it out of the store, the list and every twin's `.env`. |
-| `hermes twin secret share NAME --to-grok [--off] [--yes]` | The per-secret opt-in described above. |
-| `hermes twin secret share NAME --linked [--off]` | Lets linked computers fetch it. |
+| `hermes twin secret share NAME --to-grok [--off]` | The per-secret opt-in described above (asks at your terminal; `--yes` does not skip it). |
+| `hermes twin secret share NAME --linked [--off]` | Lets linked computers fetch it (asks at your terminal). |
 | `hermes twin secret pull` | On a linked computer: fetch what the sharing computer allows. |
 
 ## Threat model
 
 - **Prompt injection asking for a value.** No tool, MCP call, slash command or API route returns a value. `list`
   prints names; the resolve step writes only into a profile's `.env`. A model that is told "print the key" has
-  nothing to print it with. The opt-ins refuse a command a chat started.
+  nothing to print it with. The opt-ins ask for a yes typed at the controlling terminal: a command a chat
+  started, or one with no terminal (a model that scrubs the chat's variables, a Grok bot's own shell), is refused.
 - **Logs.** Values pass only through the store calls; their errors are reported by code ("store said no"), never
   with the subprocess' text, which could echo input. Events count names, not values.
 - **Git mirror.** The mirror commits scrubbed text; placeholders are plain names, and the mirror's own scrub still

@@ -816,6 +816,49 @@ def asked_turn(extra: Any = (), in_chat: bool = False, env: bool = True) -> bool
     return any(sid in number for sid in marked for number in numbers)
 
 
+OWNER_ONLY = ("Only you can do this, typing yes in your own terminal; a command without one (a chat, a bot, a "
+              "script) is refused.")
+
+
+def _open_terminal() -> tuple:
+    """This process's controlling terminal, opened by itself (never stdin/stdout, which a script can fill):
+    (reader, writer). Raises OSError when there is none: a tool's subprocess, Grok's host shell, `setsid`."""
+    if os.name == "nt":
+        return (open("CONIN$", "r", encoding="utf-8", errors="replace"),
+                open("CONOUT$", "w", encoding="utf-8", newline="\n"))
+    reader = open("/dev/tty", "r", encoding="utf-8", errors="replace")
+    try:
+        return reader, open("/dev/tty", "w", encoding="utf-8", newline="\n")
+    except OSError:
+        reader.close()
+        raise
+
+
+def owner_confirms(question: Optional[str] = None) -> bool:
+    """The one guard of the owner-only steps. False for a command that a chat started (a chat's number or origin,
+    the turn of a request from another computer), and that before any terminal is opened. With a `question`:
+    asked on the controlling terminal itself, and True only for a typed "yes" there; no controlling terminal is
+    False, and no option (--yes) skips it. Without one: only the chat check (answering a request's step, the
+    mode, `hermes twin ask`)."""
+    from . import config
+    if asked_turn() or _chat_numbers() or any(os.environ.get(n) for n in config.SURFACE_VARS):
+        return False
+    if question is None:
+        return True
+    try:
+        reader, writer = _open_terminal()
+    except OSError:
+        return False
+    try:
+        with reader, writer:
+            writer.write(f"{question} Type yes to go ahead: ")
+            writer.flush()
+            answer = reader.readline(64)
+    except (OSError, ValueError):
+        return False
+    return answer.strip().lower() == "yes"
+
+
 def decide(task_id: Any, choice: Any, q: Optional[str] = None, own_page: bool = False) -> None:
     """The owner of THIS computer answers the open question of one request: "once" or "deny". `q` is the mark
     of the question the owner was shown (`waiting[i].q`): when given, the answer counts only for that very

@@ -86,13 +86,15 @@ class FakeEngine:
 
 
 class World:
-    """The service around the tool: one Grok bot (Acme Support) and, after create, its twin."""
+    """The service around the tool: one Grok bot (Acme Support) and, after create, its twin. `twinned`: the twin
+    exists already, bot-driven (an earlier call or the owner's `hermes twin bot-driven` converted it), or, with
+    `owned=True`, still kept by botport's twin pairing (botport.mirror.json in its profile)."""
 
-    def __init__(self, svc, monkeypatch, drift_rc=None, twinned=False, conflict=False):
+    def __init__(self, svc, monkeypatch, drift_rc=None, twinned=False, conflict=False, owned=False):
         self.svc, self.eng, self.created, self.listed = svc, FakeEngine(drift_rc, conflict), 0, 0
         self.reg = {}
         if twinned:
-            self._make()
+            self._make(owned)
         monkeypatch.setattr(svc, "_registry", lambda: {k: dict(v) for k, v in self.reg.items()})
         monkeypatch.setattr(svc, "_save_registry", lambda reg: self.reg.update(reg))
         monkeypatch.setattr(svc, "_save_registry_quiet", lambda reg: self.reg.update(reg))
@@ -104,11 +106,12 @@ class World:
         monkeypatch.setattr(svc, "behaviour_test", lambda pid, **kw: {"passed": 2, "total": 2, "ok": True})
         self.imports = []
 
-    def _make(self):
+    def _make(self, owned=True):
         self.reg["acme-support"] = {"pair_id": "acme-support", "grok": {"id": "b-acme-0001", "name": "Acme Support"},
-                                    "hermes": {"profile": "acme-support"}}
+                                    "hermes": {"profile": "acme-support"}, **({} if owned else {"driver": "bot"})}
         h = store.ensure_dir(store.profile_home("acme-support"))
-        (h / one_prompt.MIRROR_STATE).write_text("{}")  # botport twin create: its pairing owns the profile
+        if owned:
+            (h / one_prompt.MIRROR_STATE).write_text("{}")  # botport twin create: its pairing owns the profile
 
     def _list(self):
         self.listed += 1
@@ -148,7 +151,7 @@ def test_one_call_makes_a_tested_twin(svc, home, monkeypatch):
     res = call(svc)
     assert res["ok"], res
     assert res["line"].startswith("PASS: Acme Support twinned to Hermes (profile acme-support): 1 skills, "
-                                  "1 memories, 1 routines added switched off; drift clean; behaviour test 2/2.")
+                                  "1 memories, 1 routines added switched off; matches what the bot sent; behaviour test 2/2.")
     assert w.created == 1 and [c[0] for c in w.eng.calls] == ["remove", "sync", "drift"]
     assert w.imports == [("acme-support", "Acme Support", ["instructions", "connectors"])]
     prof = store.profile_home("acme-support")
@@ -210,7 +213,7 @@ def test_passing_behaviour_test_is_in_the_line(svc, home, monkeypatch):
     monkeypatch.setattr(svc, "behaviour_test", lambda pid, **kw: {"passed": 4, "total": 4, "ok": True},
                         raising=False)
     res = call(svc)
-    assert res["ok"] and res["line"].endswith("drift clean; behaviour test 4/4.")
+    assert res["ok"] and res["line"].endswith("matches what the bot sent; behaviour test 4/4.")
 
 
 def test_secrets_are_scrubbed_from_every_input(svc, home, monkeypatch):
@@ -438,11 +441,18 @@ def test_without_move_no_routine_is_switched(svc, home, monkeypatch):
     assert call(svc, routines_meta=MOVE_ROUTINES)["ok"] and sw.calls == []
 
 
+def allow_to_grok(svc, pid="acme-support"):
+    """The owner's `hermes twin to-grok TWIN allow` for this twin (straight to the state, no terminal question)."""
+    from hermes_plugins.grok_bot_twin.twin import h2g
+    h2g.H2G(svc.central, h2g.FakeGrokWriter(), hermes=lambda p: {}, bot=lambda p: "b-acme-0001").allow(pid, "all")
+
+
 def test_round_trip_back_to_grok_returns_what_hermes_learned(svc, home, monkeypatch):
     from hermes_plugins.grok_bot_twin.twin import sync_both
     World(svc, monkeypatch)
     sw = Switch(svc, monkeypatch)
     assert call(svc, routines_meta=MOVE_ROUTINES, move=True, grok_paused=PAUSED)["ok"]
+    allow_to_grok(svc)
     monkeypatch.setattr(sync_both, "_botport_runner", back_runner(
         home, facts=["Learned in Hermes: ship on Fridays."], skills=[("refunds", "Check the order first.")]))
     res = one_prompt.twin_back_to_grok(svc, ALLOWED, bot_name="Acme Support", instructions="You answer.",
@@ -459,6 +469,49 @@ def test_round_trip_back_to_grok_returns_what_hermes_learned(svc, home, monkeypa
     assert [x["tool"] for x in log_lines(home)] == ["twin_from_grok", "twin_back_to_grok"]
     again = one_prompt.twin_back_to_grok(svc, ALLOWED, bot_name="Acme Support")
     assert again["ok"] and again["bundle"]["routines_to_enable"] == []  # the move record is used once
+
+
+def test_ext_1_back_to_grok_keeps_memory_and_skills_in_hermes_while_hermes_to_grok_is_off(svc, home, monkeypatch):
+    """EXT-1: without the owner's Hermes -> Grok allow for this twin, back-to-grok hands the Grok bot no Hermes-side
+    memory or skills (UpdateSkill can replace one of its skills); its own paused routines are re-enabled as before,
+    and the line names how many stay in Hermes and the owner's allow command. Nothing is written to h2g.json."""
+    from hermes_plugins.grok_bot_twin.twin import h2g, sync_both
+    World(svc, monkeypatch)
+    sw = Switch(svc, monkeypatch)
+    assert call(svc, routines_meta=MOVE_ROUTINES, move=True, grok_paused=PAUSED)["ok"]
+    monkeypatch.setattr(sync_both, "_botport_runner", back_runner(
+        home, facts=["Learned in Hermes: ship on Fridays."], skills=[("refunds", "Check the order first.")]))
+    res = one_prompt.twin_back_to_grok(svc, ALLOWED, bot_name="Acme Support", instructions="You answer.",
+                                       memory=MEMORY)
+    assert res["ok"], res
+    assert sw.calls[-1] == ("undo", "acme-support", None) and not sw.on
+    b = res["bundle"]
+    assert b["memory"] == [] and b["skills"] == []
+    assert b["routines_to_enable"] == ["rt-morning-01", "Weekly digest"]
+    assert res["line"] == ("PASS: Acme Support back to Grok: 1 memories and 1 skills stay in Hermes: Hermes → Grok "
+                           "is off for this twin (the owner turns it on with hermes twin to-grok acme-support allow); "
+                           "2 routine(s) paused in Hermes; re-enable in Grok with UpdateRoutine: rt-morning-01, "
+                           "Weekly digest.")
+    assert "ship on Fridays" not in json.dumps(res) and "Check the order first" not in json.dumps(res)
+    assert not (svc.central / h2g.STATE_FILE).exists()  # read only: the switch is the owner's
+
+
+def test_ext_1_the_bots_come_back_steps_show_memory_and_skills_and_wait_for_a_yes():
+    """EXT-1: the Grok bot's skill shows the facts and skill names and waits for a yes before writing them, and the
+    one-prompt guide names the Hermes -> Grok switch that lets them come back at all."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    skill = " ".join((root / "grok" / "SKILL-twin.md").read_text().split())
+    back = skill[skill.index("## Bring yourself back to Grok"):]
+    assert ("before any UpdateMemory or UpdateSkill, show the user every memory fact and every skill name from the "
+            "bundle and wait for their yes in the chat. Without a yes, apply only `bundle.routines_to_enable`") in back
+    assert back.index("wait for their yes") < back.index("save its `fact` with **UpdateMemory**")
+    guide = " ".join((root / "docs" / "ONE-PROMPT.md").read_text().split())
+    row = next(r for r in guide.split("| \"Come back to Grok\"")[1:])
+    assert "only when you allowed Hermes → Grok for that twin (`hermes twin to-grok TWIN allow`" in row
+    for doc in ("README.md", "AGENTS.md"):
+        text = " ".join((root / doc).read_text().split())
+        assert "only when you allowed Hermes → Grok" in text or "only under that same allow" in text, doc
 
 
 def test_back_fails_when_hermes_will_not_pause(svc, home, monkeypatch):
@@ -517,7 +570,7 @@ def test_several_bots_on_one_connector_refuse_cross_bot_calls(svc, home, monkeyp
     both = ["Acme Support", "Recipe Planner"]
     monkeypatch.delenv(mcp_server.CALLER_ENV, raising=False)
     r = _mcp_call(svc, both, "Acme Support")  # no caller named: nobody can be told apart
-    assert r["isError"] and "not set up for a bot of that name" in r["content"][0]["text"]
+    assert r["isError"] and "is not the one after --bot" in r["content"][0]["text"]
     r = _mcp_call(svc, both, "Acme Support", caller="Recipe Planner")  # bot B claiming to be A
     assert r["isError"] and not w.eng.calls
     r = _mcp_call(svc, both, "acme  support", caller="Acme Support")
@@ -549,8 +602,8 @@ def test_restore_puts_the_pairs_json_entry_back(svc, home, monkeypatch):
     monkeypatch.setattr(svc, "import_setup", imp)
     res = call(svc)
     assert not res["ok"] and res["restored"]
-    after = {k: v for k, v in w.reg["acme-support"].items() if k not in ("driver", "last_call")}
-    assert after == before  # (the one-time bot-driven mark and the last call's result are kept on purpose)
+    after = {k: v for k, v in w.reg["acme-support"].items() if k != "last_call"}
+    assert after == before  # (the last call's result is kept on purpose)
     assert w.reg["acme-support"]["last_call"]["result"] == "FAIL"
 
 
@@ -644,47 +697,125 @@ def test_engine_accepts_exit_3_from_sync_only(tmp_path, monkeypatch):
         eng.bundle_drift("acme-support", "/x/e.json", "/x/botport.toml")
 
 
-def test_mirrored_profile_is_made_bot_driven_not_refused(svc, home, monkeypatch):
-    """botport refuses spec-driven sync on a mirrored profile, so the call converts the twin once (copy kept) and
-    then syncs; the profile's own content stays until botport writes the bot's words over it."""
-    w = World(svc, monkeypatch, twinned=True)
-    prof = store.profile_home("acme-support")
-    (prof / "SOUL.md").write_text("Mirrored soul.")
+def test_new_twin_is_made_bot_driven_in_the_same_call(svc, home, monkeypatch):
+    """botport refuses spec-driven sync on a profile its pairing owns, so a twin this call made is converted at once
+    (copy kept) and then synced."""
+    w = World(svc, monkeypatch)
     res = call(svc)
-    assert res["ok"] and res["converted"] and not (prof / "botport.mirror.json").exists()
+    prof = store.profile_home("acme-support")
+    assert res["ok"] and res["created"] and res["converted"] is True, res
+    assert not (prof / one_prompt.MIRROR_STATE).exists() and prof.is_dir()
     assert [c[0] for c in w.eng.calls][:2] == ["remove", "sync"]
+    copies = list((home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "converted" / "acme-support").iterdir())
+    assert len(copies) == 1 and (copies[0] / "home" / one_prompt.MIRROR_STATE).is_file()
+    assert w.reg["acme-support"]["driver"] == "bot" and w.reg["acme-support"]["last_call"]["result"] == "PASS"
+    again = call(svc)
+    assert again["ok"] and again["converted"] is False
+    assert [c[0] for c in w.eng.calls].count("remove") == 1  # converted once
 
 
 # ---- bot-driven twins: botport v0.2.1 refuses apply/sync/drift on a profile its twin pairing owns -------------
 def test_fake_botport_refuses_an_owned_profile_like_real_botport(svc, home, monkeypatch):
-    w = World(svc, monkeypatch, twinned=True)
+    w = World(svc, monkeypatch, twinned=True, owned=True)
     with pytest.raises(E.EngineError, match="is a mirrored profile"):
         w.eng.bundle_sync("acme-support", "/x/e.json")
 
 
-def test_owned_twin_is_converted_once_with_a_copy_first(svc, home, monkeypatch):
-    w = World(svc, monkeypatch, twinned=True)
+def _tree(path):
+    return {str(p.relative_to(path)): p.read_bytes() for p in sorted(path.rglob("*")) if p.is_file()}
+
+
+def test_ext_3_existing_botport_paired_twin_is_refused_untouched(svc, home, monkeypatch):
+    """EXT-3: one prompt never converts an existing twin botport pairs (no `botport twin remove`): the call FAILs
+    before anything is written, names the owner's `hermes twin bot-driven`, and the twin's Hermes folder and its
+    pairs.json entry are exactly as they were. back-to-grok refuses it the same way."""
+    w = World(svc, monkeypatch, twinned=True, owned=True)
     prof = store.profile_home("acme-support")
     (prof / "SOUL.md").write_text("Made by botport twin create.")
+    before, reg_before = _tree(prof), json.dumps(w.reg, sort_keys=True)
     res = call(svc)
-    assert res["ok"] and res["converted"] is True, res
-    assert [c[0] for c in w.eng.calls][:2] == ["remove", "sync"]
-    assert not (prof / one_prompt.MIRROR_STATE).exists() and prof.is_dir()
-    copies = list((home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "converted" / "acme-support").iterdir())
-    assert len(copies) == 1 and (copies[0] / "home" / one_prompt.MIRROR_STATE).is_file()
-    assert (copies[0] / "home" / "SOUL.md").read_text() == "Made by botport twin create."
-    assert w.reg["acme-support"]["driver"] == "bot" and w.reg["acme-support"]["last_call"]["result"] == "PASS"
-    again = call(svc)
-    assert again["ok"] and again["converted"] is False
-    assert [c[0] for c in w.eng.calls].count("remove") == 1  # idempotent: converted once
+    assert not res["ok"] and not res["restored"], res
+    assert res["line"].startswith("FAIL: Acme Support: this twin follows its Grok bot through botport, so nothing "
+                                  "was changed. To keep it in step with one prompt instead, the owner runs hermes "
+                                  'twin bot-driven "Acme Support" in their own terminal.'), res["line"]
+    back = one_prompt.twin_back_to_grok(svc, ALLOWED, "Acme Support", instructions="hi", memory=MEMORY)
+    assert not back["ok"] and "hermes twin bot-driven" in back["line"], back
+    assert w.eng.calls == [] and w.created == 0
+    assert _tree(prof) == before and json.dumps(w.reg, sort_keys=True) == reg_before
+    assert not (home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "converted").exists()
+    assert not (home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "snapshots").exists()
+    assert call(svc)["ok"] is False and w.eng.calls == []  # never converted on a later call either
 
 
 def test_conversion_that_botport_does_not_do_is_a_fail_and_writes_nothing(svc, home, monkeypatch):
-    w = World(svc, monkeypatch, twinned=True)
+    w = World(svc, monkeypatch)
     monkeypatch.setattr(w.eng, "remove", lambda pid: {"pair_id": pid})  # botport kept its file
     res = call(svc)
     assert not res["ok"] and "still keeps this twin" in res["line"]
     assert [c[0] for c in w.eng.calls] == [] and w.reg["acme-support"].get("driver") is None
+
+
+# ---- the owner's step: hermes twin bot-driven TWIN -------------------------------------------------------------
+def _bot_driven(argv, monkeypatch, capsys, chat=False, typed=None):
+    """`typed`: what the owner types at a pretend controlling terminal (tasks._open_terminal); None: no terminal."""
+    from hermes_plugins.grok_bot_twin.twin import cli, tasks
+    monkeypatch.setattr(tasks, "_chat_numbers", lambda *a, **k: ["chat-1"] if chat else [])
+    opened = []
+
+    def terminal():
+        if typed is None:
+            raise OSError("no controlling terminal")
+        opened.append(True)
+        return io.StringIO(typed), io.StringIO()
+    monkeypatch.setattr(tasks, "_open_terminal", terminal)
+    rc = cli.main(["bot-driven", *argv])
+    if chat:
+        assert not opened  # (a chat is refused before any terminal is opened)
+    got = capsys.readouterr()
+    return rc, got.out + got.err
+
+
+def test_ext_3_bot_driven_command_dry_run_yes_idempotent_and_owner_only(svc, home, monkeypatch, capsys):
+    from hermes_plugins.grok_bot_twin.twin import service
+    w = World(svc, monkeypatch, twinned=True, owned=True)
+    monkeypatch.setattr(service, "get_service", lambda: svc)
+    prof = store.profile_home("acme-support")
+    (prof / "SOUL.md").write_text("Made by botport twin create.")
+    before, reg_before = _tree(prof), json.dumps(w.reg, sort_keys=True)
+    rc, out = _bot_driven(["acme-support", "--dry-run"], monkeypatch, capsys)
+    assert rc == 0 and "no longer follows renames" in out and "one-prompt/converted/acme-support/" in out
+    assert "Nothing changed (dry run)." in out
+    rc, out = _bot_driven(["acme-support", "--yes"], monkeypatch, capsys, chat=True, typed="yes\n")
+    assert rc == 1 and "Only you can make a twin bot-driven" in out and "Nothing changed." in out
+    for argv in (["acme-support"], ["acme-support", "--yes"]):  # no terminal: refused, and --yes does not skip it
+        rc, out = _bot_driven(argv, monkeypatch, capsys)
+        assert rc == 1 and "typing yes in your own terminal" in out and "Nothing changed." in out
+    rc, out = _bot_driven(["acme-support", "--yes"], monkeypatch, capsys, typed="no\n")
+    assert rc == 1 and "Nothing changed." in out
+    assert w.eng.calls == [] and _tree(prof) == before and json.dumps(w.reg, sort_keys=True) == reg_before
+    rc, out = _bot_driven(["acme-support"], monkeypatch, capsys, typed="yes\n")
+    assert rc == 0 and "is bot-driven now" in out, out
+    assert w.eng.calls == [("remove", "acme-support")] and not (prof / one_prompt.MIRROR_STATE).exists()
+    assert (prof / "SOUL.md").read_text() == "Made by botport twin create." and w.reg["acme-support"]["driver"] == "bot"
+    copies = list((home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "converted" / "acme-support").iterdir())
+    assert len(copies) == 1 and (copies[0] / "home" / one_prompt.MIRROR_STATE).is_file()
+    after, reg_after = _tree(prof), json.dumps(w.reg, sort_keys=True)
+    for argv in (["acme-support"], ["acme-support", "--dry-run"]):  # idempotent: already bot-driven
+        rc, out = _bot_driven(argv, monkeypatch, capsys, typed="yes\n")
+        assert rc == 0 and "already bot-driven" in out
+    assert w.eng.calls == [("remove", "acme-support")]
+    assert _tree(prof) == after and json.dumps(w.reg, sort_keys=True) == reg_after
+    assert call(svc)["ok"] and [c[0] for c in w.eng.calls].count("remove") == 1  # from-grok now just syncs
+
+
+def test_bot_driven_twin_is_unaffected_by_both(svc, home, monkeypatch, capsys):
+    from hermes_plugins.grok_bot_twin.twin import service
+    w = World(svc, monkeypatch, twinned=True)
+    monkeypatch.setattr(service, "get_service", lambda: svc)
+    rc, out = _bot_driven(["acme-support"], monkeypatch, capsys, typed="yes\n")
+    assert rc == 0 and "already bot-driven" in out
+    res = call(svc)
+    assert res["ok"] and res["converted"] is False and "remove" not in [c[0] for c in w.eng.calls]
 
 
 def run_cli(argv, stdin_text, monkeypatch, capsys):
@@ -718,6 +849,7 @@ def test_back_to_grok_cli_prints_the_bundle(svc, home, monkeypatch, capsys):
     Switch(svc, monkeypatch)
     monkeypatch.setattr(service, "get_service", lambda: svc)
     assert call(svc, routines_meta=MOVE_ROUTINES, move=True, grok_paused=PAUSED)["ok"]
+    allow_to_grok(svc)
     monkeypatch.setattr(sync_both, "_botport_runner", back_runner(home, facts=["Learned in Hermes."]))
     rc, out = run_cli(["back-to-grok", "--bot", "Acme Support"], json.dumps({"instructions": "You answer."}),
                       monkeypatch, capsys)
@@ -771,6 +903,16 @@ def test_memory_lands_in_hermes_own_memory_file_once(svc, home, monkeypatch):
     assert call(svc, memory=["the owner prefers  SHORT answers.", "Ships on Fridays.", "Closed on Sundays."])["ok"]
     assert (prof / "memories" / "MEMORY.md").read_text().split("\n§\n") == [
         "The owner prefers short answers.", "Ships on Fridays.", "Closed on Sundays."]  # a union, no duplicates
+
+
+def test_a_fact_back_from_grok_with_its_from_hermes_tag_is_not_added_twice(svc, home, monkeypatch):
+    # live test 0.4.1: Hermes -> Grok (the bot saves it tagged "(from Hermes)", sync_both.HOW) -> the next one prompt
+    World(svc, monkeypatch)
+    prof = store.profile_home("acme-support")
+    assert call(svc, memory=["Ships on Fridays."])["ok"]
+    assert call(svc, memory=["Ships on Fridays.", "(from Hermes) Ships on  fridays.", "(From Hermes)Closed on Sundays."])["ok"]
+    assert (prof / "memories" / "MEMORY.md").read_text().split("\n§\n") == [
+        "Ships on Fridays.", "(From Hermes)Closed on Sundays."]
 
 
 def test_memory_beyond_hermes_limit_is_left_out_and_said(svc, home, monkeypatch):
@@ -848,6 +990,7 @@ def test_back_with_a_secret_looking_bundle_pauses_nothing_and_keeps_the_move_rec
     World(svc, monkeypatch)
     sw = Switch(svc, monkeypatch)
     assert call(svc, routines_meta=MOVE_ROUTINES, move=True, grok_paused=PAUSED)["ok"]
+    allow_to_grok(svc)
     monkeypatch.setattr(sync_both, "_botport_runner", back_runner(home, facts=["Learned in Hermes."]))
     real = one_prompt._secrets.has_secret
     monkeypatch.setattr(one_prompt._secrets, "has_secret",  # as if a fact in the bundle looked like a key
@@ -1003,4 +1146,17 @@ def test_a_git_remote_with_a_password_or_token_is_refused():
         with pytest.raises(E.EngineError, match="carries a password or token"):
             git_mirror.clean_remote(url)
     assert git_mirror.clean_remote("https://forgejo.example/me/bot.git") == "https://forgejo.example/me/bot.git"
-    assert git_mirror.clean_remote("git@forgejo.example:me/bot.git") == "git@forgejo.example:me/bot.git"
+    assert git_mirror.clean_remote("git@forgejo.example:me/bot.git") == "git@forgejo.example:me/bot.git"  # privacy:allow
+
+
+def test_skill_text_prints_the_grok_skill(capsys):
+    """`hermes twin skill-text`: the skill a user gives the Grok bot once, from an install with no checkout."""
+    from hermes_plugins.grok_bot_twin.twin import cli
+    assert cli.main(["skill-text"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("---\nname: twin-to-hermes") and "hermes twin from-grok" in out
+    assert cli.main(["skill-text", "--name"]) == 0 and capsys.readouterr().out == "twin-to-hermes\n"
+    assert cli.main(["skill-text", "--description"]) == 0 and capsys.readouterr().out.startswith("Twin, clone")
+    assert cli.main(["skill-text", "--body"]) == 0
+    body = capsys.readouterr().out
+    assert body.startswith("# Twin yourself to Hermes") and "---" not in body.splitlines()[0]

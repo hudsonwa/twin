@@ -26,7 +26,7 @@ DEFAULTS = {
     "share_port": 18777,
     "share_address": "",
     "machine_name": "",
-    "mirror_name": "",  # the Mirror bot's name in Grok, for the Auto-Review rule text (Hermes to Grok beta)
+    "mirror_name": "",  # the sync bot's name in Grok, for the Auto-Review rule text (Hermes to Grok beta)
 }
 MIN_INTERVAL = 5
 MAX_INTERVAL = 86400

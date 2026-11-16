@@ -15,7 +15,7 @@ import re
 import pytest
 
 from fleet_testlib import shape_problems, wait_until, wire_sync
-from test_tasks_machines import (ASK, _listening, _mid, _pass, fake, orchard, source, surface)  # noqa: F401
+from test_tasks_machines import (ASK, _listening, _mid, _pass, fake, orchard, source, surface, typed_yes)  # noqa: F401
 from test_tasks_units import ME, OTHER, SRC, linked  # noqa: F401
 from twin_testlib import config, home, service  # noqa: F401
 from hermes_plugins.grok_bot_twin.twin import fleet, fleet_follow as follow, store, tasks, tasks_hub
@@ -180,7 +180,7 @@ def test_each_computer_sees_which_of_the_others_take_requests_and_a_new_link_sta
     wait_until(lambda: takes(source.json("requests"), "Surface") is True, timeout=30,
                what="mini to see that Surface takes requests")
     # mini's owner switches mini's on in a terminal: Surface hears it without being asked anything
-    source.run("requests", "on")
+    typed_yes(source, "requests", "on")
     wait_until(lambda: takes(surface.tasks(), "mini") is True, timeout=90, what="Surface to hear that mini's is on")
     # mini removes Surface. Surface's switch is off again, and stays off through a new link
     source.run("fleet", "remove", "Surface", "--yes")

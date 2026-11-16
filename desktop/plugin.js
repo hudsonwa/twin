@@ -2312,7 +2312,7 @@ const WHAT_COPIES = [
       { what: 'Instructions, routines and connections', how: "With Import setup export: the bot writes a file about itself when you ask it in Grok. Instructions are filled in, routines arrive switched off, and connections arrive as a list of names. Logins are never copied. With skill sync set up, instructions also follow Grok's every 15 minutes by themselves, unless you switch that off. When it is unsure which to keep, you are asked." },
       { what: 'Skills', how: 'With skill sync, which is optional: a sync bot in your own Grok account carries them. Without it you copy them yourself.' },
       { what: 'Conversations', how: 'Off until you switch full transcripts on for a twin. Then conversations from a Grok export can become Hermes chats of the twin; full transcripts are set up in the terminal.' },
-      { what: 'Grok memory', how: 'Does not copy: memory is the most private thing a bot holds, so none is taken.' },
+      { what: 'Grok memory', how: 'Does not copy: memory is the most private thing a bot holds, so none is taken unless you ask the bot itself with the one prompt.' },
       { what: 'Grok model setting', how: "Does not copy: nothing Hermes reads from Grok names the bot's model, so the twin uses the model you choose in Hermes." }
     ]
   },
@@ -2590,7 +2590,7 @@ const SYNC_WAYS = { grok_to_hermes: 'Grok → Hermes', hermes_to_grok: 'Hermes �
 const SYNC_ROW_WAYS = { transcripts: ['grok_to_hermes', 'off'] }
 const SYNC_ROW_STATES = ['ok', 'needs_mirror', 'not_yet', 'error']
 const SYNC_MIRROR_STATES = ['ready', 'not_set_up', 'no_permission', 'unknown']
-const SYNC_NEEDS_MIRROR = 'Needs the Mirror'
+const SYNC_NEEDS_MIRROR = 'Needs the sync bot'
 const SYNC_NOT_YET = 'Not in this version yet'
 const SYNC_PRIVATE = 'Conversations start off for every twin, and only you switch them on.'
 const syncGroupLabel = (label, twin) => `${label} for ${twin}: which way it syncs`
@@ -2692,7 +2692,7 @@ function SyncRow({ twin, item, busy, said, act }) {
   const id = `gbt-sync-${item.key}`
   const waiting = Boolean(busy)
   const shut = item.choices.filter(c => c.state !== 'ok')
-  // the ways that cannot be chosen, grouped by their reason: "Hermes → Grok, Both ways: Needs the Mirror, …"
+  // the ways that cannot be chosen, grouped by their reason: "Hermes → Grok, Both ways: Needs the sync bot, …"
   const whys = [...new Set(shut.map(c => c.why))].map(why => ({ text: `${shut.filter(c => c.why === why).map(c => SYNC_WAYS[c.direction]).join(', ')}: ${why}`, why }))
   const whyId = why => `${id}-why-${whys.findIndex(w => w.why === why)}`
   // (a tag only on a row where nothing moves: a row that syncs one way is not "waiting", its why lines say the rest)
@@ -2725,7 +2725,7 @@ function SyncRow({ twin, item, busy, said, act }) {
 }
 
 // The panel for one twin. `twin`: its part of the tidied answer. `onMirror`: opens the twin's skill sync set-up,
-// where the Mirror is set up (offered once, for every row that needs it).
+// where the sync bot is set up (offered once, for every row that needs it).
 function SyncsPanel({ twin, mirror, onMirror, initialSaid = null }) {
   const [busy, run] = useBusy()
   const [said, setSaid] = useState(initialSaid) // { item, problem } | { item, said } | null
@@ -2766,7 +2766,7 @@ function SyncsPanel({ twin, mirror, onMirror, initialSaid = null }) {
       el(
         'div',
         { className: cn(NOTE, 'flex flex-wrap items-center gap-2') },
-        el('span', { className: 'min-w-0 flex-1', id: 'gbt-sync-mirror' }, mirror.sentence || 'Some of these need the Mirror: a small bot in your Grok account that carries changes.'),
+        el('span', { className: 'min-w-0 flex-1', id: 'gbt-sync-mirror' }, mirror.sentence || 'Some of these need the sync bot: a small bot in your Grok account that carries changes.'),
         onMirror ? el(Button, { 'aria-describedby': 'gbt-sync-mirror', onClick: onMirror, variant: 'secondary' }, 'Skill sync…') : el('span', {}, "Set it up with Skill sync… in this twin's menu.")
       ),
     open.length > 0 && el('ul', { className: 'flex flex-col gap-1.5' }, open.map(row)),
@@ -2948,7 +2948,7 @@ const TO_GROK_WORDS = {
   no_change: ['Grok already has all of this, so there is nothing to change.', ''],
   no_permission: ['Grok has not given permission for this yet.', 'Add the rule shown here in Grok once, then try again.'],
   not_allowed: ['This twin does not allow that change to Grok.', 'Tick it under "What may change in Grok" and press Allow.'],
-  pending: ['The last change is still waiting for the Mirror\'s next run.', 'Wait for it, or press Stop waiting.'],
+  pending: ['The last change is still waiting for the sync bot\'s next run.', 'Wait for it, or press Stop waiting.'],
   refused: ['Changes to Grok can only be made from this page, on this computer.', ''],
   stale: [TO_GROK_STALE, ''],
   undone: ['That change was already put back.', '']
@@ -3076,7 +3076,7 @@ function toGrokOf(raw) {
   }
 }
 
-const toGrokResultWords = res => clean(res?.sentence, 400) || clean(res?.message, 400) || (res?.state === 'sent' ? "Sent. It is made at the Mirror's next run." : 'Done.')
+const toGrokResultWords = res => clean(res?.sentence, 400) || clean(res?.message, 400) || (res?.state === 'sent' ? "Sent. It is made at the sync bot's next run." : 'Done.')
 
 // What every press does, apart from the sheet so each can be checked alone. `set(patch)` is handed what to show:
 // { info } (an answer of the INFO shape), { said } (one sentence for the status line), { problem }, { revoke }.
@@ -3117,7 +3117,7 @@ function toGrokActs(pid, set) {
 
   return {
     read: () => guard(() => read()),
-    // while a change waits for the Mirror: read again quietly (what was said stays; a failed read changes nothing)
+    // while a change waits for the sync bot: read again quietly (what was said stays; a failed read changes nothing)
     refresh: async () => {
       try {
         set({ info: await api(path()) })
@@ -3271,7 +3271,7 @@ function ToGrokPreview({ preview, busy, onApply, onGiveUp, onRetry, onResolve })
         )
       )
     )
-  const stopped = preview.blocked || (preview.pending ? 'The last change is still waiting for the Mirror\'s next run.' : '')
+  const stopped = preview.blocked || (preview.pending ? 'The last change is still waiting for the sync bot\'s next run.' : '')
 
   return el(
     'section',
@@ -3282,7 +3282,7 @@ function ToGrokPreview({ preview, busy, onApply, onGiveUp, onRetry, onResolve })
       el(
         'div',
         { className: cn(NOTE, 'flex flex-wrap items-center gap-2') },
-        el('span', { className: 'min-w-0 flex-1' }, "Waiting for the Mirror's next run."),
+        el('span', { className: 'min-w-0 flex-1' }, "Waiting for the sync bot's next run."),
         el(Button, { disabled: Boolean(busy), loading: busy === 'give-up', onClick: onGiveUp, variant: 'secondary' }, 'Stop waiting')
       ),
     !preview.nothing && el('ul', { className: 'flex flex-col gap-1.5' }, preview.changes.map((c, i) => jsx(ToGrokChange, { change: c }, `${c.item}-${i}`))),
@@ -3312,7 +3312,7 @@ function ToGrokSetUp({ info, initialSteps = false }) {
     'section',
     { 'aria-labelledby': 'gbt-tg-setup', className: cn(BOX) },
     el('h3', { className: HEADING, id: 'gbt-tg-setup' }, 'Grok needs this once'),
-    el('p', { className: BODY }, info.permission === 'no_permission' ? 'Grok did not allow the last change. Add this rule in Grok, then make the changes again.' : 'Add this rule in Grok so the Mirror may make these changes for you.'),
+    el('p', { className: BODY }, info.permission === 'no_permission' ? 'Grok did not allow the last change. Add this rule in Grok, then make the changes again.' : 'Add this rule in Grok so the sync bot may make these changes for you.'),
     info.grant &&
       el(
         'div',
@@ -3324,14 +3324,14 @@ function ToGrokSetUp({ info, initialSteps = false }) {
     info.mirrorSteps &&
       el(
         Fold,
-        { initialOpen: initialSteps, label: "Steps for the Mirror's chat" },
-        el('pre', { 'aria-label': "Steps for the Mirror's chat", className: cn(PRE, 'max-h-48'), role: 'group', tabIndex: 0 }, info.mirrorSteps),
+        { initialOpen: initialSteps, label: "Steps for the sync bot's chat" },
+        el('pre', { 'aria-label': "Steps for the sync bot's chat", className: cn(PRE, 'max-h-48'), role: 'group', tabIndex: 0 }, info.mirrorSteps),
         el('div', {}, jsx(CopyButton, { appearance: 'button', buttonVariant: 'secondary', label: 'Copy the steps', showLabel: true, text: info.mirrorSteps }))
       )
   )
 }
 
-const TO_GROK_STATE = { done: 'Done', failed: 'Did not go through', sent: "Waiting for the Mirror's next run" }
+const TO_GROK_STATE = { done: 'Done', failed: 'Did not go through', sent: "Waiting for the sync bot's next run" }
 
 function ToGrokHistory({ changes, busy, onUndo }) {
   if (changes.length === 0) {
@@ -3417,7 +3417,7 @@ function ToGrokSheet({ pair, open, onClose, initialInfo = null, initialTicked = 
     }
   }, [open])
 
-  // a change on its way: looked at again every 15 s until the Mirror has made it (or the owner stopped waiting)
+  // a change on its way: looked at again every 15 s until the sync bot has made it (or the owner stopped waiting)
   const waiting = Boolean(info?.preview?.pending) || (info?.changes ?? []).some(c => c.state === 'sent')
 
   useEffect(() => {

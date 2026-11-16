@@ -1,5 +1,10 @@
 # Your twins on your other computers
 
+**On this page:** [Mac](#mac) · [Windows](#windows) · [Linux](#linux) · [What you get](#what-you-get-and-how-fast) ·
+[Skills](#skills-between-your-computers) · [Routines](#routines-on-your-other-computers) ·
+[Undo](#undo-everything) · [If something goes wrong](#if-something-goes-wrong) · [Terminal](#in-the-terminal) ·
+[Memory](#a-twins-memory-on-your-other-computers) · [Ask another computer](#ask-a-twin-on-another-computer)
+
 Your Grok bots live in the Grok app on one Mac. Hermes may run on several computers. Switch sharing on, and
 every twin on that Mac also appears as a Hermes bot on your other computers (Mac, Windows, Linux) and stays in
 sync by itself. There is no account, no cloud service and no "main computer" to choose.
@@ -7,7 +12,7 @@ sync by itself. There is no account, no cloud service and no "main computer" to 
 Every computer needs Hermes with Grok Bot Twin installed and turned on ([README: Install](../README.md#install)), and
 the same private network as the Mac: the same home network, or [Tailscale](https://tailscale.com) on both.
 Your other computers need no Grok app and no botport. Installing it there is the same `next` install line as
-on the Mac, at the top of the [README](../README.md) (the catalog name gives the older 0.2.1).
+on the Mac, at the top of the [README](../README.md) (the catalog name gives the older plugin 0.2.1).
 
 ## Mac
 
@@ -60,6 +65,9 @@ switch that on (see [Skills between your computers](#skills-between-your-compute
 [Routines on your other computers](#routines-on-your-other-computers)). Memory is copied only for a
 twin you switch it on for (see [A twin's memory on your other computers](#a-twins-memory-on-your-other-computers)).
 
+<details>
+<summary>How fast: the measurements</summary>
+
 Measured between four computers over Tailscale: a Mac that shared, and a second Mac, a Linux desktop and a
 Windows 11 laptop that were linked. The twins were invented ones, changed with a test command, so the time the Grok app takes to
 save a change (see [How fast is it?](GUIDE.md#how-fast-is-it)) comes on top:
@@ -75,6 +83,8 @@ save a change (see [How fast is it?](GUIDE.md#how-fast-is-it)) comes on top:
 These times were taken with the terminal commands listed further down, on all three systems. The Twins page
 does the same through its buttons and shows a change at its next look, every 5 s; it is the same page
 everywhere and was clicked through on a Mac.
+
+</details>
 
 ## What crosses your network, and what never does
 
@@ -239,10 +249,10 @@ Each way out says what stays and what goes before you confirm, and each is undon
 | "Grok Bot Twin was removed on My other Mac, so your twins here no longer follow it." | Nothing has to be done: the twins here stay and work. To follow the Mac again after it is set up again, unlink this computer and link it again with a new code. To keep the twins here as plain Hermes bots for good, press **Remove Grok Bot Twin…** here too. |
 | "My other Mac no longer answers as a computer linked to this one." | If Grok Bot Twin was set up again on the Mac, unlink this computer and link it again with a new code. If it was not, check that the Mac is on your network with Hermes open; nothing changes here meanwhile. |
 | "My other Mac stopped sharing with this computer" | It was unlinked from the Mac. Its twins are kept for 30 days: **Link this computer** with a new code brings them back. |
-| "My other Mac and this computer run versions of Grok Bot Twin that cannot work together." | Update Grok Bot Twin on the computer with the older version (Capabilities → Plugins); when the message names a computer, that one. The twins stay as they are meanwhile. |
+| "My other Mac and this computer run versions of Grok Bot Twin that cannot work together." | Update Grok Bot Twin on the computer with the older version (the README's install line with `--force`); when the message names a computer, that one. The twins stay as they are meanwhile. |
 | "Recipe Planner could not be made on this computer" | Nothing: Hermes tries again by itself, and your other twins are in sync. |
 | "A Hermes bot called recipe-planner was already here, so this twin is recipe-planner-2. The other one was left as it is." | Nothing. Your own bot is untouched. |
-| `'twin' is not a hermes command` | The plugin is installed but switched off: `hermes plugins enable grok-bot-twin`. |
+| ``hermes: 'twin' is not a `hermes` command.`` | The plugin is installed but switched off: `hermes plugins enable grok-bot-twin`. |
 | "Grok Bot Twin was installed from an administrator window…" (Windows) | Windows keeps what an administrator window installs away from your ordinary programs, Hermes Desktop included. Run the one `icacls` line it prints in that administrator window; next time install from an ordinary one. |
 
 ## In the terminal
@@ -265,9 +275,8 @@ computer, `hermes twin background on` sets up one small background helper for yo
 while Hermes is closed: a launchd agent on macOS (macOS shows its own "background item added" notice once), a
 systemd user unit on Linux (after logout only if "lingering" is on for your account), a scheduled task of your
 own account on Windows (no administrator rights; set to start when you sign in). It runs as you,
-never as root, and on a linked computer it waits for no calls. Idle for two minutes it used 0.00 s of processor time on Linux and
-0.04 s on a Mac (on Windows 0.1 s in one minute), and it holds about 95 MB of memory (99 MB on the Mac, 98 MB
-on Windows). After a crash it was running again about 30 s later on Linux and macOS. `hermes twin background`
+never as root, and on a linked computer it waits for no calls. It uses almost no processor time when idle and about 95 MB of memory, and
+restarts by itself after a crash. `hermes twin background`
 says whether it is on. `hermes twin background off` stops it and deletes what it added; unlinking on that
 computer or removing Grok Bot Twin there does the same (seen on all three systems). A computer that was
 unlinked from the Mac keeps its helper waiting until you turn it off. On Windows switching it on can take up
@@ -282,7 +291,7 @@ while Hermes is closed, so there it does listen, on the one address described ne
 address when Tailscale is running, else its private home-network address. Never on every interface, never on
 a public address; port 18777. It keeps the address it first shared on for as long as that address works, so a
 Mac that started on the home network stays there after Tailscale is started: set "Address to share on" to move
-it, and link your computers again. Idle, sharing used 0.12 s of processor time in two minutes. Your other
+it, and link your computers again. Your other
 computers only make outgoing connections to that address. No key and no code is ever sent between your computers:
 linking is an exchange in which
 both computers prove they know the code without sending it, and from then on every request and every answer
@@ -375,7 +384,8 @@ Windows, 50 GB free on C:
 
 **It is off until you switch it on, computer by computer.** On the computer that should take requests, open
 **Twins** and switch on **Let my other computers ask this one to do things**, under the list of computers
-(terminal: `hermes twin requests on`). The same switch ends it at once, also for a request that is running
+(terminal: `hermes twin requests on`, which goes ahead only on a `yes` you type in that terminal; `--yes` does
+not skip it, and a chat or a script is refused). The same switch ends it at once, also for a request that is running
 (on Windows a program that the running request had already started goes on to its own end; in our test that
 was two minutes). Asking needs no switch; being asked does.
 

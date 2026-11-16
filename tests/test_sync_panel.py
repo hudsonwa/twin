@@ -90,7 +90,7 @@ def test_the_rows_say_what_this_version_does(bp):
         assert it["sentence"] and all(c["sentence"] for c in it["choices"])
         assert all(("why" in c) == (c["state"] != "ok") for c in it["choices"])
         assert it["private"] is (it["key"] == "transcripts")
-    # name: follows Grok; the way back needs the Mirror
+    # name: follows Grok; the way back needs the sync bot
     n = _item(t, "name")
     assert n["direction"] == "grok_to_hermes" and n["state"] == "needs_mirror"
     assert {c["direction"]: c["state"] for c in n["choices"]} == {
@@ -100,7 +100,7 @@ def test_the_rows_say_what_this_version_does(bp):
     ins = _item(t, "instructions")
     assert ins["last_synced_at"] is None and "import the setup export" in ins["note"]
     assert "each time you import the setup export" in ins["sentence"]
-    # skills without skill sync: off, and every way of syncing them needs the Mirror
+    # skills without skill sync: off, and every way of syncing them needs the sync bot
     sk = _item(t, "skills")
     assert sk["direction"] == "off" and sk["state"] == "needs_mirror"
     # routines and the private row: off, not in this version yet
@@ -117,7 +117,7 @@ def test_a_direction_that_cannot_work_is_refused_and_nothing_is_saved(bp):
     assert e.value.code == "not_available" and e.value.message == sp.WHY["not_yet"]
     with pytest.raises(EngineError) as e:
         sp.choose(bp, pid, "name", "hermes_to_grok")
-    assert e.value.code == "not_available" and "Mirror" in e.value.message
+    assert e.value.code == "not_available" and "sync bot" in e.value.message
     assert sp.wanted(pid, "routines") is None and not (bp.central / sp.FILE).exists()
     for bad in (("nope", "off"), ("name", "sideways"), (None, "off"), ("name", 3)):
         with pytest.raises(EngineError) as e:
@@ -200,7 +200,7 @@ def test_the_terminal(bp):
     assert lines[0] == "What syncs for Acme Support"
     for label in ("Name", "Description", "Instructions", "Skills", "Routines", "Conversations (full)"):
         assert any(line.startswith(f"  {label} ") for line in lines), label
-    assert "Grok → Hermes" in out and "Not in this version yet" in out and "Needs the Mirror" in out
+    assert "Grok → Hermes" in out and "Not in this version yet" in out and "Needs the sync bot" in out
     assert "not synced yet" in out and "nothing private moves without your choice" in out
     assert "  Routines              Off" in out
     name_off = _item(_twin(sp.view(bp)), "name")["choices"][3]["sentence"]

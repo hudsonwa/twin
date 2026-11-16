@@ -6,7 +6,10 @@ This file tells you exactly what to run, what to leave to your owner, and what n
 
 Grok Bot Twin is a plugin for Hermes Agent. It gives a bot from the Grok desktop app a twin: a Hermes bot that
 follows it. Nothing changes in Grok unless your owner allows "Hermes → Grok" for a twin (off for every twin by
-default; only your owner, in their own terminal or on the Twins page) and applies a preview they saw (see below).
+default; only your owner, in their own terminal or on the Twins page) and applies a preview they saw (see below),
+or asks the Grok bot itself to move or come back ([docs/ONE-PROMPT.md](docs/ONE-PROMPT.md)).
+A bot coming back with `hermes twin back-to-grok` re-enables only its own routines it paused when it moved; it
+gets Hermes-side memory and skills to write into itself only under that same allow, and shows them first.
 
 ## If your owner asked you to set it up
 
@@ -27,15 +30,15 @@ Add `--json` to `--check` or `--plan` for a machine-readable answer.
    and tell your owner to install Hermes Agent first. Do not install or update Hermes yourself; if it offers
    an update, mention that to your owner.
 2. **Is the plugin there?** Run `hermes plugins list --plain --no-bundled` (the short list). If
-   `grok-bot-twin` is not listed, run the `next` install line at the top of README.md (the catalog name gives
-   the older 0.2.1). If it is listed but off, run `hermes plugins enable grok-bot-twin`.
+   `grok-bot-twin` is not listed, run the install line in README.md's Install section (the catalog name gives
+   the older plugin 0.2.1). If it is listed but off, run `hermes plugins enable grok-bot-twin`.
    If your owner wants the code of this very checkout instead, or the computer is offline, install from the
    checkout: `hermes plugins install file://ABSOLUTE-PATH --ref COMMIT --enable`. ABSOLUTE-PATH is where this
    checkout is, so the address has three slashes in a row, like `file:///home/you/twin`. COMMIT is
    the full commit id that `git rev-parse HEAD` prints here; only committed code is installed. Hermes then
    prints two warnings (the source is not from its catalog; the address is a local one). Pass both on to
    your owner.
-3. **Look.** Run `hermes twin setup --check` and read every line. `✓` is done, `!` is your owner's to do, `·`
+3. **Look.** Run `hermes twin setup --check` and read every line. `✓` is done, `→` this run will do it, `!` is your owner's to do, `·`
    waits for an earlier step, `–` is optional or not needed here. Its first two lines also tell you that the
    plugin is on and which kind of computer this is.
 4. **If botport is missing, ask for it now.** botport is a small free app that reads the bot list from
@@ -100,7 +103,8 @@ with Hermes and this plugin; no Grok app and no botport needed there), run
   `hermes twin finish` and `hermes twin import-exports DIR` do print names (the last two also instructions):
   run them only when your owner asks you to.
 - **Do not edit Hermes' files by hand.** Not `config.yaml`, not a bot's `SOUL.md`, nothing under
-  `plugin-data/grok-bot-twin/`. Every change has a command.
+  `plugin-data/grok-bot-twin/`. Every change has a command. (One exception is your owner's, never yours: a key for a Twins-page twin goes into that
+  twin's `.env` by hand, docs/SECRETS.md.)
 - **Do not go around a refusal.** If a step fails, report its exact words and stop. Do not retry with other
   options. In particular never add `--allow-unattested` (it accepts a botport that was NOT verified; it is
   only for a botport your owner built themselves and asks for by name), and never download or build botport
@@ -110,10 +114,18 @@ with Hermes and this plugin; no Grok app and no botport needed there), run
   (`hermes twin fleet skills on`), routines (`hermes twin routines on`, `run-here on`), a twin's memory
   (`hermes twin fleet memory TWIN on`), any row of a twin's What syncs panel (`hermes twin syncs TWIN ITEM DIRECTION`;
   looking with `hermes twin syncs TWIN` is fine), a twin's full transcripts
-  (`hermes twin transcripts on`), Grok's instructions from Downloads (`hermes twin instructions downloads on`), the model setting (`hermes twin fleet settings model on`), and changes made in Grok by the Mirror bot
+  (`hermes twin transcripts on`), Grok's instructions from Downloads (`hermes twin instructions downloads on`), the model setting (`hermes twin fleet settings model on`), and changes made in Grok by the sync bot
   (off for every twin until your owner runs `hermes twin to-grok TWIN allow`; `apply` only after your owner saw
-  the preview and said yes; these refuse a command a chat started). Each is your owner's
-  decision. Skill sync also spends Grok credit on every run.
+  the preview and said yes), and making a twin bot-driven (`hermes twin bot-driven TWIN`). `to-grok TWIN allow`,
+  `to-grok TWIN apply`, `secret share NAME --to-grok|--linked`, `bot-driven TWIN` and `requests on` ask at the
+  controlling terminal itself and go ahead only when your owner types yes there; `--yes` does not skip that
+  question, and a command with no terminal (a chat, a bot, a script) is refused. Do not answer it, pipe into it
+  or work around it. Each is your owner's decision. Skill sync also spends Grok credit on every run. The same goes for a twin's git history
+  (`hermes twin git on`; with `--remote` it pushes over the network), sharing a secret
+  (`hermes twin secret share NAME --linked` or `--to-grok`) and `hermes twin quick --yes`.
+- **Do not run the one-prompt commands yourself.** `hermes twin from-grok` and `hermes twin back-to-grok` are run
+  by the Grok bot, from its own state. You may print the skill for your owner (`hermes twin skill-text`); adding
+  it to the bot and choosing the Grok app's Settings → Bot → Execution on Local Computer are your owner's steps.
 - **Do not remove anything without showing it first.** `hermes twin stop`, `hermes twin unlink` and
   `hermes twin uninstall` each take `--dry-run`; show that output and wait for a yes.
 - **Do not push, publish or post** anything from this repository on your owner's behalf.
@@ -128,7 +140,8 @@ hermes twin doctor            # every line starts with ✓, or with – and a re
 hermes plugins list --plain --no-bundled    # grok-bot-twin is enabled
 ```
 
-If `--check` exits with 1, something is left: each line marked `!` says who does it and how. That is a
+If your owner uses the one prompt in Grok, exit 1 with only the "No twins yet" line left is expected: the first
+prompt makes the twin. Otherwise, if `--check` exits with 1, something is left: each line marked `!` says who does it and how. That is a
 normal result while your owner still has to download botport or paste instructions; say so plainly.
 `hermes twin doctor` shows one "pair set up" line per twin, without its name, and a line about `gh`
 (GitHub's own tool, used only if your owner asks for the GitHub check of botport).
@@ -148,9 +161,9 @@ normal result while your owner still has to download botport or paste instructio
   owner can say "set up Grok Bot Twin" (or type `/grok-bot-twin:set-up-grok-bot-twin`), and Hermes walks
   them through the same command. Its text is in
   [skills/set-up-grok-bot-twin/SKILL.md](skills/set-up-grok-bot-twin/SKILL.md).
-- **Designs, not built.** [docs/SETUP-ORIGINS.md](docs/SETUP-ORIGINS.md) describes two more: Hermes doing the
+- **Designs, not built.** [docs/design/SETUP-ORIGINS.md](docs/design/SETUP-ORIGINS.md) describes two more: Hermes doing the
   clicks in the Grok app with its computer-use tool while the owner approves each step, and a Grok bot
-  setting itself up as the sync bot ([docs/MIRROR-SELF-SETUP.md](docs/MIRROR-SELF-SETUP.md)). Neither has
+  setting itself up as the sync bot ([docs/design/MIRROR-SELF-SETUP.md](docs/design/MIRROR-SELF-SETUP.md)). Neither has
   been run on the real Grok app. Do not try them on your own.
 
 ## If you are here to change the code

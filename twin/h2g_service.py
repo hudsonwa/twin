@@ -6,8 +6,8 @@ What this file adds to h2g.py is only where things are on this computer:
   pasted block, else botport's `persona` section) and its routines (the twin's own cron jobs: the ids recorded
   for it, or a job an importer marked; never another bot's job);
 - the Grok bot's id (the twin's record);
-- the writer (`_h2g_writer`). Until the Mirror's way of changing a bot is wired in, a real twin gets
-  `NoMirrorWriter`, which says "the Mirror is not set up" and changes nothing. The sample twin gets the pretend
+- the writer (`_h2g_writer`). Until the sync bot's way of changing a bot is wired in, a real twin gets
+  `NoMirrorWriter`, which says "the sync bot is not set up" and changes nothing. The sample twin gets the pretend
   Grok account (FakeGrokWriter in the plugin's data folder, filled from the sample's own invented bot).
 - pausing and switching on the twin's own Hermes job for a routine, and checking afterwards that it really is.
 """
@@ -35,15 +35,17 @@ NO_BETA = ("Hermes to Grok is no longer a beta: it is off for every twin until y
 GRANT_WHERE = h2g.GRANT_WHERE
 
 
-def owner_only(own_page: bool = False) -> None:
+def owner_only(own_page: bool = False, question: Optional[str] = None) -> None:
     """Changes in Grok are the owner's own: never from a request from another computer, never from a command a
-    chat started. `own_page`: the Twins page's own route inside the running Hermes (see tasks._chat_numbers)."""
+    chat started (tasks.owner_confirms, the one guard). `question`: the terminal's `allow` and `apply` ask it on the
+    controlling terminal, and only a typed yes there goes ahead (no --yes). `own_page`: the Twins page's own route
+    inside the running Hermes (see tasks._chat_numbers), which has its own sign-in and asks nothing here."""
     from . import tasks
     if tasks.asked_turn(env=not own_page):  # (the chat turn of a request from another computer never changes a twin's setup)
         raise EngineError("refused", "A request from another computer cannot change a Grok bot.",
                           "Do it yourself, on the Twins page or in your own terminal.")
-    if not own_page and tasks._chat_numbers():  # a command a chat started: the owner must see the preview and say yes
-        raise EngineError("refused", "Only you can allow or make changes in Grok, not a chat.",
+    if not own_page and not tasks.owner_confirms(question):  # a chat, a bot, a script: the owner must say yes
+        raise EngineError("refused", tasks.OWNER_ONLY,
                           "Look at the preview and apply it in your own terminal or on the Twins page.")
 
 
@@ -57,7 +59,7 @@ class NoMirrorWriter:
 
     def apply(self, bot: str, ops: list, change_id: str) -> dict:
         return {"state": "failed", "done": [], "failed": list(range(len(ops))), "at": None,
-                "message": "The Mirror is not set up, so Grok was not changed."}
+                "message": "The sync bot is not set up, so Grok was not changed."}
 
     def poll(self, change_id: str, n: Optional[int] = None) -> Optional[dict]:
         return None
@@ -124,14 +126,14 @@ class H2GMixin:
 
     def _h2g_writer(self, pid: Optional[str] = None) -> Any:
         """The one place that says how Grok is changed: the sample's pretend Grok account, a test's writer, or
-        (until the Mirror's mechanism is wired in) none at all."""
+        (until the sync bot's mechanism is wired in) none at all."""
         if pid is not None and self._h2g_is_sample(pid):
             w = h2g.FakeGrokWriter(self.central / FAKE_PATH)
             self._h2g_seed_sample(w, pid)
             return w
         if self.h2g_test_writer is not None:
             return self.h2g_test_writer
-        if skill_sync.shared_root(self.central) is not None:  # the Mirror is reached through skill sync's folder
+        if skill_sync.shared_root(self.central) is not None:  # the sync bot is reached through skill sync's folder
             return h2g_mirror.MirrorFolderWriter(self.central, name_of=self._h2g_grok_name,
                                                  local_read=self._h2g_local_read)
         return NoMirrorWriter()
@@ -156,7 +158,7 @@ class H2GMixin:
         return None if g is None else {"name": str(g.get("name") or ""), "description": str(g.get("description") or "")}
 
     def _h2g_seed_sample(self, w: h2g.FakeGrokWriter, pid: str) -> None:
-        """The sample's pretend Grok account starts as the sample's own invented Grok bot (and allows the Mirror)."""
+        """The sample's pretend Grok account starts as the sample's own invented Grok bot (and allows the sync bot)."""
         try:
             t = self.demo._twin(pid)
             gid = t.get("grok_id")
@@ -272,7 +274,7 @@ class H2GMixin:
         w = self._h2g_writer(info["pair_id"])
         bot = self._h2g_bot(info["pair_id"])
         info["permission"] = w.permission(bot or "-")
-        if getattr(w, "kind", "") == "mirror":  # what the owner does once in Grok: the rule, and the Mirror's steps
+        if getattr(w, "kind", "") == "mirror":  # what the owner does once in Grok: the rule, and the sync bot's steps
             info["in_grok"] = {"allow_rule": (info.get("grant") or {}).get("rule") or self._h2g_rule(bot),
                                "where": GRANT_WHERE, "mirror_steps": h2g_mirror.mirror_instructions()}
         if info["allowed"]:
@@ -283,7 +285,7 @@ class H2GMixin:
         return info
 
     def _h2g_rule(self, bot: str) -> str:
-        """The narrowest Auto-Review rule for this bot: the Mirror (setting mirror_name, only when it is a plain
+        """The narrowest Auto-Review rule for this bot: the sync bot (setting mirror_name, only when it is a plain
         name) may ask this one bot, named by its id, to edit its own fields and existing routines."""
         return h2g_mirror.allow_rule(config.settings().get("mirror_name") or "",
                                      [{"id": bot, "name": self._h2g_grok_name(bot)}])
@@ -346,7 +348,7 @@ class H2GMixin:
         return self._h2g_call(pid, "move_runner", rkey, to)
 
     def to_grok_poll(self) -> list:
-        """Final answers for changes the Mirror makes on its next run, then the handovers waiting on them (the real
+        """Final answers for changes the sync bot makes on its next run, then the handovers waiting on them (the real
         writer, and the sample's pretend Grok account when the sample is on)."""
         pids: list = [None]
         try:
@@ -358,16 +360,16 @@ class H2GMixin:
             try:
                 out += self._h2g(pid).finish_moves()
             except (h2g.H2GError, OSError, ValueError, KeyError, TypeError):
-                log.warning("grok-bot-twin: the Mirror's answers could not be read")
+                log.warning("grok-bot-twin: the sync bot's answers could not be read")
         return out
 
     def to_grok_tick(self) -> None:
-        """The timer's part: read the Mirror's answers, only when Hermes -> Grok was ever used here. Never raises."""
+        """The timer's part: read the sync bot's answers, only when Hermes -> Grok was ever used here. Never raises."""
         try:
             if os.path.lexists(self.central / h2g.STATE_FILE):
                 self.to_grok_poll()
         except Exception:  # the timer's other work goes on whatever happens here
-            log.exception("grok-bot-twin: reading the Mirror's answers failed")
+            log.exception("grok-bot-twin: reading the sync bot's answers failed")
 
     def to_grok_give_up(self, pid: Any, own_page: bool = False) -> dict:
         self._h2g_owner_only(own_page)
@@ -375,7 +377,7 @@ class H2GMixin:
 
     def h2g_directions(self, pid: str, item: str) -> dict:
         """For the panel: hermes_to_grok / both are "ok" while the twin is allowed for `item` (the owner's own choice in
-        the Hermes -> Grok sheet or terminal; the preview itself says when the Mirror is not ready yet); else
+        the Hermes -> Grok sheet or terminal; the preview itself says when the sync bot is not ready yet); else
         "needs_mirror"."""
         x = self._h2g(pid)
         bot = self._h2g_bot(pid)
@@ -486,23 +488,26 @@ def cmd_to_grok(a: Any) -> int:
         cli._out(NO_BETA)
         return 0
     pid = cli._one(svc, pair)
-    if action in ("allow", "apply", "undo", "resolve", "runner", "give-up"):
+    if action in ("allow", "apply"):  # asked once here, at the controlling terminal; the service checks the chat again
+        owner_only(False, f"{'Allow the sync bot to change' if action == 'allow' else 'Make this change to'} "
+                          f"{pair or 'this twin'} in Grok?")
+    elif action in ("undo", "resolve", "runner", "give-up"):
         owner_only(False)
     if action == "give-up":
         v = svc.to_grok_give_up(pid)
         cli._out(v.get("sentence") or "")
         return 0
     if action == "show":
-        svc.to_grok_poll()  # the Mirror's answers first, so the preview is up to date
+        svc.to_grok_poll()  # the sync bot's answers first, so the preview is up to date
         v = svc.to_grok_info(pid)
         if a.json:
             cli._out(json.dumps(v, ensure_ascii=False, indent=1))
             return 0
         if not v["allowed"]:
-            cli._out("The Mirror may not change this bot in Grok. To allow it: hermes twin to-grok "
+            cli._out("The sync bot may not change this bot in Grok. To allow it: hermes twin to-grok "
                      "allow (all, or name description instructions routines).")
             return 0
-        cli._out("The Mirror may change in Grok: " + ", ".join(_ITEM_WORDS[i].lower() for i in v["allowed"]) + ".")
+        cli._out("The sync bot may change in Grok: " + ", ".join(_ITEM_WORDS[i].lower() for i in v["allowed"]) + ".")
         p = v.get("preview") or {}
         if p.get("error"):
             cli._err(f"✗ {p['error']['message']}")
@@ -526,7 +531,7 @@ def cmd_to_grok(a: Any) -> int:
         items = [w.lower() for w in rest] or ["all"]
         items = "all" if "all" in items else items
         v = getattr(svc, f"to_grok_{action}")(pid, items)
-        cli._out("The Mirror may change in Grok: " + (", ".join(_ITEM_WORDS[i].lower() for i in v["allowed"])
+        cli._out("The sync bot may change in Grok: " + (", ".join(_ITEM_WORDS[i].lower() for i in v["allowed"])
                                                       or "nothing") + ".")
         g = v.get("grant") or {}
         if action == "allow" and g.get("rule"):
@@ -537,7 +542,7 @@ def cmd_to_grok(a: Any) -> int:
             if r.get("rule"):
                 cli._out(f"  \"{r['rule']}\"")
             if r.get("forgot"):
-                cli._out(f"{r['forgot']} change(s) still waiting for the Mirror were taken back.")
+                cli._out(f"{r['forgot']} change(s) still waiting for the sync bot were taken back.")
         return 0
     if action in ("apply", "undo"):
         if len(rest) != 1 or not h2g.CHANGE_RE.match(rest[0]):
@@ -563,10 +568,10 @@ def cmd_to_grok(a: Any) -> int:
 
 
 def setup(subs: Any) -> None:
-    p = subs.add_parser("to-grok", help="Changes made in Hermes, made in Grok by your Mirror bot: preview, apply, undo")
+    p = subs.add_parser("to-grok", help="Changes made in Hermes, made in Grok by your sync bot: preview, apply, undo")
     p.add_argument("args", nargs="*", metavar="[TWIN] [ACTION ...]",
                    help="show (default) | allow [ITEMS|all] | disallow [ITEMS|all] | apply ID | undo ID | "
-                        "resolve ITEM hermes|grok | runner ROUTINE grok|hermes | give-up (stop waiting for the Mirror) | "
+                        "resolve ITEM hermes|grok | runner ROUTINE grok|hermes | give-up (stop waiting for the sync bot) | "
                         "(off for every twin until you allow it)")
     p.add_argument("--json", action="store_true", help="Machine-readable output")
 

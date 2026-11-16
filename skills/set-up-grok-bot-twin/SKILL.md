@@ -117,7 +117,7 @@ after the owner's yes. A plain `hermes twin setup` asks its question in a termin
 - Never ask for, read out or paste a password, key, token or pass. A link code is the one code that may
   appear here: it is short-lived, works once, and only from the owner's own private network.
 - Do nothing in the Grok app: no clicks, no computer use, no reading of its folder. Hermes doing the Grok
-  clicks is a design that is not built (docs/SETUP-ORIGINS.md in the plugin's repository).
+  clicks is a design that is not built (docs/design/SETUP-ORIGINS.md in the plugin's repository).
 - Do not edit `config.yaml`, a bot's `SOUL.md` or the plugin's data folder by hand. Every change has a
   command.
 - Do not switch on requests between computers, the background helper, the activity digest, skills, routines

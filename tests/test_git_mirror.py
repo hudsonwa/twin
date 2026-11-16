@@ -103,3 +103,27 @@ def test_cli_on_off_status(svc, home, monkeypatch, capsys):
     assert G.cmd_git(a) == 0 and G.setting_for("acme-support") is None
     assert G.cmd_git(types.SimpleNamespace(action="status")) == 0
     assert "PASS: git history off" in capsys.readouterr().out
+
+
+def test_all_with_one_remote_is_refused(svc, home, capsys):
+    """Each twin is its own repository: they cannot all push `main` to one address."""
+    a = types.SimpleNamespace(action="on", pair=None, all=True, remote="git@forgejo.example:me/bots.git",  # privacy:allow
+                              with_history=False)
+    assert G.cmd_git(a) == 1 and G.setting_for("acme-support") is None
+    assert "--remote is per twin" in capsys.readouterr().out
+
+
+@needs_git
+def test_a_remote_added_later_gets_the_earlier_commits_at_the_next_pass(svc, home, monkeypatch, tmp_path):
+    """git on --all, the first prompt, then a remote: the next PASS pushes, even when nothing changed."""
+    bare = tmp_path / "later.git"
+    git("init", "-q", "--bare", str(bare))
+    World(svc, monkeypatch)
+    G.set_on("acme-support", True)
+    first = call(svc)
+    assert first["ok"] and "Git history: commit" in first["line"]
+    G.set_on("acme-support", True, remote=str(bare))
+    again = call(svc)  # nothing changed in the bot
+    assert again["ok"] and "commit" not in again["line"] and "Warning" not in again["line"], again["line"]
+    assert git("--git-dir", str(bare), "log", "--format=%s", "main").strip() == \
+        git("log", "-1", "--format=%s", cwd=repo()).strip()

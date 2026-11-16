@@ -24,7 +24,7 @@ import fleet_testlib
 from fleet_testlib import shape_problems, wait_until
 from tasks_testlib import approval_answers, rpc_record
 from test_tasks_machines import (ASK, RISKY, _ask, _mid, _pass, _tok, _twin_id, approving, fake, orchard,  # noqa: F401
-                                 source, surface, task)
+                                 source, surface, task, typed_yes)
 from twin_testlib import config, home, service  # noqa: F401
 from hermes_plugins.grok_bot_twin.twin import tasks, tasks_hub
 from hermes_plugins.grok_bot_twin.twin.connect import BadInput
@@ -86,7 +86,7 @@ def test_the_terminal_shows_the_mode(source, surface, home):  # noqa: F811
     assert json.loads(source.run("requests", "mode", "safe", "--json").stdout)["mode"]["value"] == "safe"
     cp = source.run("requests", "mode", "everything", check=False)
     assert cp.returncode != 0 and source.json("requests")["mode"]["value"] == "safe"
-    source.run("requests", "on")
+    typed_yes(source, "requests", "on")
     assert "When a step needs approval: Only safe requests." in source.run("requests").stdout
     # ... and none of it reached the other computer
     assert surface.tasks()["mode"]["value"] == "here"

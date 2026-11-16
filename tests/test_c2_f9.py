@@ -83,7 +83,7 @@ def test_F9_move_routines_to_hermes_never_resumes_a_routine_that_runs_in_grok(tw
     assert svc.switch(PID, ["job-2"]) == {"resumed": ["job-2"], "failed": []}  # not moved to Grok: resumes
     assert calls == [("resume", "job-2")]
 
-    # mid-move (a `_move:` mark: the Mirror has not answered yet) also refuses
+    # mid-move (a `_move:` mark: the sync bot has not answered yet) also refuses
     importer.pause_cron("job-2", PID)
     with store.update(lambda: store.read_json(svc.central / h2g.STATE_FILE),
                       lambda d: store.atomic_write_json(svc.central / h2g.STATE_FILE, d)) as d:

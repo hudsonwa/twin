@@ -2015,7 +2015,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 except Exception:
                     log.warning("grok-bot-twin: could not delete a removed twin's full transcripts", exc_info=True)
             if not sample:
-                try:  # its Hermes -> Grok allow and record: the Mirror may no longer change its Grok bot
+                try:  # its Hermes -> Grok allow and record: the sync bot may no longer change its Grok bot
                     to_grok.forget(pid)
                 except Exception:
                     log.warning("grok-bot-twin: could not drop a removed twin's Hermes to Grok allow", exc_info=True)

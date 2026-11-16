@@ -1011,7 +1011,12 @@ def test_a_short_terminal_command_never_holds_the_share_port(home, tmp_path, cap
     assert server.serving() is not None  # a short command leaves a serving process alone
     # a stranger on the port is still said in words by a short command
     server.stop()
+    # stop() wakes its accept loop with a connection of its own and closes it, so the port has a connection in
+    # TIME_WAIT for a minute. Linux refuses a plain bind() then (macOS does not); a real program listening there
+    # sets SO_REUSEADDR, as the share server itself does, so the stranger does too.
     stranger = socket.socket()
+    if os.name != "nt":
+        stranger.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     stranger.bind(("127.0.0.1", port))
     stranger.listen(1)
     try:

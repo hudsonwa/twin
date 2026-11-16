@@ -19,6 +19,14 @@ here is built yet.
    instructions and skills, never your chats, your files or your sign-ins. They can stop the sharing at any
    time, and so can you.
 
+**For the one prompt:** a bot-driven twin follows a rename or a new description in Grok by itself (read from
+the Grok bot list), a command to put a one-prompt snapshot back, and the local connector route
+(`hermes twin mcp`) once the Grok app runs connectors on your computer.
+
+**Two more ways in, designed but not built:** Hermes doing the clicks in the Grok app for you while you watch
+and approve each one, and a Grok bot setting itself up as the sync bot
+([design/SETUP-ORIGINS.md](design/SETUP-ORIGINS.md)).
+
 Smaller things on the list: choosing which of your computers may ask which ("only my Mac may ask this one"),
 a note in the chat when a waiting step has been answered, and a direct path between two linked computers so
 the Mac with the Grok app need not be on.

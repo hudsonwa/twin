@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any, Optional
 
-from . import config, fleet, tasks, tasks_run
+from . import fleet, tasks, tasks_run
 from .model import ago as _ago
 from .connect import BadInput
 from .engine import EngineError
@@ -78,7 +78,7 @@ class TasksMixin:
         if own_page is not True:  # the terminal: never a request's own turn, never a command a chat started
             if tasks.asked_turn(env=True):
                 raise tasks.TaskError("not_from_a_request")
-            if not _owner_terminal():
+            if not tasks.owner_confirms():
                 raise tasks.TaskError("answer_owner_only")
         was = tasks.mode()
         now = tasks.set_mode(value, own_page=own_page is True)
@@ -110,7 +110,7 @@ class TasksMixin:
         if own_page is not True:  # the terminal: never a request's own turn, never a command a chat started
             if tasks.asked_turn(env=True):
                 raise tasks.TaskError("not_from_a_request")
-            if not _owner_terminal():
+            if not tasks.owner_confirms():
                 raise tasks.TaskError("answer_owner_only")
         tasks.decide(task_id, choice, q, own_page=own_page is True)
         self.emit("tasks", None, {"what": "approved" if choice == "once" else "denied", "count": 1})
@@ -122,16 +122,6 @@ class TasksMixin:
         wait = 0.0 if not isinstance(wait_s, (int, float)) or isinstance(wait_s, bool) \
             else max(0.0, min(600.0, float(wait_s)))
         return tasks_run.check(self, task_id, wait)
-
-
-# ---- where the command came from --------------------------------------------------------------------------------------------
-def _owner_terminal() -> bool:
-    """Is this command the owner's own, typed in a terminal, and started by no chat? Hermes hands a chat's marks
-    (its number, its origin) to every command the chat starts, so a command that carries any of them was started
-    by a chat (and so by a model) and is refused. A new process holds no per-chat values of Hermes' own, so its
-    environment is all there is to read (tasks._chat_numbers also asks Hermes, where it is loaded)."""
-    import os
-    return not any(os.environ.get(n) for n in config.SURFACE_VARS) and not tasks._chat_numbers()
 
 
 # ---- terminal ---------------------------------------------------------------------------------------------------------------
@@ -215,7 +205,7 @@ def describe_view(view: dict) -> list:
 
 def cmd_ask(args: Any) -> int:
     svc = _get_service()
-    if not _owner_terminal():
+    if not tasks.owner_confirms():
         # only the owner asks another computer: never a command a chat (or its model) started, local or not
         raise tasks.TaskError("local_only")
     if getattr(args, "check", None):
@@ -255,6 +245,8 @@ def cmd_requests(args: Any) -> int:
                 _out(line)
             return 0
     else:
+        if what == "on" and not tasks.owner_confirms("Let your other computers ask this one to do things?"):
+            raise EngineError("refused", tasks.OWNER_ONLY, "Switch it on in your own terminal or on the Twins page.")
         view = svc.tasks_switch(what == "on") if what in ("on", "off") else svc.tasks()
     if args.json:
         _out(json.dumps(view, ensure_ascii=False, indent=1))

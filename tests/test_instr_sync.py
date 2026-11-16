@@ -551,7 +551,7 @@ class Panel:
         now = self.choices.get((pid, key)) or p["default"](None)
         if now != direction:
             if p["directions"](Ctx(pid))[direction] != "ok":
-                raise EngineError("not_available", "Needs the Mirror.")
+                raise EngineError("not_available", "Needs the sync bot.")
             p["on_change"](Ctx(pid), direction)
             self.choices[(pid, key)] = direction
 

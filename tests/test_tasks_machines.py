@@ -9,18 +9,33 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 
 import pytest
 
-from fleet_testlib import Machine, free_port, wait_until, wire
+from fleet_testlib import TOOLS, Machine, free_port, wait_until, wire
 from tasks_testlib import calls, install_fake_hermes
 from twin_testlib import config, home, service  # noqa: F401
 from hermes_plugins.grok_bot_twin.twin import (fleet, fleet_follow as follow, fleet_server, slash, tasks,  # noqa: F401
                                                tasks_hub, tasks_run)
 
 ASK = "tell me this machine's OS and free disk"
+
+# `hermes twin WORDS` where the owner types yes at the terminal: owner-only steps (`requests on`) ask there, and the
+# test's subprocess has no terminal of its own, so a pretend one answers.
+_TYPED_YES = ("import io, os, sys; sys.path.insert(0, sys.argv[1]); os.environ['HERMES_HOME'] = sys.argv[2]; "
+              "import fleet; fleet.load_plugin(); from hermes_plugins.grok_bot_twin.twin import tasks; "
+              "tasks._open_terminal = lambda: (io.StringIO('yes\\n'), io.StringIO()); sys.exit(fleet.main(sys.argv[3:]))")
+
+
+def typed_yes(m: Machine, *words: str) -> subprocess.CompletedProcess:
+    cp = subprocess.run([sys.executable, "-c", _TYPED_YES, str(TOOLS), str(m.home.resolve()), *m._argv(*words)[2:]],
+                        capture_output=True, text=True, timeout=60)
+    assert cp.returncode == 0, f"{m.name}: {' '.join(words)} failed ({cp.returncode}):\n{cp.stdout}\n{cp.stderr}"
+    return cp
 
 
 @pytest.fixture
@@ -176,9 +191,9 @@ def test_ask_runs_one_chat_turn_of_the_twin_there_and_the_answer_comes_back_labe
 def test_a_following_computer_can_ask_the_sharing_one_and_another_following_one(source, surface, orchard, home,  # noqa: F811
                                                                               fake):
     orchard.run("link", source.code())
-    orchard.run("requests", "on")
+    typed_yes(orchard, "requests", "on")
     orchard.start()
-    source.run("requests", "on")
+    typed_yes(source, "requests", "on")
     wait_until(lambda: len(surface.fleet()["machines"]) == 3, what="Surface to know Orchard")
     _hears(source, _pass(home), _mid(source, "mini"))
     _hears(source, _pass(home), _mid(source, "Orchard"))
@@ -545,7 +560,7 @@ def test_no_hermes_program_means_a_plain_refusal(source, surface, home, fake, mo
 
 # ---- routing by name -----------------------------------------------------------------------------
 def test_routing_by_name(source, surface, home, fake):  # noqa: F811
-    source.run("requests", "on")
+    typed_yes(source, "requests", "on")
     _hears(source, _pass(home), _mid(source, "mini"))
     for said in ("mini", "MINI", " Mini "):
         res = surface.tasks_ask(said, ASK)

@@ -1,4 +1,4 @@
-# Set yourself up as the sync bot
+# Design (not built yet): set yourself up as the sync bot
 
 > **For the owner (a person), before you hand this to a bot.**
 > This is a guide that a bot in your Grok app follows to set itself up as the sync bot for skill sync.
@@ -15,7 +15,7 @@ whose Grok account you live in.
 After setup you have one job: you carry skills between your owner's Grok bots and their twins in Hermes,
 through one shared folder that both sides can reach. You do this when your routine runs. You do nothing else:
 you do not chat for other bots, you do not change other bots, and you do not look at their chats.
-(botport's own documents call this bot the Mirror bot. It is the same thing.)
+(botport's own documents call this bot the sync bot. It is the same thing.)
 
 ## Rules
 

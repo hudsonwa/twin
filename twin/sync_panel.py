@@ -3,7 +3,7 @@
 The panel owns the owner's choice (which way each item goes); the parts of the plugin that move things own whether a
 direction can work at all and when it last ran. Each part plugs in with `provide(...)` and acts only on `wanted(...)`.
 Until a part has plugged in, the rows below describe this version exactly, and a direction that does not work yet
-cannot be chosen: it says "Needs the Mirror" or "Not in this version yet".
+cannot be chosen: it says "Needs the sync bot" or "Not in this version yet".
 
 Local only: nothing here goes to another computer or to Grok.
 
@@ -41,13 +41,13 @@ CHOICE_STATES = ("ok", "needs_mirror", "not_yet")
 MIRROR_STATES = ("ready", "not_set_up", "no_permission")
 
 WHY = {
-    "needs_mirror": "Needs the Mirror, with your permission to change this bot in Grok.",
+    "needs_mirror": "Needs the sync bot, with your permission to change this bot in Grok.",
     "not_yet": "Not in this version yet.",
 }
 MIRROR_SENTENCE = {
-    "ready": "The Mirror is set up: the small bot in your Grok account that carries changes for your twins.",
-    "not_set_up": "The Mirror is not set up yet: it is the small bot in your Grok account that carries changes.",
-    "no_permission": "The Mirror is set up, but you have not given it permission to change your other Grok bots.",
+    "ready": "The sync bot is set up: the small bot in your Grok account that carries changes for your twins.",
+    "not_set_up": "The sync bot is not set up yet: it is the small bot in your Grok account that carries changes.",
+    "no_permission": "The sync bot is set up, but you have not given it permission to change your other Grok bots.",
     "unknown": "No twins yet.",
 }
 
@@ -72,7 +72,7 @@ def _sentence(key: str, direction: str) -> str:
         }[direction]
     return {
         "grok_to_hermes": f"Changes to {n} made in Grok reach this twin; a change made in Hermes stays in Hermes.",
-        "hermes_to_grok": f"Changes to {n} made in Hermes are made in Grok too, by the Mirror; Grok's changes stay "
+        "hermes_to_grok": f"Changes to {n} made in Hermes are made in Grok too, by the sync bot; Grok's changes stay "
                           "in Grok.",
         "both": f"Changes to {n} go both ways; when both sides changed, you choose which to keep.",
         "off": (f"{n[0].upper()}{n[1:]} stays as it is on each side." if key in ("name", "description") else
@@ -118,7 +118,7 @@ def provide(key: str, directions: Callable[[Ctx], dict], last_synced: Optional[C
 
 
 def set_mirror_probe(fn: Optional[Callable[[str], str]]) -> None:
-    """The Mirror's pre-approval state per twin ("ready" | "not_set_up" | "no_permission"), once the Mirror knows it."""
+    """The sync bot's pre-approval state per twin ("ready" | "not_set_up" | "no_permission"), once the sync bot knows it."""
     global _mirror_probe
     _mirror_probe = fn
 
@@ -265,7 +265,7 @@ def _directions(prov: Provider, ctx: Ctx, key: str) -> dict:
     except Exception:
         got = {}
     out = {d: (got.get(d) if got.get(d) in CHOICE_STATES else "not_yet") for d in _ways(key)}
-    # never "needs the Mirror" when the Mirror is there: then the part itself is what is missing
+    # never "needs the sync bot" when the sync bot is there: then the part itself is what is missing
     if ctx.mirror == "ready":
         out = {d: ("not_yet" if s == "needs_mirror" else s) for d, s in out.items()}
     return out
@@ -300,7 +300,7 @@ def _row(key: str, ctx: Ctx, f: dict) -> dict:
     prov = _provider(key)
     dirs = _directions(prov, ctx, key)
     chosen = None if prov.live and prov.default else _entry(f["twins"], ctx.pair_id, key).get("direction")
-    # a choice that can no longer work (the Mirror went, a part left) is not shown as in effect
+    # a choice that can no longer work (the sync bot went, a part left) is not shown as in effect
     direction = chosen if chosen in DIRECTIONS and dirs.get(chosen) == "ok" else _default_direction(prov, ctx, dirs)
     direction = direction if direction in dirs else "off"
     at, last_dir = None, None

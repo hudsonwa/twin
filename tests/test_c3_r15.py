@@ -32,5 +32,15 @@ def test_R15_the_version_warning_and_the_next_command_come_before_any_other_inst
 
 
 def test_R15_the_next_install_is_written_once():
-    assert README.count(NEXT_CMD) == 1
+    # Once for POSIX shells and once for Windows PowerShell (whose `$(...)` and `cut` do not exist), each a
+    # copy-paste line that looks up the newest `next` commit itself. Before, PowerShell users got prose to follow
+    # by hand, which a usability review found error-prone; the rule's point (one place, no drift) still holds.
+    lines = [ln for ln in README.splitlines() if NEXT_CMD in ln]
+    assert len(lines) == 2, lines
+    posix, pwsh = lines
+    assert '"$(git ls-remote' in posix and "| cut -f1)" in posix
+    assert "((git ls-remote" in pwsh and "-split" in pwsh and ")[0]" in pwsh
+    for ln in lines:
+        assert "refs/heads/next" in ln and ln.endswith("--enable")
+    assert README.find("```powershell") > README.find(posix)
     assert "<that commit>" not in README

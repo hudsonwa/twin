@@ -3,6 +3,27 @@
 What the plugin does on your machine, for the Hermes plugin catalog's rule 13 and for you. Unofficial; not
 affiliated with xAI.
 
+## In short
+
+- **Runs:** botport (verified before first use), Hermes' own commands, and a few system tools; never a shell.
+  `git` only if you switch on a twin's git history.
+- **Reads:** from the Grok app's local files, only the bot list and the selected bots' transcript files (via
+  botport); its own data folder; the Hermes profiles of your twins.
+- **Writes:** your twins' Hermes profiles and its own folder, `plugin-data/grok-bot-twin/`. Keys go to your OS
+  secret store; the twin's own `.env` (owner-only, like Hermes' own keys) gets the value so its skills work.
+  Never into instructions, skills, memory, logs or git.
+- **Sends over the network:** nothing by itself by default. Only what you switch on: sharing with your own
+  computers (private network only), skill sync through your own Grok account, a git push to the remote you name.
+  The behaviour test (every one-prompt run, `hermes twin test`, the `twin_make` tool) asks your Hermes model a few
+  questions made from the bot's instructions; with a cloud model these go to that provider.
+- **Changes in Grok:** nothing, unless you allow Hermes → Grok for a twin, or ask the bot to move or come back.
+- **One prompt:** the Grok bot runs `hermes twin from-grok` on your computer, with the permission you gave it
+  in the Grok app.
+- **Off by default:** sharing, requests between computers, the background helper, skill sync, full transcripts,
+  git history, Hermes → Grok, the digest.
+
+The detail follows.
+
 ## Processes it starts
 
 All with an argument list (never a shell), stdin closed, a timeout and capped output. botport, `gh`,
@@ -150,6 +171,10 @@ runs; otherwise it is refused with a message saying why. `hermes twin doctor` sh
 - When a kept twin comes back and a folder sits at its old name: that folder's file names, its `SOUL.md` (compared
   with Hermes' own starting text), `cron/jobs.json` and, opened read-only, its session database (only whether it
   holds a chat), to tell a folder Hermes made again by itself from a Hermes bot of yours.
+- When you run `requests on`, `to-grok TWIN allow|apply`, `secret share NAME --to-grok|--linked` or
+  `bot-driven TWIN` in a terminal:
+  the controlling terminal itself (`/dev/tty`; `CONIN$` and `CONOUT$` on Windows), opened for that one question
+  and closed again. It writes the question there and reads one line (your `yes`); nothing of it is kept.
 
 It never reads Hermes' `.env` or other credential files, browser profiles or any credential store, with one
 exception you can see in "Secrets kept by reference" below: the plugin's own entries (service `grok-bot-twin`) in
@@ -166,7 +191,7 @@ same folder, fsync, rename; links are not followed):
 | `batteries/<twin>.json` | the behaviour test's cases for a twin, made by `botport battery init` from the setup export you named with `hermes twin test --from-export` (prompts and the patterns an answer should have, derived from the bot's export); deleted with the plugin's data |
 | `tests/<twin>/` | botport's own results of each `hermes twin test` run (`battery-*.jsonl`, 0600: each case's id, pass, reasons) and its work folders |
 | `sync/<twin>/` | `hermes twin sync`: the bot's state as given (`grok-state.json`), the botport spec, botport's Hermes bundle (`hermes-out/`), the bundle for the Grok bot (`for-grok.json`) and `restore/STAMP/`: the Grok copy of a skill edited on both sides (all 0600); deleted with the plugin's data |
-| `status-cache.json` | last status, so the per-turn note never waits for botport |
+| `status-cache.json` | last status, so the per-turn note and `hermes twin setup --check` never wait for botport (also written by a setup run that makes twins) |
 | `waiting.json` | per twin, the item ids botport last listed as waiting for your go-ahead (so the "Send to Grok" boxes survive a refresh) |
 | `skipped.json` | per twin, the item ids you chose to keep in Hermes only (so they stop asking; "offer again" removes the entry) |
 | `copied.json` | per twin, the skills you said you pasted into Grok by hand: the item id and a short digest of the pasted version (no text), so the skill asks again when it changes. Also, for each routine an imported setup export added: its item id, which holds the routine's name, and a short digest of its schedule and prompt (no other text), so its Hermes copy does not ask to be carried back to Grok, where it came from, until you change it in Hermes |
@@ -316,8 +341,10 @@ the plugin with `hermes plugins remove` alone leaves this folder on disk.
   port. `hermes twin mcp` serves the same two calls as a local MCP server for a later Grok app. Only the bot named
   with `--bot` is served (with several `--bot` names, only the one `GROK_BOT_TWIN_CALLER` in the environment
   names; without it, every call is refused).
-- `from-grok` runs botport `twin remove` once per twin (the first call: the twin becomes bot-driven; its Hermes
-  profile and chats stay), `sync --bundle=FILE --spec=SPEC --profile=P --direction=g2h --adopt --no-cron` and
+- `from-grok` runs botport `twin remove` only for a twin it made in the same call (the twin becomes bot-driven; its
+  Hermes profile and chats stay); an existing twin botport pairs is refused untouched, and only your own
+  `hermes twin bot-driven TWIN` (your terminal, never a chat) runs `twin remove` for it, after the same copy.
+  `from-grok` also runs `sync --bundle=FILE --spec=SPEC --profile=P --direction=g2h --adopt --no-cron` and
   `drift` (same verified copy and environment as every other botport command; SPEC is the twin's one spec, the same
   `back-to-grok` and `hermes twin sync` use), the plugin's own routine import (routines switched off), the
   behaviour test (`hermes twin test`, botport `battery init` and `test`, which asks the twin's model through
@@ -326,11 +353,14 @@ the plugin with `hermes plugins remove` alone leaves this folder on disk.
 - `back-to-grok` runs what `hermes twin sync` runs: botport `drift`, `apply --adopt --no-cron` (Grok to Hermes)
   and `sync --direction=h2g` (Hermes to Grok), each with the twin's spec file, then `hermes twin switch --undo`
   (the routines it turned on are paused again). What goes back to Grok (facts and skills) passes the same
-  password/key screen as what comes in, and is returned to the bot in the answer.
+  password/key screen as what comes in, and is returned to the bot in the answer only when you allowed Hermes →
+  Grok for that twin (it reads `plugin-data/grok-bot-twin/h2g.json`, never writes it); otherwise both lists are
+  empty and the line says how many stay in Hermes. The bot's own paused routines are named to re-enable either way.
 - Writes, under `plugin-data/grok-bot-twin/one-prompt/` (owner-only): `exports/PAIR.json` (the bot's words as a
   grok-bot-export, after the password/key screen: instructions, skills, memory, routines; kept so drift can be
-  rerun), `converted/PAIR/STAMP/` (a copy of the twin's botport parts taken before it became bot-driven; never put
-  back by itself), `snapshots/PAIR/STAMP/` (copies of the twin's `SOUL.md`, `skills`, `cron`, `memories`,
+  rerun), `converted/PAIR/STAMP/` (a copy of the twin's botport parts taken before it became bot-driven, by
+  `from-grok` or `hermes twin bot-driven`; never put back by itself), `snapshots/PAIR/STAMP/` (copies of the
+  twin's `SOUL.md`, `skills`, `cron`, `memories`,
   `config.yaml`, botport lock files, `backups/botport/` and `botport-manual.md`, symlinks recorded as links, plus
   the twin's pairs.json entry and its kept test cases; the last 3 kept), `moved/PAIR.json` (the Grok routine names
   to re-enable after a move), and `calls.jsonl` (when, which bot, PASS/FAIL, counts, drift and test results; never
@@ -411,13 +441,15 @@ bot in your account, so any of your bots can change a skill your twin sent, and 
 The heartbeat also says how many skills the library holds. It makes no network calls; the sync bot copies files
 between the box and the shared folder. Every run of the sync bot's routine spends Grok credit.
 
-### Hermes → Grok through the Mirror bot (off for every twin until you allow it)
+### Hermes → Grok through the sync bot (off for every twin until you allow it)
 
 Hermes → Grok is off for every twin until you allow that twin; there is no switch for the whole plugin (the old
 `hermes twin to-grok beta` only says so and changes nothing). For a twin you never allowed, nothing is sent, the
 timer sends nothing, and no request for it is written to the skill sync folder's `to-grok/`. Allowing, applying,
-undoing, settling a difference, moving a routine and giving up on the Mirror are refused, also on the Twins page's
-own routes, inside a request from another computer, and a command a chat started cannot do them either. Stopping
+undoing, settling a difference, moving a routine and giving up on the sync bot are refused, also on the Twins page's
+own routes, inside a request from another computer, and a command a chat started cannot do them either. In the
+terminal, `allow` and `apply` ask at the terminal itself and go ahead only on a typed yes (no `--yes`; no terminal
+is a refusal). Stopping
 (`disallow`) is always accepted: it only takes changes back.
 
 Changes go only for a twin and the items you allow (`hermes twin to-grok TWIN allow name description instructions routines`)
@@ -430,7 +462,7 @@ pass; the request also carries, signed, the ids of the bots you allowed). Next t
 `to-grok/allowed.json` and `to-grok/allowed.json.mac`: the bots you allow right now and the ids of the requests
 Hermes still waits for, with a number that only grows, signed with the same pass and rewritten each time you allow or
 stop a twin, make a change, stop waiting, or an answer comes back (and emptied when you remove Grok Bot Twin). The bot's name goes into a request only when it is a plain short name; otherwise the id alone. Every text,
-routine name and prompt sits in the message between its own BEGIN and END lines, as data. The Mirror bot checks
+routine name and prompt sits in the message between its own BEGIN and END lines, as data. The sync bot checks
 the signature with the script in its box, which refuses a request whose bot is not in both lists (the one signed
 into the request and the current `allowed.json`), a missing or unsigned `allowed.json`, one older than the request
 was signed with or than one the box saw before, a request Hermes no longer waits for (answered, stopped or given
@@ -439,7 +471,7 @@ Mirror's own `status/approved.json` is never trusted for this). It sends that me
 back `status/to-grok/<change id>.json` (what was done) and `status/bots/<bot id>.json` (the bot's name and
 description now); the plugin reads only those small files, as data of known shapes, and takes only the name and
 description from the read-back (botport's own read on this computer wins; instructions or routines in it are
-ignored). The Mirror's box keeps, in its skill sync folder (`/workspace/skill-sync`), the copies of requests it took
+ignored). The sync bot's box keeps, in its skill sync folder (`/workspace/skill-sync`), the copies of requests it took
 down (with their instruction texts and routine prompts), the list of the request ids it showed (`.work/to-grok-answered`)
 and the newest allowlist number it saw. The new values reach Grok:
 that is the point, so instructions you write in Hermes for such a twin are read by Grok. Never sent: a text that
@@ -448,13 +480,13 @@ credit, and saving a new routine asks for your Allow in that bot's chat in Grok.
 
 The Auto-Review rule the plugin shows you to add in Grok (Settings > Permissions > Auto-Review > Allow without
 Asking) names the bot by its stable id (with its display name in quotes only when that name has no comma, quote,
-line break or linking word such as "and") and the Mirror by the name in the `mirror_name` setting. It covers only
-edits that the Mirror asks that one bot to make to its own name, description, instructions and existing routines;
+line break or linking word such as "and") and the sync bot by the name in the `mirror_name` setting. It covers only
+edits that the sync bot asks that one bot to make to its own name, description, instructions and existing routines;
 saving a new routine is not covered and keeps Grok's own Allow question in that bot's chat. The plugin keeps the
 exact rule text it showed you in `h2g.json`. To stop: `hermes twin to-grok TWIN disallow` (or **Stop changes in
 Grok** on the Twins page). That takes the bot out of `allowed.json`, takes that twin's requests still waiting out of
 the skill sync folder, and shows the exact rule to delete in Grok (Settings > Permissions > Auto-Review > Allow
-without Asking). Delete it there: until you do, Grok would still let the Mirror ask that bot for such edits.
+without Asking). Delete it there: until you do, Grok would still let the sync bot ask that bot for such edits.
 
 ### The background helper (the one file outside the Hermes folder and your skill sync folder)
 
@@ -567,7 +599,9 @@ nothing changes (a look at four file dates every 5 s and one waiting request to 
 Unless you use "Share my twins with my other computers" (below), the plugin makes no network calls and uploads
 nothing itself, with one exception: the "finish several twins" sheet sends `GET <base_url>/models` to each model
 server already set up in the default Hermes profile's `config.yaml` (at most 6, 2 s timeout, no key or
-Authorization header sent) to list the models it serves. The plugin never downloads a model. botport makes none for twins: skill sync works through a folder that your
+Authorization header sent) to list the models it serves. The behaviour test also chats with the twin's model through Hermes (every
+one-prompt run, `hermes twin test`, `twin_make`): with a cloud model, its questions, made from the bot's
+instructions, go to that provider. The plugin never downloads a model. botport makes none for twins: skill sync works through a folder that your
 own sync app keeps on both sides (or that your sync bot reaches on this computer). "Download it" in the skill
 sync sheet hands the address of botport's release file for the sync bot's box to your browser. `gh attestation verify` talks to GitHub only when that check runs (see
 "Processes it starts"); verifying botport against the plugin's own list needs no network. "Download botport" hands the address of botport's
@@ -1012,7 +1046,7 @@ written from one file, `twin/copies.py`, and a test compares them, so they canno
   itself when you ask it in Grok; instructions are filled in, routines arrive switched off, and connections
   arrive as a list of names.
 - **Only with skill sync, which you set up yourself**: skills, in both directions; per twin and item when you allow
-  it, name, description, instructions and routines from Hermes to Grok (made by the Mirror bot); Grok's instructions, every 15
+  it, name, description, instructions and routines from Hermes to Grok (made by the sync bot); Grok's instructions, every 15
   minutes by themselves unless you switch that off (you are asked when it is unsure which to keep).
 - **Only once you switch full transcripts on for a twin**: conversations from a Grok export, which
   `hermes twin transcripts to-hermes` makes into Hermes chats of the twin.

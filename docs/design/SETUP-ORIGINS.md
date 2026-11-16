@@ -1,4 +1,4 @@
-# Setup, from wherever you start
+# Setup, from wherever you start (partly a design)
 
 **Status of this document.** Ways 1 and 2 below are built and were tested in a throwaway Hermes home with
 invented bots: one agent that was given only `AGENTS.md`, and one that was given the skill's text in place of
@@ -31,7 +31,7 @@ chat with an agent.
 
 Ways 1 and 2 never touch the Grok app. They install nothing in Grok, change nothing in Grok and read no chat.
 The only part of setup that happens inside the Grok app is skill sync, which is optional: it needs a small
-sync bot in your own Grok account (botport's own documents call it the Mirror bot). Today you make that bot by
+sync bot in your own Grok account (botport's own documents call it the sync bot). Today you make that bot by
 hand, with the guided sheet on the Twins page (a twin's … menu, Skill sync…). Ways 3a and 3b are two ideas for
 taking some of that clicking off you.
 
@@ -171,7 +171,7 @@ act on your computer. That was wrong. A bot in the Grok desktop app can:
 - use computer use.
 
 Its memory, skills and routines are different: they are server-side tools (the bot reads and writes them
-itself), not files on your computer. See [ONE-PROMPT.md](ONE-PROMPT.md) for the one-prompt use cases built on this.
+itself), not files on your computer. See [ONE-PROMPT.md](../ONE-PROMPT.md) for the one-prompt use cases built on this.
 The facts above come from reading the app; a full twin run through them is not yet tested end to end.
 
 A Grok bot cannot do all of the steps below on its own. The honest table:
@@ -194,7 +194,7 @@ the Grok app, because a bot saying "done" is not proof.
 
 Costs to know before trying it: every chat turn with the bot and every run of its routine spends Grok credit.
 The pass still reaches the bot as a file you attach, never as pasted text, and a copy of it then lives in that
-bot's chat ([DISCLOSURE.md](DISCLOSURE.md#known-residual-the-pass-in-the-sync-bots-chat) says the same of today's setup).
+bot's chat ([DISCLOSURE.md](../DISCLOSURE.md#known-residual-the-pass-in-the-sync-bots-chat) says the same of today's setup).
 
 ## Test plan (needs the owner's OK before any step runs on the real Grok app)
 

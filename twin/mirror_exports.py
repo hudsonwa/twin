@@ -1,4 +1,4 @@
-"""Setup exports that arrive through skill sync ("the Mirror"), for the sheet that finishes several twins.
+"""Setup exports that arrive through skill sync ("the sync bot"), for the sheet that finishes several twins.
 
 When skill sync is set up, the request the owner pastes into each Grok bot's chat also asks the bot to save its export
 as a file in the Grok box, at EXPORT_DIR/grok-bot-export-<its bot id>.json. The sync bot's script names those files on

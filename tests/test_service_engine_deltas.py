@@ -1,4 +1,4 @@
-"""TwinService against the fake botport: masked names everywhere, --account, per-twin sync errors, the Mirror
+"""TwinService against the fake botport: masked names everywhere, --account, per-twin sync errors, the sync bot
 pair folder rule, and routines/connectors left waiting after create."""
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def test_sync_all_keeps_demo_results_when_botport_cannot_run(rig):
     assert out["demo-acme-support"]["error"] is None
 
 
-# ---- the Mirror pair folder ---------------------------------------------------------------------------------
+# ---- the sync bot pair folder ---------------------------------------------------------------------------------
 
 def test_pair_folder_must_be_absolute_real_and_outside(rig, home, tmp_path):
     svc = rig.svc

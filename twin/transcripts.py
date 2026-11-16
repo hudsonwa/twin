@@ -1,6 +1,6 @@
 """Full transcripts (memory layer 3): an archive of a twin's conversations, on this computer, off until switched on.
 
-What it keeps: every conversation of a twin, both sides (the Grok bot's, from a Grok export the owner or the Mirror
+What it keeps: every conversation of a twin, both sides (the Grok bot's, from a Grok export the owner or the sync bot
 saved; the Hermes twin's, read from the twin's own Hermes session database), message by message (user and
 assistant turns; tool output and hidden reasoning are not kept).
 
@@ -577,7 +577,7 @@ def _need_on(pid: str) -> tuple:
 # ---- taking conversations in ------------------------------------------------------------------------------------------
 def ingest_grok(pid: str, data: Any) -> dict:
     """Keep the Grok side's conversations from a Grok export: {"conversations": [{"id", "title", "messages":
-    [{"role": "user"|"assistant", "text", "at"}]}]} (the bot's own export, saved by the owner or the Mirror)."""
+    [{"role": "user"|"assistant", "text", "at"}]}]} (the bot's own export, saved by the owner or the sync bot)."""
     pid, _rec, key = _need_on(pid)
     convs = data.get("conversations") if isinstance(data, dict) else None
     if not isinstance(convs, list):

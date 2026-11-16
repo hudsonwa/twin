@@ -44,7 +44,7 @@ Everyday
   add                    give a Grok bot a twin: add --bot "Acme Support" (or --all); asks first
   quick NAME             one twin start to finish: add, import its setup export, set the model, compare (--all)
   finish [TWIN ...]      new twins: set their model and print what to ask each bot for (--all)
-  stop TWIN              stop twinning a bot; its Hermes bot and chats stay
+  stop TWIN              stop twinning a bot (always name it); its Hermes bot and chats stay
 
 Your other computers
   share on|off|code      share your twins with your other computers; shows the link code
@@ -72,7 +72,7 @@ Fix things
   setup                  set up this computer or finish what is left (--check, --plan; safe to run again)
 
 Advanced
-  check [TWIN]           check Grok now
+  check [TWIN]           check Grok now (sync TWIN --stdin: level it with the bot's own state)
   list-grok              the bots in your Grok app
   recent [TWIN]          recent activity (when and what kind; never content)
   compare [TWIN]         compare with Grok, item by item
@@ -80,7 +80,6 @@ Advanced
   copies                 what copies over and how: the whole table, as on the Twins page
   checklist [TWIN]       what you do yourself, and what moving routines to Hermes takes
   syncs [TWIN]           what syncs with Grok, which way, and when it last did (ITEM from-grok|to-grok|both|off)
-  git on|off|status [TWIN|--all]  optional git history of a twin (off by default; --remote URL to push)
   secret list|set|forget|share|pull [NAME]  secrets kept by reference in this computer's OS store
   import [TWIN] FILE     import the setup export a Grok bot wrote about itself (--request prints what to ask it)
   import-exports DIR     import every setup export in a folder, each into its bot's twin (--show)
@@ -92,16 +91,22 @@ Advanced
   digest [TWIN]          the optional activity digest to Grok: preview, --on, --off
   transcripts ACTION [TWIN]  whole conversations kept here, encrypted, searchable by the twin (off by
                          default). ACTION: on, off, add-grok, refresh, search, export, to-hermes, forget
-  to-grok [TWIN]         changes made in Hermes, made in Grok by your Mirror bot: preview, then
+  to-grok [TWIN]         changes made in Hermes, made in Grok by your sync bot: preview, then
                          allow ITEMS, apply ID, undo ID, resolve ITEM hermes|grok, runner ROUTINE grok|hermes
   verify                 check botport against GitHub's signed build record
-  from-grok --bot NAME   one prompt in Grok: twin, back up or move the bot (its state as JSON on stdin; the
-                         bot runs this on this computer; docs/ONE-PROMPT.md). back-to-grok: bring it back
-  mcp --bot NAME         the same two calls as a local MCP server (for a future local connector)
   demo [ACTION]          a sample twin with invented data (demo remove ends it)
   uninstall              remove Grok Bot Twin: every twin and its records; Hermes bots and chats stay
 
-TWIN is a twin's name, such as "Acme Support" (shown by status). With one twin you can leave it out.
+One prompt in Grok
+  skill-text             print the skill to give a Grok bot once (--name, --description, --body: one field each)
+  git on|off|status [TWIN|--all]  optional git history of a twin (off by default; --remote URL to push)
+  from-grok --bot NAME   one prompt in Grok: twin, back up or move the bot (its state as JSON on stdin; the
+                         bot runs this on this computer; docs/ONE-PROMPT.md). back-to-grok: bring it back
+  mcp --bot NAME         the same two calls as a local MCP server (for a future local connector)
+  bot-driven [TWIN]      let the twin's Grok bot keep it in step with one prompt instead of botport (your
+                         own step, once; --dry-run shows what changes)
+
+TWIN is a twin's name, such as "Acme Support" (shown by status). With one twin you can leave it out (not for stop).
 """
 
 
@@ -1806,7 +1811,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     parser.formatter_class = argparse.RawDescriptionHelpFormatter
     parser.description = HELP_TEXT
     parser.usage = "%(prog)s [COMMAND] [options]    (plain `%(prog)s` shows your twins and the next step)"
-    subs = parser.add_subparsers(dest="twin_command", metavar="COMMAND", help=argparse.SUPPRESS)
+    subs = parser.add_subparsers(dest="twin_command", metavar="COMMAND", help=argparse.SUPPRESS, prog=parser.prog)
     p = subs.add_parser("status", help="Your twins and what to do next")
     p.add_argument("--json", action="store_true", help="Machine-readable output")
     p = subs.add_parser("check", help="Check Grok now")  # (`sync` with no state given: twin/sync_both.py)
@@ -1897,7 +1902,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     g.add_argument("--new-pass", "--rotate-key", dest="rotate_key", action="store_true",
                    help="Replace the twin's pass, the small file the sync bot needs (also: --rotate-key)")
     p = subs.add_parser("stop", aliases=["remove"], help="Stop twinning a bot (its Hermes bot and chats stay)")
-    _twin_arg(p)
+    p.add_argument("pair", nargs="?", type=_twin, metavar="TWIN", help="The twin's name, in quotes (always needed)")
     p.add_argument("--remove-data", action="store_true", help="Also delete its full transcripts and What syncs choices")
     p.add_argument("--dry-run", action="store_true", help="Only show what would happen")
     p.add_argument("--yes", "-y", action="store_true")

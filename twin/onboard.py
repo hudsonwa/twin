@@ -10,11 +10,14 @@ be shown in a chat with an agent. The link code somebody typed is never printed 
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Optional
 
 from . import safe
 from .engine import EngineError
 from .model import plural
+
+log = logging.getLogger(__name__)
 
 PAGE = "the Twins page in Hermes Desktop"
 # what a step is, in one word (also the `state` in --json)
@@ -97,12 +100,13 @@ def _fleet(svc: Any) -> dict:
 
 def _twin_facts(svc: Any) -> tuple:
     """(real twins, their names in lower case when remembered, how many still wait for their instructions, how
-    many for a model). From the plugin's own records only: botport is not run."""
+    many for a model, how many the remembered status has not seen yet). From the plugin's own records only: botport
+    is not run. A twin the status has not seen is unchecked, never counted as finished."""
     try:
         ids = [i for i in svc.pair_ids() if i not in svc.demo.pair_ids()]
     except Exception:
         ids = []
-    names, no_text, no_model = set(), 0, 0
+    names, no_text, no_model, seen = set(), 0, 0, set()
     try:
         st = svc.cached_status(compute=False) or {}
     except Exception:
@@ -110,13 +114,14 @@ def _twin_facts(svc: Any) -> tuple:
     for p in st.get("pairs") or []:
         if not isinstance(p, dict) or p.get("pair_id") not in ids:
             continue
+        seen.add(p["pair_id"])
         grok = p.get("grok") if isinstance(p.get("grok"), dict) else {}
         if isinstance(grok.get("name"), str):
             names.add(grok["name"].lower())
         left = p.get("setup_left") if isinstance(p.get("setup_left"), list) else []
         no_text += 1 if "instructions" in left else 0
         no_model += 1 if "model" in left else 0
-    return ids, names, no_text, no_model
+    return ids, names, no_text, no_model, len([i for i in ids if i not in seen])
 
 
 def has_twins(svc: Any) -> bool:
@@ -131,7 +136,7 @@ def build(svc: Any, a: Any) -> dict:
     role = f.get("role") or "none"
     me = safe.clean_name((f.get("this_machine") or {}).get("name"), 60) or "this computer"
     app = bool(s["grok_app"]["found"])
-    twins, known_names, no_text, no_model = _twin_facts(svc)
+    twins, known_names, no_text, no_model, unchecked = _twin_facts(svc)
     # which kind of computer this is: one that gets its twins over a link, or the one with the Grok app
     linked = role == "follower"
     follows = linked or bool(w["link"]) or (not app and not twins and not s["helper"]["found"] and not w["file"]
@@ -140,7 +145,7 @@ def build(svc: Any, a: Any) -> dict:
     if follows:
         _plan_linked(steps, w, f, linked, app)
     else:
-        _plan_grok(steps, w, s, f, app, twins, known_names, no_text, no_model)
+        _plan_grok(steps, w, s, f, app, twins, known_names, no_text, no_model, unchecked)
     required = ("link",) if follows else ("grok_app", "botport", "twins", "finish")
     left = [st for st in steps if st["id"] in required and st["state"] != DONE]
     return {"computer": me, "kind": "linked" if follows else "grok", "complete": not left, "steps": steps,
@@ -174,7 +179,7 @@ def _plan_linked(steps: list, w: dict, f: dict, linked: bool, app: bool) -> None
 
 
 def _plan_grok(steps: list, w: dict, s: dict, f: dict, app: bool, twins: list, known: set, no_text: int,
-               no_model: int) -> None:
+               no_model: int, unchecked: int) -> None:
     from .engine import release_target
     tag = s["release_tag"]
     if app:
@@ -227,23 +232,27 @@ def _plan_grok(steps: list, w: dict, s: dict, f: dict, app: bool, twins: list, k
     else:
         steps.append(_step("twins", YOU if ready else WAITS, have,
                            how=f"Choose your bots on {PAGE} (Connect my Grok bots), or name them: hermes twin setup "
-                               "--bot \"NAME\" (hermes twin list-grok shows the names; --all takes every bot)."))
+                               "--bot \"NAME\" (hermes twin list-grok shows the names; --all takes every bot). Using the one prompt "
+                               "in Grok instead? Nothing to do here: the first prompt makes the twin."))
     # ---- what only the owner can finish ------------------------------------------------------------------------
-    if no_text or no_model:
+    if no_text or no_model or unchecked:
         waits = lambda n: f"{plural(n, 'twin')} still {'waits' if n == 1 else 'wait'}"  # noqa: E731
         title = " and ".join(x for x in (
             f"{waits(no_text)} for {'its' if no_text == 1 else 'their'} instructions" if no_text else "",
-            f"{waits(no_model)} for a model" if no_model else "") if x) + "."
+            f"{waits(no_model)} for a model" if no_model else "",
+            f"{plural(unchecked, 'twin')} not checked yet" if unchecked else "") if x) + "."
         how = " ".join(x for x in (
+            "hermes twin shows whether " + ("it waits" if unchecked == 1 else "they wait") + " for "
+            "instructions or a model." if unchecked else "",
             f"On {PAGE}: Paste its instructions (copied from the Grok app; the Grok app does not keep them on this "
             "computer)." if no_text else "",
             f"On {PAGE}: Choose a model (a new twin takes the model of your other Hermes chats; this computer has "
             "none yet)." if no_model else "",
-            "Nobody but you can do this.") if x)
+            "Nobody but you can do this." if no_text or no_model else "") if x)
         steps.append(_step("finish", YOU, title, how=how))
     elif twins:
-        steps.append(_step("finish", DONE, "No twin waits for its instructions or for a model, as far as the last "
-                                           "check knows (hermes twin shows each one)."))
+        steps.append(_step("finish", DONE, "No twin waits for its instructions or for a model (hermes twin shows "
+                                           "each one)."))
     # ---- sharing ---------------------------------------------------------------------------------------------
     share = f.get("share") if isinstance(f.get("share"), dict) else {}
     if share.get("on"):
@@ -322,7 +331,8 @@ def public(plan: dict) -> dict:
 # ---- doing it ----------------------------------------------------------------------------------------------------
 def twin_bots(svc: Any, bots: list, every: bool, out: Callable[[str], None], err: Callable[[str], None]) -> int:
     """Give the named bots (or every bot) a twin. A bot that already has one is left as it is. Names the caller
-    did not type are not printed."""
+    did not type are not printed. When it made a twin, the status is read and remembered, so that --check (which
+    never runs botport) knows what the new twins still wait for."""
     data = svc.grok_list()
     real = [b for b in data.get("bots") or [] if isinstance(b, dict) and not b.get("demo")]
     if every:
@@ -361,7 +371,19 @@ def twin_bots(svc: Any, bots: list, every: bool, out: Callable[[str], None], err
         + (f" {plural(already, 'bot')} already had one." if already else ""))
     for note in res.get("notes") or []:
         out(f" note: {note}")
+    if made:
+        _save_status(svc)
     return 0 if made else 1
+
+
+def _save_status(svc: Any) -> None:
+    """Remember the new twins' status (what each still waits for), so a --check in a new process sees them. Best
+    effort: when it fails, --check says the new twins are not checked yet."""
+    try:
+        svc.status(fresh=True)
+        svc.save_status()
+    except Exception:
+        log.debug("grok-bot-twin: could not remember the status after twinning", exc_info=True)
 
 
 def share_on(svc: Any, out: Callable[[str], None]) -> int:

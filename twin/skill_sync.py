@@ -1085,7 +1085,7 @@ def close_all(central: Path) -> None:
     state["twins"], state["via"], state["take"] = {}, {}, {}
     state["serial"] = max(state["serial"] + 1, int(datetime.now(timezone.utc).timestamp()))
     write_inbox(central, state)
-    try:  # Hermes -> Grok: the Mirror's signed list of bots it may message now names none
+    try:  # Hermes -> Grok: the sync bot's signed list of bots it may message now names none
         from . import h2g_mirror
         h2g_mirror.publish_allowed(central, [])
     except (OSError, ValueError, SkillSyncProblem):

@@ -1,8 +1,56 @@
 # Using Grok Bot Twin
 
-How to install it and the first three steps are in the [README](../README.md). This page has the rest for one
+How to install it and the first steps are in the [README](../README.md). This page has the rest for one
 computer; your other computers are in [SHARING.md](SHARING.md), the terminal in [TERMINAL.md](TERMINAL.md), and
-everything the plugin reads, writes, runs or sends in [DISCLOSURE.md](DISCLOSURE.md).
+everything the plugin reads, writes, runs or sends in [DISCLOSURE.md](DISCLOSURE.md). The one-prompt flow in
+Grok is in [ONE-PROMPT.md](ONE-PROMPT.md).
+
+**On this page:** [Words used](#words-used) · [The sample](#the-sample) · [Connect your Grok bots](#connect-your-grok-bots) ·
+[Start from wherever you are](#start-from-wherever-you-are) · [Everyday use](#everyday-use) ·
+[Import setup export](#import-setup-export) · [What syncs](#what-syncs-and-hermes--grok) ·
+[Skill sync](#skill-sync-optional) · [Whole conversations](#a-twins-whole-conversations-archive-and-search) ·
+[How fast](#how-fast-is-it) · [Settings](#settings) · [Uninstall](#uninstall) · [Troubleshooting](#troubleshooting) ·
+[Ready or experimental](#ready-or-experimental) · [Pictures](#pictures) ·
+[Known limitations](#known-limitations)
+
+## I want to…
+
+| I want to… | Go to |
+|---|---|
+| See what a twin is, risk-free | [The sample](#the-sample) |
+| Twin my real bots | [Connect your Grok bots](#connect-your-grok-bots), or the [one prompt](ONE-PROMPT.md) |
+| Give a twin its instructions | [Import setup export](#import-setup-export) |
+| Fix "Changed in both places" | [Everyday use](#everyday-use) |
+| Move routines to Hermes | [Everyday use](#everyday-use) (Move routines to Hermes) |
+| Bring skills over | [Skill sync](#skill-sync-optional) |
+| Have twins on my other computers | [SHARING.md](SHARING.md) |
+| Change a setting | [Settings](#settings) |
+| Fix a problem | [Troubleshooting](#troubleshooting) |
+| Remove it | [Uninstall](#uninstall) |
+
+## Words used
+
+| Word | Means |
+|---|---|
+| Twin | A Hermes bot (a Hermes *profile*) that follows one of your Grok bots. |
+| botport | A small free app that reads your bot list from the Grok desktop app; the plugin runs it. |
+| Setup export | A file a Grok bot writes about itself when you ask it: instructions, routines, connection names. |
+| Sync bot | An optional bot in your own Grok account that carries skills (and Hermes → Grok changes). Older text, and botport itself, call it the Mirror. |
+| Bot-driven twin | A twin kept in step by the bot's own one prompt, not by botport ([ONE-PROMPT.md](ONE-PROMPT.md#before-you-start)). |
+| Behaviour test | botport's short test chats with the twin's model, checking it answers like the bot (`hermes twin test`). |
+| Drift | botport's check that the twin's files match what the bot sent. |
+| Linked computer | Another computer of yours that holds copies of the twins ([SHARING.md](SHARING.md)). |
+| Hermes bot / profile | The same thing: each Hermes bot is a Hermes *profile*, with its own instructions, skills and chats. |
+| Routine | Something a bot does on a schedule, such as a morning summary. |
+| Skill sync | Optional: skills travel between Grok and Hermes through the sync bot. |
+| The pass | A small key file the sync bot needs to prove a twin is yours. You attach it as a file, never paste it. |
+| Snapshot | A copy of a twin's files taken before each one-prompt run, put back on FAIL. |
+| One prompt | Saying "Clone yourself to Hermes" (or back up, move, come back) to a Grok bot ([ONE-PROMPT.md](ONE-PROMPT.md)). |
+| PASS / FAIL | The first word of every one-prompt answer and of `quick`, `stop` and `link-computer`. |
+| Execution on Local Computer | The Grok app setting (Settings → Bot) that lets bots run commands on your computer. |
+| What syncs | Per twin, which way each item goes (Grok → Hermes, Hermes → Grok, both, off). |
+| Hermes → Grok | Changes made in Hermes, made in Grok by the sync bot; off until you allow it. |
+| Full transcripts | A twin's whole conversations, kept encrypted on this computer for search. |
 
 ## The sample
 
@@ -32,8 +80,8 @@ a model." Each twin has a box, all ticked. Two ways on:
   while the sheet is open, matches each file to its twin by the bot's name (or its id, when the file has
   one), and imports it at once: the instructions, the routines (switched off), and the connector names. A
   line per twin says how far it is: "Acme Helper: instructions in ✓", "2 routines added, switched off",
-  "waiting for its file…". The lists of memories and facts about you in those files are left out; Hermes
-  never stores them. **Paste it yourself instead** is still there for any twin. If skill sync is set up, the
+  "waiting for its file…". The lists of memories and facts about you in those files are left out; this
+  route never stores them (the [one prompt](ONE-PROMPT.md#what-the-bot-sends) does copy memory). **Paste it yourself instead** is still there for any twin. If skill sync is set up, the
   sheet offers it as the way to keep their skills the same.
 - **One at a time.** The twin's own sheet: paste its instructions, choose its model.
 
@@ -44,29 +92,6 @@ If a line of the instructions looks like a password or key, it is left out and i
 when you paste by hand, nothing is saved until you save without it or say it is not a password. A new twin
 uses the model of your other Hermes chats when there is one, so often only the instructions are left.
 
-## Pictures
-
-| First visit | Connect, once |
-|---|---|
-| ![Welcome: two sentences, one button](screenshots/welcome.png) | ![Connect your Grok bots: two rows that tick themselves](screenshots/connect-sheet.png) |
-| Two short sentences, one button, and a sample to look at first. | Two rows that tick themselves. Nothing runs until the download is verified. |
-| ![Summary before a new twin is made](screenshots/add-twins-preview.png) | ![Finish setting up: paste the instructions, choose a model](screenshots/finish-setting-up.png) |
-| Before anything is written: what copies now, and what comes later. | One twin at a time: paste its instructions, choose its model. |
-| ![Twins page with the sample twin and three twins](screenshots/twins-page.png) | ![Both versions side by side](screenshots/conflict-card.png) |
-| One line per twin: how it is doing, and one button only when something needs you. | Changed in both places? See both versions and choose one; each choice says what happens. |
-| ![Move routines to Hermes](screenshots/ready-to-switch.png) | ![The Mac that shares, with three linked computers in sync](screenshots/other-computers.png) |
-| A twin's routines: switch each one off in Grok, then on in Hermes, so nothing runs twice. | Sharing switched on: your other computers, each in sync, and the skills they share. |
-| ![A request from another computer waits for approval](screenshots/ask-another-computer.png) | ![Three choices for a step that needs approval](screenshots/approval-choices.png) |
-| On a linked computer: a request from the Mac shows the step first and waits for **Do it once** or **Don't**. | A step that needs approval waits on this computer, is also shown on the computer that asked, or is refused at once. |
-| ![Settings, skills and routines on the linked computers](screenshots/what-follows.png) | ![A twin's memory on the linked computers you choose](screenshots/twin-memory.png) |
-| Settings, skills and routines follow to your linked computers; each routine runs on one computer only. | A twin's memory, kept the same on the linked computers you choose, with earlier versions and **Forget on this computer**. |
-| ![Set up skill sync, step 1 of 4](screenshots/skill-sync-sheet.png) | ![Import a bot's setup export](screenshots/setup-export.png) |
-| Optional skill sync in four steps; it says first that its sync bot spends Grok credit. | Ask the bot in Grok for its setup export, then drop the answer here. |
-| ![Several new twins at once: tick them, one model for all, then Do all ticked now](screenshots/finish-twins.png) | |
-| Several new twins at once: one model for all, and each one's setup export taken in as it arrives. | |
-
-The pictures are taken in a throwaway Hermes home with invented bots only.
-
 ## Start from wherever you are
 
 However you start, the same command does the work: `hermes twin setup`. It can be run again at any time, and a
@@ -75,6 +100,7 @@ step that is done is skipped.
 | You are | Do this |
 |---|---|
 | In Hermes Desktop | Open **Twins** and press **Connect my Grok bots** (see [Connect your Grok bots](#connect-your-grok-bots)). |
+| In a Hermes chat, for one bot | Say "twin my Acme Support bot": the `twin_make` tool makes the twin without asking (add, model, compare) and, when the twin has test cases, runs the behaviour test, which calls the twin's model. |
 | In a Hermes chat | Say "set up Grok Bot Twin". The plugin ships a skill (`grok-bot-twin:set-up-grok-bot-twin`) that walks you through it in the chat: it shows the plan, waits for your yes, links your other computers and offers skill sync. |
 | In a coding agent (Claude Code, Cursor, Codex or any other) | Point it at this repository. [AGENTS.md](../AGENTS.md) gives it the exact steps, what it must never do, and how to check its work. |
 | In a terminal | `hermes twin setup --check`, then see [One setup command](TERMINAL.md#one-setup-command). |
@@ -83,22 +109,25 @@ Whoever runs it, four things stay yours: downloading botport with your browser, 
 instructions over, choosing a model for a twin that has none, and every sign-in. No agent is asked to type a password, a key or a twin's pass, and none makes
 changes in the Grok app.
 
-Two more ways in are designed and not built: Hermes doing the clicks in the Grok app for you while you watch
-and approve each one, and a Grok bot setting itself up as the sync bot. Neither has been run on the real Grok
-app; [SETUP-ORIGINS.md](SETUP-ORIGINS.md) has both designs and the test plan.
+Designed ways in that are not built are on the [ROADMAP](ROADMAP.md) (Neither has been run on the real Grok app).
 
 ## Everyday use
 
-Each twin is one row: the bot's name, one sentence ("Follows Grok · ready", "Almost ready · 2 things left",
-"Updating…", "3 things need you", "Not following Grok right now", "Not in Grok any more", "Can't check right
-now") and at most one button. When anything is waiting for you, exactly one button on the whole page is the
-highlighted one, and the line under the title counts every kind of open thing ("3 twins · 1 needs your
-attention · 3 to finish setting up"). Everything else is in the row's **…** menu: Check now, Details…,
-Earlier versions…, Import setup export…, Skill sync…, Move routines to Hermes… (when the bot has routines) and
-Stop twinning….
+Each twin is one row:
 
-**Open in Hermes** starts a chat with the twin. Twins is still there when you come back: if Hermes Desktop is
-pointed at the twin's own Hermes bot, the page goes back to your twins by itself.
+- the bot's name and one sentence: "Follows Grok · ready", "Almost ready · 2 things left", "Updating…", "3
+  things need you", "Not following Grok right now", "Not in Grok any more", "Can't check right now";
+- at most one button. When anything is waiting for you, exactly one button on the whole page is the
+  highlighted one, and the line under the title counts every kind of open thing ("3 twins · 1 needs your
+  attention · 3 to finish setting up");
+- everything else in the row's **…** menu: Check now, Details…, Earlier versions…, Import setup export…,
+  Skill sync…, Move routines to Hermes… (when the bot has routines) and Stop twinning….
+
+**Bot-driven twins** (made or synced by the [one prompt](ONE-PROMPT.md)) show "Kept in step by the bot · last
+synced …, PASS" in their row. They change when you say the prompt in Grok, not by themselves.
+
+**Open in Hermes** starts a chat with the twin. When you come back to the Twins page from that chat, it shows
+your twins again by itself.
 
 When something needs you, the row shows the first matter as a box that says what happened and what to do, and
 any others as one-line headers you can open:
@@ -118,9 +147,11 @@ any others as one-line headers you can open:
   to come back.
 
 When no twin can follow Grok, one banner says why, once, and the rows say "Not following Grok right now"; you
-can still open every twin in Hermes. botport was updated: **Verify botport** fixes it in one press. botport
-is gone: **Get botport again…**. The Grok desktop app is gone: nothing to press; the banner clears by itself
-when Grok is back.
+can still open every twin in Hermes.
+
+- botport was updated: **Verify botport** fixes it in one press.
+- botport is gone: **Get botport again…**.
+- The Grok desktop app is gone: nothing to press; the banner clears by itself when Grok is back.
 
 No pop-up repeats what the page is already showing. Elsewhere in Hermes a notice appears once, leaves by
 itself, and its button opens Twins.
@@ -136,22 +167,31 @@ itself, and its button opens Twins.
   yet lists none.
 - **Recent activity**: what changed lately and where. Times and kinds only, never what was said.
 
-**Move routines to Hermes** (routines are the things your bot does on a schedule): switch the routines off in
-Grok and tick them. Where the twin holds switched-off copies of them (the sample does), the last step,
-switching those copies on in Hermes, opens when they are ticked, with the same routines ticked already, so
-nothing runs twice. A twin made from the Grok app's files holds no copies, because Grok keeps a routine's
-schedule to itself: the sheet says so and lists each routine for you to make again in Hermes. Only two things
-hold this up: a choice between two versions that is still open, and a twin that cannot be checked. Afterwards the row says "Follows Grok · 2
-routines run in Hermes" and offers **Pause routines**, which switches them off in Hermes again; the menu item
-becomes **Routines in Hermes…**.
+**Move routines to Hermes** (routines are the things your bot does on a schedule). Routines in Hermes run only
+while Hermes and its scheduler run: check with `hermes cron status`.
 
-**In chats**: in a twin's Hermes bot the model gets a short, data-only note each turn ("your Grok twin", an
-internal id such as `t-1a2b3c4d5e6f7a8b` and whether it is up to date). The `twin_status` and `twin_recent`
-tools use the same label and id: by default no bot, routine, skill or connection names reach the model (its
-to-do list says "Turn off 2 routines in Grok when you move to Hermes (names on the Twins page)"). Turn on
-"Let the model see names" to let the tools name them, reduced to plain characters; the per-turn note never
-carries names. The sample twin stays out of your chats unless you name a Hermes profile for it in the
-settings, and then the note says "This is a sample twin with invented data."
+1. Switch the routines off in Grok and tick them.
+2. Where the twin holds switched-off copies of them (the sample does), the last step, switching those copies
+   on in Hermes, opens when they are ticked, with the same routines ticked already, so nothing runs twice.
+   A twin made from the Grok app's files holds no copies, because Grok keeps a routine's schedule to itself:
+   the sheet says so and lists each routine for you to make again in Hermes.
+3. Afterwards the row says "Follows Grok · 2 routines run in Hermes" and offers **Pause routines**, which
+   switches them off in Hermes again; the menu item becomes **Routines in Hermes…**.
+
+Moving routines waits for only two things: a choice between two versions that is still open, and a twin that cannot be
+checked.
+
+**In chats:**
+
+- In a twin's Hermes bot the model gets a short, data-only note each turn ("your Grok twin", an internal id
+  such as `t-1a2b3c4d5e6f7a8b` and whether it is up to date).
+- The `twin_status` and `twin_recent` tools use the same label and id: by default no bot, routine, skill or
+  connection names reach the model (its to-do list says "Turn off 2 routines in Grok when you move to Hermes
+  (names on the Twins page)").
+- Turn on "Let the model see names" to let the tools name them, reduced to plain characters; the per-turn note
+  never carries names.
+- The sample twin stays out of your chats unless you name a Hermes profile for it in the settings, and then
+  the note says "This is a sample twin with invented data."
 
 ### Example: the agent answers from `twin_status`
 
@@ -193,53 +233,64 @@ What an import does:
   whose name is already in the twin's Hermes bot is left alone (by name; the two are not compared).
 - **Connectors** become a list, "Set up on this computer", of names only. No address and no login is copied.
 
-The file's lists of memories and of facts about you are left out: Hermes never stores them. The file itself
-is not kept either: its text is read for the preview and once more for the import. What an import writes is
-the three things above and four small notes of its own: the ids of the routines it made, that the
-instructions came from an export, for each routine its name with a short digest (so its Hermes copy does not
-ask to be sent back to Grok), and an event with counts. Skills in the file are counted and left alone (skills
-travel by skill sync, or you copy them yourself). Nothing is sent to Grok. The file is the same
+What it leaves out:
+
+- The file's lists of memories and of facts about you are left out: this route never stores them.
+- The file itself is not kept either: its text is read for the preview and once more for the import.
+- Skills in the file are counted and left alone (skills travel by skill sync, or you copy them yourself).
+- Nothing is sent to Grok.
+
+Besides the three things above, an import writes four small notes of its own: the ids of the routines it
+made, that the instructions came from an export, for each routine its name with a short digest (so its
+Hermes copy does not ask to be sent back to Grok), and an event with counts. The file is the same
 `grok-bot-export` document that botport's `--from-export` and Hermes' own Grok importer read, so an export you
 already have works too.
 
-What this cannot do for you: the bot wrote the file. Whatever it put into its instructions, a routine or a
-connector's name is taken as that, also when it is something the bot remembers about you; Hermes can only
-leave out the two lists that are named as memories. The password-and-key check is a check, not a guarantee:
-it misses short passwords and addresses with a login in them. So read the text before you import. While a
-routine is being added, its name and prompt are arguments of a Hermes command for a few seconds, which other
-users of this computer could see. **Stop twinning** later forgets the list of connectors; the imported
-instructions and the switched-off routines stay in the Hermes bot, which is yours.
+What this cannot do for you:
+
+- The bot wrote the file. Whatever it put into its instructions, a routine or a connector's name is taken as
+  that, also when it is something the bot remembers about you; Hermes can only leave out the two lists that
+  are named as memories.
+- The password-and-key check is a check, not a guarantee: it misses short passwords and addresses with a
+  login in them. So read the text before you import.
+- While a routine is being added, its name and prompt are arguments of a Hermes command for a few seconds,
+  which other users of this computer could see.
+- **Stop twinning** later forgets the list of connectors; the imported instructions and the switched-off
+  routines stay in the Hermes bot, which is yours.
 
 ## What syncs, and Hermes → Grok
 
-Per twin, **What syncs** in its Details (and
-`hermes twin syncs TWIN`) shows each item with the way it goes, when it last synced, and what this version cannot
-do yet; a row that needs the Mirror or is not in this version yet says so and cannot be switched on.
-Hermes → Grok (name, description, instructions and routines made in Grok by the Mirror bot) is off for every twin
-until you allow that twin (`hermes twin to-grok TWIN allow`, or the twin's **Hermes → Grok…** on the Twins page),
-and nothing is sent until you look at the preview and apply exactly that preview. The Auto-Review rule it shows for
-Grok names the bot by its id and covers only edits of that bot's own name, description, instructions and existing
-routines, never a new routine; stopping (`hermes twin to-grok TWIN disallow`) names that exact rule for you to delete
-in Grok.
+- **What syncs**, per twin in its Details (and `hermes twin syncs TWIN`), shows each item with the way it goes,
+  when it last synced, and what this version cannot do yet; a row that needs the sync bot or is not in this
+  version yet says so and cannot be switched on.
+- **Hermes → Grok** (name, description, instructions and routines made in Grok by the sync bot) is off for every
+  twin until you allow that twin (`hermes twin to-grok TWIN allow`, or the twin's **Changes to Grok…** button on the
+  Twins page), and nothing is sent until you look at the preview and apply exactly that preview.
+- The Auto-Review rule it shows for Grok names the bot by its id and covers only edits of that bot's own name,
+  description, instructions and existing routines, never a new routine; stopping
+  (`hermes twin to-grok TWIN disallow`) names that exact rule for you to delete in Grok.
 
 Why so much is yours to bring over: from the Grok desktop app's local files, botport opens only the bot list
 (id, name, description) and the selected bots' transcript files, read only for routine-change events. Those
 files hold no instructions, skills, schedules or connections, and botport takes nothing else out of them, so
-the plugin does not pretend otherwise.
+the plugin does not pretend otherwise. The [one prompt](ONE-PROMPT.md) is the exception: there the bot itself
+sends its instructions, skills, memory and routines.
 
 ## Skill sync (optional)
 
-Skills can travel between Grok and Hermes through a small sync bot in your own
-Grok account and a shared folder that sync bot can reach (for example one that Google Drive keeps on both
-sides). **Every run of the sync bot's routine spends Grok credit, also when nothing changed**: once an hour is plenty.
+Skills can travel between Grok and Hermes through a small sync bot in your own Grok account and a shared folder
+that sync bot can reach (for example one that Google Drive keeps on both sides).
+
+**Every run of the sync bot's routine spends Grok credit, also when nothing changed**: once an hour is plenty.
+
 Hermes never touches the Grok app; the **Set up skill sync** sheet does everything else and shows one step at a
 time, each with its buttons:
 
 1. **Choose a shared folder.**
 2. **Give the sync bot its instructions.** You make a new bot in Grok; **Copy instructions** has the text.
 3. **Send it the set-up folder.** Hermes made one folder with all the sync bot needs: its guide, a small
-   script, botport for its box with checksums, and the twin's pass as a file. You attach every file in it to
-   one message (**Copy the message** has the words) and never paste what is in a file. botport for the box
+   script, botport for its cloud computer with checksums, and the twin's pass as a file. You attach every file in it to
+   one message (**Copy the message** has the words) and never paste what is in a file. botport for the sync bot's computer
    is a second download from the same release page; the sheet has the link, finds the file in your Downloads
    folder and checks it against the plugin's list of release files before it goes into the folder.
 4. **Give it a routine, then check.** **Copy routine prompt** has the text; **Check** shows when the sync bot
@@ -260,9 +311,13 @@ twin, and the pass is replaced, so the sync bot must be set up again to turn it 
 ## A twin's whole conversations (archive and search)
 
 Off until you switch it on for a twin. Then the plugin keeps that twin's conversations on this computer, both sides:
-the Grok bot's (from a Grok export with conversations you hand over, or that the Mirror reads once it is set up) and
-the twin's own Hermes chats. They stay here, encrypted, and the twin can search them with its
-`twin_transcripts_search` tool ("what did we decide about the demo last week?"). Another twin cannot.
+
+- the Grok bot's (from a Grok export with conversations you hand over, or that the sync bot reads once it is
+  set up);
+- the twin's own Hermes chats.
+
+They stay here, encrypted, and the twin can search them with its `twin_transcripts_search` tool ("what did we
+decide about the demo last week?"). Another twin cannot.
 
 ```
 hermes twin transcripts on "Test Scout"                  # start keeping; `off` stops (what was kept stays)
@@ -280,6 +335,12 @@ read the key too. Details: [DISCLOSURE.md](DISCLOSURE.md).
 
 ## How fast is it?
 
+In short: a new name or description reaches the twin in about 2 to 10 seconds while Hermes is open; everything
+else at the next check (every 60 s); nothing while Hermes is closed.
+
+<details>
+<summary>The measurements</summary>
+
 - **Name and description, Grok → Hermes: seconds.** While Hermes is running (a chat or the Twins page was opened
   since it started), the plugin is woken the moment the Grok app saves its bot list, and copies the change.
   From the saved file to the updated twin took about 0.6 s in our test runs with the real botport (slowest:
@@ -292,15 +353,18 @@ read the key too. Details: [DISCLOSURE.md](DISCLOSURE.md).
   check, every 60 s by default, or at once with **Check now** / `hermes twin check`.
 - **Your other computers:** a linked computer keeps one request open with the computer that shares; it is
   answered the moment a twin's name or description changes there, so the copy follows 0.3 to 1.4 s later
-  (measured between four computers over Tailscale; the table under "What you get, and how fast" has the
+  (measured between four computers over Tailscale; [What you get, and how fast](SHARING.md#what-you-get-and-how-fast) has the
   rest). An idle link costs one small request a minute.
 - **Hermes closed:** nothing runs. The twin catches up at the first check after Hermes starts.
-- **Instructions never copy from Grok by themselves.** You paste or import them once; between your own computers
-  they then follow as a setting.
+- **Instructions:** you paste or import them once. They then follow Grok by themselves only with skill sync set
+  up (every 15 minutes; `hermes twin instructions` shows where they stand), or at each one prompt for a
+  bot-driven twin. Between your own computers they follow as a setting.
+
+</details>
 
 ## Settings
 
-Desktop, Settings, Plugins, Grok Bot Twin (or `plugins.entries.grok-bot-twin.settings` in `config.yaml`):
+**Capabilities → Plugins → Grok Bot Twin** in Hermes Desktop (or `plugins.entries.grok-bot-twin.settings` in `config.yaml`):
 
 | Setting | Key | Default | What it does |
 |---|---|---|---|
@@ -309,7 +373,7 @@ Desktop, Settings, Plugins, Grok Bot Twin (or `plugins.entries.grok-bot-twin.set
 | Bots to list | `bots` | `[]` | only list Grok bots whose names match (for example `Acme*`); nothing is twinned until you pick it |
 | Let chats know this is a twin | `inject_context` | `true` | the short per-turn note in chats with a twin's Hermes bot |
 | Let the model see names | `share_names_with_model` | `false` | let the `twin_status` / `twin_recent` tool results name the bot, its routines, skills and connections (plain characters only); off, they say "your Grok twin" and an internal id. Never affects the per-turn note |
-| Allow an activity digest to Grok | `digest_to_grok` | `false` | allows a per-twin activity digest (counts and times) that goes along when you send skill changes to Grok; each twin still starts off |
+| Allow an activity digest to Grok | `digest_to_grok` | `false` | allows a per-twin activity digest (counts and times) that goes along when you send skill changes to Grok; each twin still starts off. In this version only the sample shows it; real twins do not send it yet |
 | Include short titles in the digest | `digest_titles` | `false` | separate opt-in for short, masked titles in that digest |
 | Where botport is (advanced) | `botport_path` | `""` | full path of botport, if you keep it somewhere special |
 | botport release to accept (advanced) | `botport_release_tag` | `""` (uses v0.2.1) | the release botport is verified against; empty means the release this plugin version expects, v0.2.1 |
@@ -324,7 +388,8 @@ Desktop, Settings, Plugins, Grok Bot Twin (or `plugins.entries.grok-bot-twin.set
 
 Three ways out, each with one confirmation that says what stays and what is removed.
 
-**Stop twinning one bot** (the row's **…** menu, or `hermes twin remove`):
+**Stop twinning one bot** (the row's **…** menu, or `hermes twin stop "Acme Support"`; add `--dry-run` to see
+what it would do first):
 
 - Stays: your bot in Grok, unchanged. Its Hermes bot and all its chats; you find it among your profiles in
   Hermes, and the confirmation that follows has an **Open in Hermes** button. Routines you switched on in
@@ -332,6 +397,8 @@ Three ways out, each with one confirmation that says what stays and what is remo
 - Removed: following Grok, and the earlier versions kept for undo; on the Twins page also what the page
   remembered about it (boxes you ticked, the skill sync guide).
 - If skill sync was on for it: in Grok, tell the sync bot to forget this bot; Hermes cannot reach it.
+- In the terminal, the twin's full transcripts and What syncs choices stay unless you add `--remove-data`; the
+  Twins page removes them.
 - You can twin it again later.
 
 **End the sample** (**End sample** on its banner or in its **…** menu, or `hermes twin demo remove`): the
@@ -363,14 +430,75 @@ sample is removed. Nothing of yours changes.
   `hermes twin background off`) deletes its one file; after removing the plugin alone it notices that the
   plugin is gone and stays stopped, and its file is left for you to delete.
 
+## Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| Anything odd | `hermes twin doctor` checks the setup and says what to fix; `hermes twin setup --check` shows what is left. |
+| `hermes: command not found` | Hermes is not on your path: install it, or open a new terminal. |
+| ``hermes: 'twin' is not a `hermes` command.`` | The plugin is off: `hermes plugins enable grok-bot-twin`. Under `plugins.isolation: host`, see [Known limitations](#known-limitations). |
+| `hermes plugins list` shows Grok Bot Twin 0.2.1 (the plugin, not botport) | You have the catalog version: run the install line in the [README](../README.md#install) with `--force` added. |
+| botport row says the file is wrong | Press **Download botport** again; Hermes checks every download and runs only the real release. |
+| The Grok app row does not tick | Install the Grok desktop app on this Mac and sign in. Bots that exist only on the web or a phone cannot be twinned. |
+| A twin says "Changed in both places" | Open it on the Twins page and choose a version (`hermes twin conflicts`, then `hermes twin resolve TWIN ITEM --keep hermes`). |
+| A one-prompt run says FAIL | See [If it says FAIL](ONE-PROMPT.md#if-it-says-fail). |
+| The install line fails, or `--ref` is empty | The `git ls-remote` part needs git and the network: check `git --version` and that github.com is reachable, then run the line again. |
+| A linked computer is behind | See [SHARING.md: If something goes wrong](SHARING.md#if-something-goes-wrong). |
+| No **Twins** in the Hermes Desktop sidebar | The plugin's second switch (its Twins page) is off: turn on both under **Capabilities → Plugins**, then restart Hermes Desktop. |
+| Setup does not find botport in Downloads | It looks for the exact release file name; a renamed copy such as `botport-…(1).tar.gz` is not taken. Press **Choose the file…**, or `hermes twin setup --file PATH`. |
+| The Grok app shows no approval and the bot cannot run commands | **Settings → Bot → Execution on Local Computer** is on **Never allow**, or the Grok app is too old to have it: update the Grok app. |
+| A twin does not answer in Hermes | It has no model: choose one on the twin's row (or `hermes twin finish TWIN --model MODEL`). |
+| Nothing updates | Hermes is closed: nothing runs then on the Mac. Open Hermes. (A linked computer can follow while closed: `hermes twin background on`, [SHARING.md](SHARING.md#in-the-terminal).) |
+
+## Ready or experimental
+
+**Ready**: tested on every change, needs nothing unbuilt. **Experimental**: tested too, but newer; the last
+column says why. Watch its first runs.
+
+| Feature | State | Why, and more |
+|---|---|---|
+| Twins page, sample, connecting your Grok bots, name and description in seconds | ready | [Guide](#connect-your-grok-bots) |
+| Instructions by paste or setup export; changed in both places; undo | ready | [Everyday use](#everyday-use) |
+| Move routines to Hermes; uninstall | ready | [Everyday use](#everyday-use), [Uninstall](#uninstall) |
+| Twins on your other computers (the Mac shares; Mac, Linux, Windows link) | ready | [Sharing](SHARING.md) |
+| One prompt: twin, sync, move, come back | experimental | new. [One prompt](ONE-PROMPT.md) |
+| Keys kept by reference in your OS secret store | experimental | new. [Secrets](SECRETS.md) |
+| Git history per twin (bot-driven twins only), pushed to your own Forgejo or other git server | experimental | new; off by default. [Git history](ONE-PROMPT.md#optional-git-history) |
+| Skills, routines and memory between your computers; asking a twin on another computer | experimental | off by default. [Sharing](SHARING.md#skills-between-your-computers) |
+| Skill sync and Hermes → Grok through a sync bot in your Grok account | experimental | off; tested only against a pretend Grok. [Skill sync](#skill-sync-optional) |
+| A twin's whole conversations (archive and search) | experimental | off by default. [Archive](#a-twins-whole-conversations-archive-and-search) |
+
+## Pictures
+
+| First visit | Connect, once |
+|---|---|
+| ![Welcome: two sentences, one button](screenshots/welcome.png) | ![Connect your Grok bots: two rows that tick themselves](screenshots/connect-sheet.png) |
+| Two short sentences, one button, and a sample to look at first. | Two rows that tick themselves. Nothing runs until the download is verified. |
+| ![Summary before a new twin is made](screenshots/add-twins-preview.png) | ![Finish setting up: paste the instructions, choose a model](screenshots/finish-setting-up.png) |
+| Before anything is written: what copies now, and what comes later. | One twin at a time: paste its instructions, choose its model. |
+| ![Twins page with the sample twin and three twins](screenshots/twins-page.png) | ![Both versions side by side](screenshots/conflict-card.png) |
+| One line per twin: how it is doing, and one button only when something needs you. | Changed in both places? See both versions and choose one; each choice says what happens. |
+| ![Move routines to Hermes](screenshots/ready-to-switch.png) | ![The Mac that shares, with three linked computers in sync](screenshots/other-computers.png) |
+| A twin's routines: switch each one off in Grok, then on in Hermes, so nothing runs twice. | Sharing switched on: your other computers, each in sync, and the skills they share. |
+| ![A request from another computer waits for approval](screenshots/ask-another-computer.png) | ![Three choices for a step that needs approval](screenshots/approval-choices.png) |
+| On a linked computer: a request from the Mac shows the step first and waits for **Do it once** or **Don't**. | A step that needs approval waits on this computer, is also shown on the computer that asked, or is refused at once. |
+| ![Settings, skills and routines on the linked computers](screenshots/what-follows.png) | ![A twin's memory on the linked computers you choose](screenshots/twin-memory.png) |
+| Settings, skills and routines follow to your linked computers; each routine runs on one computer only. | A twin's memory, kept the same on the linked computers you choose, with earlier versions and **Forget on this computer**. |
+| ![Set up skill sync, step 1 of 4](screenshots/skill-sync-sheet.png) | ![Import a bot's setup export](screenshots/setup-export.png) |
+| Optional skill sync in four steps; it says first that its sync bot spends Grok credit. | Ask the bot in Grok for its setup export, then drop the answer here. |
+| ![Several new twins at once: tick them, one model for all, then Do all ticked now](screenshots/finish-twins.png) | |
+| Several new twins at once: one model for all, and each one's setup export taken in as it arrives. | |
+
+The pictures are taken in a throwaway Hermes home with invented bots only.
+
 ## Known limitations
 
 - Under `plugins.isolation: host`, Hermes skips plugin CLI commands, so `hermes twin` is unavailable there; `/twin`
   and the Twins page still work.
-- Skill sync's box half (the script the sync bot runs) is tested here against botport in a pretend box, with
+- Skill sync's Grok half (the script the sync bot runs) is tested here against botport in a pretend copy of its computer, with
   invented bots; the plugin cannot test it inside your Grok account. The first run there is yours to watch:
   **Check** shows whether the sync bot ran. Adding a later twin without a chat, or sending a replaced pass, needs
-  `python3` in the sync bot's box (to check the signed list); without it the script says so in its heartbeat,
+  `python3` on the sync bot's cloud computer (to check the signed list); without it the script says so in its heartbeat,
   and the sheet offers **Send the set-up folder again…** (`hermes twin skill-sync --again`), which does it by
   chat.
 - botport has its own, stricter check for passwords and keys. Before it changes anything in a twin's Hermes bot

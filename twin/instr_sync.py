@@ -3,7 +3,7 @@
 A one-time "Import setup export" brings a bot's instructions over once. This keeps them in step afterwards: every
 EVERY_S seconds (the plugin's own background check, and "Check now") the newest setup export of each twin is read
 again, from where the exports arrive:
-- the shared folder of skill sync (the Mirror): <shared folder>/exports/grok-bot-export-<bot id>.json, the file the
+- the shared folder of skill sync (the sync bot): <shared folder>/exports/grok-bot-export-<bot id>.json, the file the
   sync bot copies up from the Grok box unchanged (twin/mirror_exports.py). Whatever keeps that file fresh in the box
   (the bot's own Grok routine, or the sync bot under the owner's pre-approval) is the transport; this module only
   reads files;
@@ -164,7 +164,7 @@ def keep_fresh_request() -> str:
 
 
 def mirror_step(bot_names: list) -> str:
-    """One step for the sync bot's own routine (the Mirror work found it can message the owner's other bots, which then
+    """One step for the sync bot's own routine (the sync bot work found it can message the owner's other bots, which then
     act on themselves): ask each named bot to write its setup export again. Bot names are the owner's choice of
     bots; each is one plain line, at most 100 characters, and at most 50 of them, in a fenced list that is said to
     hold names only (a name is never read as an instruction)."""

@@ -83,7 +83,7 @@ def test_conflict_and_resolve(svc):
     assert "warm" in g["skills"]["greet-visitors"]["text"]  # the Grok side is not touched
     p = _pair(svc)
     assert p["state"] == "changes_waiting" and p["pending"]["to_grok"] == 1
-    # with the Mirror bot connected the skill travels through it, not the by-hand list; without, by hand
+    # with the sync bot connected the skill travels through it, not the by-hand list; without, by hand
     assert not any(b["side"] == "grok" for b in p["by_hand"])
     svc.mirror("acme-support", None, True)
     assert any(b["side"] == "grok" and b["item"] == "skill:greet-visitors" for b in _pair(svc)["by_hand"])

@@ -58,7 +58,7 @@ def test_F4_cron_runs_with_no_lock_held(tmp_path, monkeypatch):
     x.apply(PID, p["change_id"])
     assert x.move_runner(PID, "morning-digest", "grok")["runner"] == "grok"
     assert x.move_runner(PID, "morning-digest", "hermes")["runner"] == "hermes"
-    writer.delay = True  # the Mirror answers later: the Hermes step runs from finish_moves (the timer's path)
+    writer.delay = True  # the sync bot answers later: the Hermes step runs from finish_moves (the timer's path)
     assert x.move_runner(PID, "morning-digest", "grok")["state"] == "sent"
     writer.delay = False
     assert x.finish_moves()[0]["runner"] == "grok"

@@ -131,7 +131,8 @@ def test_real_botport_writes_are_all_in_the_snapshot(rig, monkeypatch):
 
 def test_mirrored_profile_is_refused_and_left_as_it_was(rig):
     """A profile the owner's own `botport mirror` keeps (no twin pair owns it, so it cannot be made bot-driven):
-    botport 0.2.1 refuses spec-driven sync on it; every path FAILs and nothing changes."""
+    botport 0.2.1 refuses spec-driven sync on it; the one-prompt calls refuse it before botport runs (EXT-3: never
+    converted by a call) and `hermes twin sync` gets botport's refusal; every path FAILs and nothing changes."""
     svc, prof, exe, tmp = rig["svc"], rig["prof"], rig["exe"], rig["tmp"]
     (prof / "SOUL.md").write_text("Mirrored soul.\n")
     env = {"PATH": "/usr/bin:/bin", "HOME": os.environ["HOME"], "NO_COLOR": "1",
@@ -146,11 +147,11 @@ def test_mirrored_profile_is_refused_and_left_as_it_was(rig):
     assert cp.returncode in (0, 1, 2)
     before = _tree(prof)
     res = _from_grok(svc)
-    assert not res["ok"] and "mirrored profile" in res["line"], res
+    assert not res["ok"] and "follows its Grok bot through botport" in res["line"], res
     assert _tree(prof) == before
     with pytest.raises(E.EngineError) as exc:
         sync_both.sync_bot(svc, PID, {"instructions": INSTRUCTIONS, "memory": MEMORY})
     assert "mirrored profile" in exc.value.message
     back = one_prompt.twin_back_to_grok(svc, ALLOWED, NAME, instructions=INSTRUCTIONS, memory=MEMORY)
-    assert not back["ok"] and "mirrored profile" in back["line"], back  # (refused before any snapshot: nothing to restore)
+    assert not back["ok"] and "hermes twin bot-driven" in back["line"], back  # (refused before any snapshot)
     assert _tree(prof) == before

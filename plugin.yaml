@@ -1,11 +1,10 @@
 name: grok-bot-twin
 label: Grok Bot Twin
-version: "0.4.0"
+version: "0.4.1"
 description: >-
-  Gives each bot from the Grok desktop app a twin in Hermes: a Hermes bot that follows its name and description.
-  It runs botport (your own verified download), reads the Grok app's bot list, writes mainly in your Hermes
-  folder and, only if you share twins, talks to your other computers. Unofficial; not affiliated with xAI.
-  Disclosure: docs/DISCLOSURE.md
+  Gives each bot from the Grok desktop app a twin in Hermes that follows it. Experimental: one prompt in Grok
+  twins the bot, keeps it in step, moves it to Hermes and back. It runs botport (your own verified download) and writes mainly in
+  your Hermes folder. Unofficial; not affiliated with xAI. Disclosure: docs/DISCLOSURE.md
 author: Josh Hudson
 license: MIT
 homepage: https://github.com/hudsonwa/twin
@@ -28,10 +27,10 @@ emits: [synced, secrets_withheld, conflict, changed, created, removed, resolved,
         skipped, sent_to_grok, switched, switch_undone, mirror, helper, sync_error, demo, fleet, tasks, setup_export, setup]
 external_dependencies:
   - name: botport
-    install: "Open the Twins page in Hermes Desktop and press Connect my Grok bots. In the terminal: download release v0.2.1 for your computer from https://github.com/hudsonwa/botport/releases, then run hermes twin setup --file with the downloaded file. Hermes verifies botport before it is ever run."
+    install: "Open the Twins page in Hermes Desktop and press Connect my Grok bots. In the terminal: on the Mac with the Grok app, download release v0.2.1 from https://github.com/hudsonwa/botport/releases, then run hermes twin setup --file with the downloaded file. Hermes verifies botport before it is ever run."
     check: "botport version --json"
     optional: true
-    note: "Without botport only the built-in sample twin works (See a sample first on the Twins page, or hermes twin demo)."
+    note: "Needed for your real bots. Without botport only the built-in sample twin works (See a sample first on the Twins page, or hermes twin demo)."
 config_schema:
   sync_interval_seconds:
     type: int

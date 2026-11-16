@@ -196,9 +196,9 @@ function fits(value, type, path) {
 // ── 3. fixtures (invented) ──────────────────────────────────────────────────
 
 const AT = '2000-01-01T09:00:00Z'
-const RULE = 'Allow the Mirror to edit the bot "Acme Helper": name, description, instructions, routines'
+const RULE = 'Allow the sync bot to edit the bot "Acme Helper": name, description, instructions, routines'
 const WHERE = 'Grok: Settings > Permissions > Auto-Review > Allow without Asking > Add rule'
-const STEPS = 'Step 1. Open the Mirror\'s chat.\nStep 2. Paste this whole text and send it.'
+const STEPS = 'Step 1. Open the sync bot\'s chat.\nStep 2. Paste this whole text and send it.'
 const XSS = '<img src=x onerror=alert(1)>'
 const LONG = Array.from({ length: 100 }, (_, i) => `Line ${String(i).padStart(3, '0')}: be kind to every Acme customer, and answer in full.`).join('\n')
 const LONG_AFTER = `${LONG}\nLine 100: the new last line.`
@@ -304,10 +304,10 @@ ok(button('Allow')?.disabled === false && (markup.match(/checked=""/g) ?? []).le
 
 html = render(info({ permission: 'not_set_up', preview: preview({ permission: 'not_set_up', blocked: 'Grok needs the rule above first.' }) }), { initialSteps: true })
 ok(html.includes('Grok needs this once') && html.includes(RULE) && html.includes(`Where: ${WHERE}`) && H.copies.some(c => c.text === RULE), 'not set up: the exact rule, where, and Copy')
-ok(html.includes("Step 1. Open the Mirror's chat.") && H.copies.some(c => c.text === STEPS && c.label === 'Copy the steps') && markup.includes('Step 1. Open the Mirror&#x27;s chat.\nStep 2.'), 'the Mirror steps, whole, with their own Copy')
+ok(html.includes("Step 1. Open the sync bot's chat.") && H.copies.some(c => c.text === STEPS && c.label === 'Copy the steps') && markup.includes('Step 1. Open the sync bot&#x27;s chat.\nStep 2.'), 'the sync bot steps, whole, with their own Copy')
 ok(button('Make these changes in Grok')?.disabled === true && html.includes('Grok needs the rule above first.') && markup.includes('aria-describedby="gbt-tg-blocked"'), 'blocked: Apply is there but waits, with the reason beside it')
 render(info({ permission: 'not_set_up' }))
-ok(button("Steps for the Mirror's chat")?.expanded === false && !markup.includes('Step 1.'), 'the steps are folded at first')
+ok(button("Steps for the sync bot's chat")?.expanded === false && !markup.includes('Step 1.'), 'the steps are folded at first')
 html = render(info({ permission: 'no_permission' }))
 ok(html.includes('Grok did not allow the last change.'), 'no permission: said so')
 ok(!render(info()).includes('Grok needs this once'), 'ready: no set-up')
@@ -353,9 +353,9 @@ ok(html.includes('Grok has not given permission for this yet.') && !html.include
   // a change already waiting
   quiet(async path => (path.endsWith('/apply') ? refusal('pending') : info({ preview: preview({ pending: CID }) })))
   await acts.apply(CID2)
-  ok(state.said.startsWith("The last change is still waiting for the Mirror's next run.") && !state.problem, `pending: said in words (${state.said})`)
+  ok(state.said.startsWith("The last change is still waiting for the sync bot's next run.") && !state.problem, `pending: said in words (${state.said})`)
   html = render(state.info)
-  ok(html.includes("Waiting for the Mirror's next run.") && button('Stop waiting')?.disabled === false && button('Make these changes in Grok')?.disabled === true, 'pending: waiting, Stop waiting, Apply waits')
+  ok(html.includes("Waiting for the sync bot's next run.") && button('Stop waiting')?.disabled === false && button('Make these changes in Grok')?.disabled === true, 'pending: waiting, Stop waiting, Apply waits')
 
   // while it waits, a quiet look again: the sentence said stays
   state.patches = []
@@ -371,10 +371,10 @@ ok(html.includes('Grok has not given permission for this yet.') && !html.include
   await acts.giveUp()
   ok(H.restCalls[0].path === `/pairs/${ACME}/to-grok/give-up` && JSON.stringify(H.restCalls[0].opts.body) === '{}' && state.said === 'Stopped waiting. Nothing more is sent for that change.', 'Stop waiting posts give-up and says the answer')
 
-  // a sent change: at the Mirror's next run
+  // a sent change: at the sync bot's next run
   quiet(async path => (path.endsWith('/apply') ? result({ state: 'sent', sentence: '' , message: '' }) : info()))
   await acts.apply(CID)
-  ok(state.said === "Sent. It is made at the Mirror's next run.", `sent: said plainly (${state.said})`)
+  ok(state.said === "Sent. It is made at the sync bot's next run.", `sent: said plainly (${state.said})`)
 
   // failed: a problem in words
   quiet(async path => (path.endsWith('/apply') ? result({ state: 'failed', sentence: 'Grok did not take the change.' }) : info()))

@@ -437,7 +437,7 @@ def test_no_routines_in_hermes_never_empties_grok(w):
     assert len(w.grok()["routines"]) == 1
 
 
-# ---- the Mirror answers later (delay) --------------------------------------------------------------------------------
+# ---- the sync bot answers later (delay) --------------------------------------------------------------------------------
 
 def test_sent_then_poll_finishes(tmp_path):
     world = World(tmp_path, writer=h2g.FakeGrokWriter(path=tmp_path / "fake.json", delay=True))
@@ -466,7 +466,7 @@ def test_delayed_move_completes_on_finish_moves(tmp_path):
     assert done and done[0]["runner"] == "grok"
     assert world.x.runner(PID, "morning-digest") == "grok"
     assert world.grok()["routines"][0]["enabled"] is True
-    # and back: Grok pauses (on the Mirror's next run) before Hermes resumes
+    # and back: Grok pauses (on the sync bot's next run) before Hermes resumes
     world.calls.clear()
     out = world.x.move_runner(PID, "morning-digest", "hermes")
     assert out["state"] == "sent" and ("hermes.resume", "morning-digest") not in world.calls

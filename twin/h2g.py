@@ -10,7 +10,7 @@
 The rules, in the order they are checked:
 
 1. Per-bot allowlist. The owner names each twin, and for each twin the items (name, description, instructions,
-   routines) the Mirror may change in Grok. Nothing else is ever sent. Off by default; `allow()` / `disallow()`.
+   routines) the sync bot may change in Grok. Nothing else is ever sent. Off by default; `allow()` / `disallow()`.
 2. The owner's direction (the "What syncs" panel): an item moves Hermes -> Grok only while it is set to
    "Hermes -> Grok" or "Both ways". (Without the panel module, the allowlist alone decides.)
 3. Change detection: the Hermes side now (SOUL.md, the twin's cron jobs) against the BASE, which is what Grok held
@@ -66,15 +66,15 @@ SCHEDULE_RE = re.compile(r"^%s(?: %s){4,6}\Z" % (_CRON_WORD, _CRON_WORD), re.I)
 _CTRL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]")
 
 # words for the owner (the page and the terminal show these unchanged)
-NOT_ALLOWED = "The Mirror may not change this bot in Grok: allow it first (hermes twin to-grok allow)."
-ITEM_NOT_ALLOWED = "The Mirror may not change the {item} of this bot in Grok."
+NOT_ALLOWED = "The sync bot may not change this bot in Grok: allow it first (hermes twin to-grok allow)."
+ITEM_NOT_ALLOWED = "The sync bot may not change the {item} of this bot in Grok."
 NOT_WANTED = "The {item} is set to stay as it is in Grok (What syncs: choose Hermes → Grok or Both ways)."
 CONFLICT = ("The {item} changed in Grok AND in Hermes since they were last the same. Nothing is sent until you "
             "choose which one to keep.")
 HELD_SECRET = "The {item} holds something that looks like a password or key, so Hermes does not send it to Grok."
 HELD_ORDER = ("The {item} reads like an instruction to bots, and in Grok every bot sees the other bots' names and "
               "descriptions, so Hermes does not send it. Reword it as a plain description.")
-# a name or description that speaks to bots: Grok shows it to every other bot of the account (the Mirror
+# a name or description that speaks to bots: Grok shows it to every other bot of the account (the sync bot
 # would otherwise put such a sentence in front of all of them), so it is held, never sent. Instructions and routine
 # prompts are the bot's own orders and are not judged here.
 _TO_BOTS = re.compile(
@@ -98,8 +98,8 @@ REPLACES_ALL = ("Hermes cannot read the {item} in Grok, so this diff is against 
 SRC_LABEL = {"grok": "Grok now", "applied": "Last sent to Grok", "hermes": "Hermes when you allowed it"}
 UNKNOWN_BEFORE = ("Hermes never knew what Grok held before this change (it cannot read it), so it cannot put it "
                   "back. Change it in Grok itself.")
-GAVE_UP = "No answer from the Mirror: Hermes stopped waiting. If the Mirror makes it later, the next check shows it."
-PENDING = ("The Mirror has not made the last change yet (it does on its next run). Nothing more is sent until it "
+GAVE_UP = "No answer from the sync bot: Hermes stopped waiting. If the sync bot makes it later, the next check shows it."
+PENDING = ("The sync bot has not made the last change yet (it does on its next run). Nothing more is sent until it "
            "answers.")
 EMPTY = "The {item} is empty in Hermes. Hermes never empties it in Grok: change it in Grok itself if you want that."
 BOTH_ON = ("The routine \"{name}\" is set to run in Grok, but its Hermes copy is switched on: it would run twice. "
@@ -113,13 +113,13 @@ RUNS_ELSEWHERE = ("This routine runs on another of your computers (Routines), so
                   "well: bring it back to this computer first.")
 MOVED = "This twin's routines changed while Hermes was being switched: nothing was switched on. Choose again."
 DISALLOWED = "You stopped Hermes to Grok for this twin, so this change is not made."
-NOT_PUBLISHED = ("Hermes could not update the list in skill sync's shared folder that tells the Mirror which bots it "
+NOT_PUBLISHED = ("Hermes could not update the list in skill sync's shared folder that tells the sync bot which bots it "
                  "may change. Open the shared folder, then stop it again; until then, also delete the rule in Grok.")
 REVOKE_WHERE = "Grok: Settings > Permissions > Auto-Review > Allow without Asking"
-REVOKE = ("The Mirror may no longer change this bot from Hermes. In Grok, delete exactly this rule (it is the one you "
+REVOKE = ("The sync bot may no longer change this bot from Hermes. In Grok, delete exactly this rule (it is the one you "
           "added when you allowed it).")
 GRANT_WHERE = "Grok: Settings > Permissions > Auto-Review > Allow without Asking > Add rule"
-STOP_GOES = ("Hermes to Grok: the Mirror may no longer change this bot. In Grok, also delete the rule you added "
+STOP_GOES = ("Hermes to Grok: the sync bot may no longer change this bot. In Grok, also delete the rule you added "
              "for it (" + REVOKE_WHERE + ").")
 NO_ROUTINES = ("Hermes has no routines for this twin now, so Grok's are left as they are (Hermes never removes "
                "every routine at once).")
@@ -137,12 +137,12 @@ class H2GError(Exception):
 # ---- the writer: the only thing that touches Grok ------------------------------------------------------------------
 
 class GrokWriter(Protocol):
-    """What the Mirror (or a fake of it) does in Grok. Every method takes the Grok bot's id (`bot`).
+    """What the sync bot (or a fake of it) does in Grok. Every method takes the Grok bot's id (`bot`).
 
     read(bot) -> {"name", "description", "instructions", "routines": [routine]} as Grok holds it now, or None when
         the writer cannot read it back (then this module goes by its base alone, and says so).
     apply(bot, ops, change_id) -> receipt {"state": "done" | "sent" | "failed", "message": str, "at": iso,
-        "done": [index of op done], "failed": [index]}. "sent": the request is on its way (the Mirror makes it on its
+        "done": [index of op done], "failed": [index]}. "sent": the request is on its way (the sync bot makes it on its
         next run); `poll(change_id, n_ops)` later answers the final receipt; `forget(change_id)` (optional) takes an
         answered or abandoned request away so it can never be made again.
     permission(bot) -> "ready" | "not_set_up" | "no_permission" (the owner's pre-approval as the writer knows it).
@@ -170,7 +170,7 @@ class GrokWriter(Protocol):
 class FakeGrokWriter:
     """A pretend Grok account: {"bots": {bot_id: {"name", "description", "instructions", "routines": {key: r}}},
     "allowed": [bot_id], "requests": [...]} in a JSON file (or in memory when `path` is None). `delay=True` makes
-    apply answer "sent" and finish on the next poll, like the Mirror's routine does. `fail_ops` makes the op kinds
+    apply answer "sent" and finish on the next poll, like the sync bot's routine does. `fail_ops` makes the op kinds
     it names fail (to test half-done handovers)."""
 
     kind = "fake"
@@ -257,12 +257,12 @@ class FakeGrokWriter:
         data = self._load()
         if self.permission(bot) != "ready":
             return {"state": "failed", "done": [], "failed": list(range(len(ops))), "at": now_iso(),
-                    "message": "The Mirror has no permission to change this bot."}
+                    "message": "The sync bot has no permission to change this bot."}
         if self.delay:
             data["requests"][change_id] = {"bot": bot, "ops": ops}
             self._save(data)
             return {"state": "sent", "done": [], "failed": [], "at": now_iso(),
-                    "message": "The Mirror makes this change on its next run."}
+                    "message": "The sync bot makes this change on its next run."}
         rec = self._do(data, bot, ops)
         self._save(data)
         return rec
@@ -324,7 +324,7 @@ def clean_side(side: Any) -> dict:
 
 
 def read_grok(writer: Any, bot: str) -> Optional[dict]:
-    """The writer's read-back, cleaned, with `known`: the items it could actually read. The Mirror can read a bot's
+    """The writer's read-back, cleaned, with `known`: the items it could actually read. The sync bot can read a bot's
     name and description but (so far) not its routines, and Grok keeps no separate instructions field: an item it
     could not read is unknown, never "empty in Grok"."""
     g = writer.read(bot) if bot else None
@@ -529,7 +529,7 @@ class H2G:
         return self.info(pid)
 
     def _publish(self, strict: bool = False) -> bool:
-        """The writer's signed current allowlist and the requests still waiting (the Mirror's box checks every request
+        """The writer's signed current allowlist and the requests still waiting (the sync bot's box checks every request
         against it). `strict`: False when it could not be rewritten (the caller says so; never silently)."""
         pub = getattr(self.writer, "publish_allowed", None)
         if pub is None:
@@ -740,7 +740,7 @@ class H2G:
         bot = (d["allow"].get(pid) or {}).get("bot") or self._bot(pid)
         grok = read_grok(self.writer, bot)
         if grok is None or item not in grok["known"]:
-            raise H2GError("no_read", "The Mirror cannot read this from Grok now, so Hermes cannot compare.")
+            raise H2GError("no_read", "The sync bot cannot read this from Grok now, so Hermes cannot compare.")
         with self._edit() as d:
             b = d["base"].setdefault(pid, {"side": clean_side({}), "at": None, "from": "hermes"})
             side = clean_side(b.get("side"))
@@ -786,9 +786,9 @@ class H2G:
         if c.get("undone_by"):
             return "It was undone already."
         if c.get("state") != "done":
-            return "It was not made in Grok." if c.get("state") == "failed" else "The Mirror has not made it yet."
+            return "It was not made in Grok." if c.get("state") == "failed" else "The sync bot has not made it yet."
         if pending:
-            return "Wait for the Mirror's answer to the last change first."
+            return "Wait for the sync bot's answer to the last change first."
         src = c.get("before_src") or {}
         if not any(op.get("op") != "set" or (src.get(op.get("item"), "hermes") != "hermes"
                                              and str((c.get("before") or {}).get(op.get("item")) or "").strip())
@@ -819,9 +819,9 @@ class H2G:
         if plan["pending"]:
             out["blocked"] = PENDING
         elif plan["permission"] != "ready":
-            out["blocked"] = {"not_set_up": "The Mirror is not set up for this bot yet.",
-                              "no_permission": "The Mirror has no permission to change this bot: set up "
-                                               "pre-approval in Grok first."}.get(plan["permission"], "The Mirror cannot be reached.")
+            out["blocked"] = {"not_set_up": "The sync bot is not set up for this bot yet.",
+                              "no_permission": "The sync bot has no permission to change this bot: set up "
+                                               "pre-approval in Grok first."}.get(plan["permission"], "The sync bot cannot be reached.")
         return out
 
     # -- apply (rule 4) and undo (rule 6)
@@ -865,7 +865,7 @@ class H2G:
         if entry["state"] != "sent":
             self._finish(entry, receipt)
         return {"state": entry["state"], "change_id": entry["id"], "items": entry["items"],
-                "message": entry["message"], "sentence": {"done": "Made in Grok.", "sent": "Sent to the Mirror: it "
+                "message": entry["message"], "sentence": {"done": "Made in Grok.", "sent": "Sent to the sync bot: it "
                 "makes the change on its next run.", "failed": entry["message"] or "Grok was not changed."}[entry["state"]]}
 
     def _finish(self, entry: dict, receipt: dict) -> None:
@@ -929,7 +929,7 @@ class H2G:
 
     @_serial
     def poll(self) -> list:
-        """Final receipts for changes that were "sent" (the Mirror makes them on its next run)."""
+        """Final receipts for changes that were "sent" (the sync bot makes them on its next run)."""
         out = []
         for c in [c for c in self._read()["changes"] if c.get("state") == "sent"]:
             rec = self.writer.poll(c["id"], len(c["ops"]))
@@ -1009,7 +1009,7 @@ class H2G:
 
     def _still_allowed(self, pid: str, items: list, bot: str) -> None:
         """Undo and a runner move send to Grok too: the same checks as apply (allowlist, the owner's direction in
-        What syncs, the bot the twin was allowed for, the Mirror's permission)."""
+        What syncs, the bot the twin was allowed for, the sync bot's permission)."""
         allowed = self.allowed(pid)
         if not allowed or not bot or (self._read()["allow"].get(pid) or {}).get("bot") not in (None, bot):
             raise H2GError("not_allowed", NOT_ALLOWED)
@@ -1018,7 +1018,7 @@ class H2G:
             if why:
                 raise H2GError("not_allowed", why)
         if self.writer.permission(bot) != "ready":
-            raise H2GError("no_permission", "The Mirror has no permission to change this bot: set up pre-approval "
+            raise H2GError("no_permission", "The sync bot has no permission to change this bot: set up pre-approval "
                                             "in Grok first.")
 
     # -- routines run in one place (rule 7)
@@ -1117,7 +1117,7 @@ class H2G:
             d = self._read()
             mine = [c for c in d["changes"] if c.get("pid") == pid and c.get("state") == "sent"]
             if not mine:
-                return {"state": "done", "sentence": "Nothing is waiting for the Mirror."}
+                return {"state": "done", "sentence": "Nothing is waiting for the sync bot."}
             forget = getattr(self.writer, "forget", None)
             for c in mine:
                 c["state"], c["message"] = "failed", GAVE_UP

@@ -206,14 +206,18 @@ def commit(pid: str, home: Path, kind: str, setting: dict) -> str:
     changed = [p for p in _git(repo, "diff", "--cached", "--name-only").stdout.splitlines() if p]
     note = f" Git history: {left} file(s) left out as password-like." if left else ""
     if not changed:
-        return note
-    got = _git(repo, "commit", "-q", "-m", _message(kind, changed))
-    if got.returncode != 0:
-        why = safe.clean_summary(_secrets.redact(got.stderr), 200)
-        _note_status(pid, commit=None, pushed=None, problem="The git commit failed: " + why)
-        return note + " Warning: the git commit failed: " + why
-    sha = _git(repo, "rev-parse", "--short", "HEAD").stdout.strip()
-    words = f" Git history: commit {sha}." + note
+        # nothing new to commit, but commits made before a remote was added (or after a failed push) still go out
+        if not setting.get("remote") or _git(repo, "rev-parse", "-q", "--verify", "HEAD").returncode != 0:
+            return note
+        sha, words = _git(repo, "rev-parse", "--short", "HEAD").stdout.strip(), note
+    else:
+        got = _git(repo, "commit", "-q", "-m", _message(kind, changed))
+        if got.returncode != 0:
+            why = safe.clean_summary(_secrets.redact(got.stderr), 200)
+            _note_status(pid, commit=None, pushed=None, problem="The git commit failed: " + why)
+            return note + " Warning: the git commit failed: " + why
+        sha = _git(repo, "rev-parse", "--short", "HEAD").stdout.strip()
+        words = f" Git history: commit {sha}." + note
     pushed_ok, problem = None, ""
     if setting.get("remote"):
         pushed = _git(repo, "push", "-q", setting["remote"], "HEAD:refs/heads/main")
@@ -222,7 +226,7 @@ def commit(pid: str, home: Path, kind: str, setting: dict) -> str:
             words += f" Warning: git push failed ({err})."
             pushed_ok, problem = False, f"The push failed: {err}"
         else:
-            words += " Pushed."
+            words += " Pushed." if changed else ""
             pushed_ok = True
     _note_status(pid, commit=sha, pushed=pushed_ok, problem=problem)
     return words
@@ -264,7 +268,7 @@ def clean_remote(value: Any) -> Optional[str]:
     if value and (_CRED_IN_URL.match(value) or _secrets.has_secret(value)):
         # (it would be kept in plain text in git/settings.json): sign-in belongs to git's own credential helper or SSH
         raise EngineError("bad_input", "That address carries a password or token. Give it without one (for example "
-                          "https://forgejo.example/me/bot.git or git@forgejo.example:me/bot.git) and let git's "
+                          "https://forgejo.example/me/bot.git or git@forgejo.example:me/bot.git) and let git's "  # privacy:allow
                           "credential helper or your SSH key sign in.")
     return value
 
@@ -347,6 +351,10 @@ def cmd_git(a) -> int:
         c._out("FAIL: name the twin (hermes twin git on \"NAME\") or give --all")
         return 1
     on = a.action == "on"
+    if on and pid == ALL and a.remote:  # one repository per twin: they cannot all push to one address
+        c._out("FAIL: --remote is per twin (one repository each); switch it on by name: "
+               "hermes twin git on \"NAME\" --remote URL")
+        return 1
     try:
         a.remote = clean_remote(a.remote) or None
     except Exception as exc:  # noqa: BLE001
