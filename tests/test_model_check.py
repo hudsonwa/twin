@@ -61,7 +61,7 @@ def test_redact_every_private_kind():
             out = mc.redact(text)
             assert addr not in out, (text, out)
             assert f":{port}" not in out, (text, out)
-    for name in ("gpu-box.local", "nas.lan", "api.corp.internal", "spark.tail1234.ts.net", "localhost"):
+    for name in ("gpu-box.local", "nas.lan", "api.corp.internal", "box.example-tailnet.ts.net", "localhost"):
         port = _port()
         out = mc.redact(f"see http://{name}:{port}/v1 or {name}:{port} or {name}")
         assert name not in out and str(port) not in out, out
