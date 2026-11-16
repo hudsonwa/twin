@@ -473,11 +473,14 @@ def apply_default(profile: str, home: Optional[Path] = None) -> dict:
             rec = records().get(profile) or {}
         preset, words = DEFAULT_PRESET, choose(profile_texts(home))[1]
         by = "rule"
-    path, extra = None, {}
+    path, extra, headless = None, {}, ""
     if preset != "open":
         before = home / "config.yaml"
         had = before.read_bytes() if before.is_file() else None
-        path = write_config(home, want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home)))
+        wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home))
+        from . import gui  # twin#76: no screen in this session -> a headless browser, whose screenshots work
+        headless = gui.fit_browser(wanted)
+        path = write_config(home, wanted)
         # what to put back when twinning stops (forget): only the first rule-applied write is kept as "before"
         if not rec.get("before_written") and by == "rule":
             keep = home / BACKUP_NAME
@@ -488,7 +491,7 @@ def apply_default(profile: str, home: Optional[Path] = None) -> dict:
         extra["wrote_owned"] = owned_sha(load_config(home))
     record(profile, preset=preset, words=words[:10], chosen_by=by, **extra)
     return {"preset": preset, "words": words, "chosen_by": by, "path": str(path) if path else None,
-            "capabilities": capabilities(load_config(home), preset)}
+            "capabilities": capabilities(load_config(home), preset), "headless": headless}
 
 
 def capabilities(c: dict, preset: str) -> list:
@@ -650,7 +653,10 @@ def set_preset(profile: str, preset: str, home: Optional[Path] = None, allow: It
     home = home or store.profile_home(profile)
     extra = {}
     if preset != "open":
-        path = write_config(home, want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home)))
+        wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home))
+        from . import gui  # twin#76: no screen in this session -> a headless browser, whose screenshots work
+        headless = gui.fit_browser(wanted)
+        path = write_config(home, wanted)
         extra["wrote_sha"] = hashlib.sha256(path.read_bytes()).hexdigest()  # (stop still puts the old one back)
         extra["wrote_owned"] = owned_sha(load_config(home))
     return record(profile, preset=preset, chosen_by="owner", allow=sorted(set(allow)), **extra)

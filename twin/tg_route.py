@@ -20,8 +20,10 @@ Rules, all checked on every message, failing closed:
   theirs with --owner). Hermes' own allow-list check still runs first; this is a second, narrower one.
 - Only twins the owner put on the route. Telegram can never start setup, sync or a route change (the existing
   /twin rule: messaging chats are read-only for everything else).
-- The twin's turn runs with every approval answered "deny": nothing a Telegram message asks for can run a tool
-  that needs approval.
+- A step of the twin's turn that needs approval is asked in this same chat, the owner's DM (twin#76), the way a
+  twin's own Telegram bot asks: Hermes' own choice card (`ask_choice`, "Approve once" / "Deny"), the step's text
+  redacted like every reply. Only "Approve once" lets it run; no answer, a closed card, or no way to ask (a turn
+  started outside the chat handler, `hermes twin check-model`) is "deny".
 - Tokens are referenced, never copied: the plugin only looks whether TELEGRAM_BOT_TOKEN is set in the gateway
   profile's `.env` (or its `secrets.command` is set); the value is never read into a variable, logged or written.
   The twin profiles get no token and keep their own Telegram off.
@@ -241,12 +243,70 @@ def describe() -> str:
 _turn: Optional[Callable] = None  # tests put a fake here: (profile, text) -> {"ok", "reply"} | None
 
 
-def _run_turn(profile: str, text: str) -> Optional[dict]:
+Ask = Callable[[str, list], Optional[str]]  # (question, choices) -> the chosen value, or None
+APPROVE_CHOICES = [{"value": "once", "label": "Approve once"}, {"value": "deny", "label": "Deny"}]
+
+
+def owner_asker() -> Optional[Ask]:
+    """Hermes' `ask_choice` for this chat (bound by the gateway around a plugin command's handler), carried to
+    the thread that asks; None when this Hermes has none. Called on the handler's own thread."""
+    import contextvars
+    from . import config
+    ask_choice = config.chat_asker()
+    if ask_choice is None:
+        return None
+    ctx = contextvars.copy_context()
+    return lambda question, choices: ctx.copy().run(ask_choice, question, choices)
+
+
+def approval_text(profile: str, q: dict) -> str:
+    from .model_check import redact
+    step = safe.cap(redact(str(q.get("command") or "")), 1500)
+    why = safe.cap(redact(str(q.get("description") or "")), 300)
+    return (f"[{safe.clean_name(profile, 60)}] asks to run a step that needs your approval:\n{step}"
+            + (f"\n({why})" if why else ""))
+
+
+def _approvals(profile: str, ask: Optional[Ask]) -> tuple:
+    """(on_wait, answer) for tasks_turn.run_turn. With `ask`, each approval question goes to the owner in another
+    thread (the turn keeps reading Hermes meanwhile); `answer()` is None until the owner chose. Without, "deny"."""
+    if ask is None:
+        return (lambda q: None), (lambda: "deny")
+    import threading
+    box: dict = {"n": 0, "choice": None}
+    lock = threading.Lock()
+
+    def on_wait(q: Optional[dict]) -> None:
+        with lock:
+            box["n"] += 1
+            box["choice"] = None
+            n = box["n"]
+        if q is None:
+            return
+
+        def ask_owner() -> None:
+            try:
+                got = ask(approval_text(profile, q), APPROVE_CHOICES)
+            except Exception:
+                got = None
+            with lock:
+                if box["n"] == n:  # still this question
+                    box["choice"] = "once" if got == "once" else "deny"
+        threading.Thread(target=ask_owner, name="grok-bot-twin-tg-approval", daemon=True).start()
+
+    def answer() -> Optional[str]:
+        with lock:
+            return box["choice"]
+    return on_wait, answer
+
+
+def _run_turn(profile: str, text: str, ask: Optional[Ask] = None) -> Optional[dict]:
     if _turn is not None:
         return _turn(profile, text)
     from . import tasks_turn
-    return tasks_turn.run_turn(profile, text, should_stop=lambda: None, on_wait=lambda q: None,
-                               answer=lambda: "deny", limit_s=TURN_LIMIT_S)
+    on_wait, answer = _approvals(profile, ask)
+    return tasks_turn.run_turn(profile, text, should_stop=lambda: None, on_wait=on_wait,
+                               answer=answer, limit_s=TURN_LIMIT_S)
 
 
 def _unsafe(profile: str) -> bool:
@@ -355,7 +415,7 @@ def handle(raw_args: str, platform: Any = None, source: Any = None, resolve: Opt
     text = text.strip()
     if not text:
         return "Say something after the twin's name."
-    res = _run_turn(prof, text[:8000])
+    res = _run_turn(prof, text[:8000], ask=owner_asker())  # approvals: asked in this DM (twin#76)
     if not res or not res.get("ok"):
         return f"The twin {safe.clean_name(prof, 60)} could not answer just now."
     reply = str(res.get("reply") or "").strip() or "(no reply)"
