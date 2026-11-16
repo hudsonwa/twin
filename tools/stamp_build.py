@@ -20,7 +20,7 @@ def stamp(repo: Path, into: Path) -> dict:
     data = {"commit": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}")}
     if git("status", "--porcelain", "--untracked-files=no"):
         data["dirty"] = True  # a copy with uncommitted changes: the commit alone does not say what it is
-    (into / "twin" / "BUILD").write_text(json.dumps(data) + "\n", encoding="utf-8", newline="\n")
+    (into / "twin" / "BUILD").write_bytes((json.dumps(data) + "\n").encode("utf-8"))  # (not write_text(newline=): 3.10+; twin#75)
     return data
 
 

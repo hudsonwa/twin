@@ -2,7 +2,7 @@
 `safety` (twin/profile_safety.py). Each prints one PASS/FAIL line last."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from . import safe
 from .engine import EngineError
@@ -40,8 +40,12 @@ def cmd_setup_auto(a: Any) -> int:
     if getattr(a, "install_line", False):
         print(auto_setup.install_line())
         return 0
-    rc, line = auto_setup.run(_svc(), open_port=bool(getattr(a, "open_port", False)),
-                              link_profile=bool(getattr(a, "link_profile", False)))
+    from . import gateways
+    svc = _svc()
+    restart = None if getattr(a, "no_gateway_restart", False) else (
+        lambda: gateways.restart_running(twin_profiles(svc)))
+    rc, line = auto_setup.run(svc, open_port=bool(getattr(a, "open_port", False)),
+                              link_profile=bool(getattr(a, "link_profile", False)), gateways=restart)
     print(line)
     return rc
 
@@ -101,7 +105,7 @@ def cmd_check_model(a: Any) -> int:
     """twin#66: one fixed message per channel (Hermes, and Telegram when the twin is on the route)."""
     from . import model_check
     svc = _svc()
-    prof = resolve_profile(svc, a.twin) if a.twin else _only(svc)
+    prof = resolve_profile(svc, a.twin) if a.twin else (current_twin_profile(svc) or _only(svc))
     res = model_check.check(prof)
     if getattr(a, "json", False):
         import json
@@ -110,6 +114,15 @@ def cmd_check_model(a: Any) -> int:
     else:
         print(res["line"])
     return 0 if res["ok"] else 1
+
+
+def current_twin_profile(svc: Any) -> Optional[str]:
+    """twin#75: the twin whose profile this command runs in (`hermes -p TWIN twin ...`), None when it runs in a
+    profile that is not a twin (default, or one of the owner's own bots)."""
+    from . import config
+    home = config.hermes_home()
+    name = config.profile_name(home) if home else None
+    return name if isinstance(name, str) and name and name != "default" and name in twin_profiles(svc) else None
 
 
 def _only(svc: Any) -> str:
@@ -153,6 +166,9 @@ def add_setup_flags(p: Any) -> None:
     p.add_argument("--link-profile", action="store_true",
                    help="With --auto: also add the plugin to the sticky profile (hermes -p) when it is not "
                         "default; off by default, since it gives that bot the twin tools")
+    p.add_argument("--no-gateway-restart", action="store_true",
+                   help="With --auto: leave running twin gateways as they are (by default each is restarted to load "
+                        "this version and checked to be running again; any offline twin is named)")
     p.add_argument("--install-line", action="store_true",
                    help="Print the pinned one-line install for this plugin version")
 

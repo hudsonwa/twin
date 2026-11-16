@@ -302,9 +302,17 @@ def test_run_fail_line_names_the_step(home, monkeypatch):
 
 
 def test_cli_setup_auto_and_install_line(svc, monkeypatch):
-    monkeypatch.setattr(auto_setup, "run", lambda s, open_port=False, link_profile=False: (0, f"PASS: x open_port={open_port}"))
+    seen = {}
+
+    def fake_run(s, open_port=False, link_profile=False, gateways=None):
+        seen["gateways"] = gateways
+        return 0, f"PASS: x open_port={open_port}"
+    monkeypatch.setattr(auto_setup, "run", fake_run)
     rc, out, _ = run(["setup", "--auto", "--open-port"])
     assert rc == 0 and out.strip() == "PASS: x open_port=True"
+    assert callable(seen["gateways"])  # twin#75: setup restarts the running twin gateways (never called here)
+    rc, out, _ = run(["setup", "--auto", "--no-gateway-restart"])
+    assert rc == 0 and seen["gateways"] is None
     monkeypatch.setattr(auto_setup, "plugin_ref", lambda: "a" * 40)
     rc, out, _ = run(["setup", "--install-line"])
     assert out.strip() == (f"hermes plugins install hudsonwa/twin --ref {'a' * 40} --enable && "

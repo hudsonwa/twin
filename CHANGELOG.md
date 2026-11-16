@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- twin#75: `tools/stamp_build.py` (and two plugin writes) no longer use `write_text(newline=)`, which is Python
+  3.10+; the macOS system Python 3.9 runs it. `hermes -p TWIN twin check-model` checks the twin whose profile it
+  runs in instead of asking which twin. `hermes twin setup --auto` restarts the twin gateways that were running
+  through one helper (twin/gateways.py) that waits for each, starts it again when a restart left it stopped, and
+  names any twin still offline in the PASS line; `--no-gateway-restart` leaves them as they are.
+
 ## 0.5.1 (17 November 2026)
 
 Grok Bot Twin 0.5.1 ↔ botport 0.3.3 (pins unchanged).
