@@ -371,7 +371,8 @@ the plugin with `hermes plugins remove` alone leaves this folder on disk.
   twin's `SOUL.md`, `skills`, `cron`, `memories`,
   `config.yaml`, botport lock files, `backups/botport/` and `botport-manual.md`, symlinks recorded as links, plus
   the twin's pairs.json entry and its kept test cases; the last 3 kept), `moved/PAIR.json` (the Grok routine names
-  to re-enable after a move), and `calls.jsonl` (when, which bot, PASS/FAIL, counts, drift and test results; never
+  to re-enable after a move), `export-fingerprints.json` (per bot id: a hash of its name, routines and last activity
+  id as read by the engine after its last export, its twin's profile and when; `from-hermes` skips an unchanged bot), and `calls.jsonl` (when, which bot, PASS/FAIL, counts, drift and test results; never
   the texts). In `pairs.json`: the twin's `driver` ("bot") and its last call (`last_call`: when, PASS/FAIL).
   `hermes twin sync` writes under `plugin-data/grok-bot-twin/sync/PAIR/` (the bot's state as an export, the spec,
   botport's h2g output, `for-grok.json`, restore points of skills that lost a both-sides edit). All of them, and
