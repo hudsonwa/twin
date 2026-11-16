@@ -360,7 +360,10 @@ def _no_secrets_or_commands(ins: Optional[str], skills: list, memory: list) -> N
 
 
 def _twin_skill(s: dict) -> bool:
-    return s["name"].casefold() == TWIN_SKILL and s["mine"] is not True
+    """This plugin's own twin skill: its name is reserved and it is never imported or checked, also when the bot
+    says it made it (rehearsal 17 Nov: the one-prompt setup has the bot create it itself, so it lists it as
+    `mine`, and its text failed the secret check on every later export). Leaving it out writes nothing."""
+    return s["name"].casefold() == TWIN_SKILL
 
 
 def parse(text_or_bytes: Any, bot_name: str) -> dict:
