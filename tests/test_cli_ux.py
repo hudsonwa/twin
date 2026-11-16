@@ -493,3 +493,16 @@ def test_removal_fallback_lines_keep_link_for_computers():
     for line in cli.REMOVE_GOES + cli.UNINSTALL_GOES:
         assert "link" not in line.lower(), line
     assert cli.REMOVE_GOES[0] == "Following Grok." and cli.UNINSTALL_GOES[0] == "Every twin."
+
+
+def test_status_shows_the_weekly_grok_usage_line(bp_svc, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import usage
+    monkeypatch.setattr(usage, "read", lambda svc, eng=None: {
+        "ok": True, "line": "Grok this week: 42% used (resets Mon); twin used 7 turns",
+        "warning": "twin used 7 Grok turns this week, past your budget of 5 (grok_turn_budget_week): x"})
+    out = run(["status"])[1]
+    assert "Grok this week: 42% used (resets Mon); twin used 7 turns\n ! Warning: twin used 7 Grok turns" in out
+    monkeypatch.setattr(usage, "read", lambda svc, eng=None: {"ok": False,
+                                                               "note": "Grok usage not shown: the port is closed."})
+    out = run(["status"])[1]
+    assert "Grok usage not shown: the port is closed." in out and "Grok this week" not in out

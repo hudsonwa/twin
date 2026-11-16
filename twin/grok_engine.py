@@ -36,7 +36,7 @@ EXIT_WORDS = {DONE: "done", OTHER: "failed", STILL_WORKING: "still working", NEE
 CMDS = {"status": ["grok", "status"], "bots": ["grok", "bots"], "ask": ["grok", "ask"], "wait": ["grok", "wait"],
         "read": ["grok", "read"], "routines": ["grok", "routines"], "files": ["grok", "files"],
         "policy": ["grok", "policy"], "launch": ["grok", "launch"],
-        "restore": ["grok", "restore"]}
+        "restore": ["grok", "restore"], "usage": ["grok", "usage"]}
 # P3 (botport feat/grok-engine-p3, 4efd374; the frozen file's §6 lists them as "open for the next lanes"):
 #   botport grok routines <bot> list --json      -> {"routines": [Routine]}
 #   botport grok files <bot> fetch [NAME|KEY] --out DIR --json
@@ -170,6 +170,11 @@ class GrokEngine:
     def routines(self, bot: str) -> Result:
         """P3: the bot's routines as the app lists them (never the bot's own words)."""
         return self._run("routines", [bot, "list"], STATUS_TIMEOUT_S * 2)
+
+    def usage(self) -> Result:
+        """P3: the plan's weekly usage (a read: never a turn). JSON: percent_used, resets_at, available; botport with
+        the turn ledger adds botport_turns_week and usage_budget_week."""
+        return self._run("usage", [], STATUS_TIMEOUT_S)
 
     def fetch(self, bot: str, which: Optional[str], out_dir: str) -> Result:
         """P3: save a file the bot sent in its chat (by message key or file name; newest when None) into out_dir."""

@@ -99,6 +99,14 @@ def _bool(body: dict, key: str) -> bool:
 
 
 # ---- read -------------------------------------------------------------------------------------------
+@router.get("/grok-usage")
+async def grok_usage() -> Any:
+    """The weekly Grok usage line for the Twins page (a read through the engine: never a bot turn)."""
+    usage = importlib.import_module(_package().__name__ + ".usage")
+    svc = _svc()
+    return await _call(usage.read, svc)
+
+
 @router.get("/status")
 async def status() -> Any:
     svc = await asyncio.to_thread(_svc)

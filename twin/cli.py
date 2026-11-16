@@ -375,6 +375,12 @@ def cmd_status(a) -> int:
         _waiting_lines(p, many, names)
     if eng.get("trust_warning"):
         _out(f" ! Note: {eng['trust_warning']}")
+    if real:  # the weekly Grok usage, read through the engine (0 turns)
+        from . import usage as _usage
+        u = _usage.read(svc)
+        _out(u["line"] if u["ok"] else u["note"])
+        if u.get("warning"):
+            _out(f" ! Warning: {u['warning']}")
     if brief.get("role") == "source":
         n = brief.get("machines") or 0
         _out(("Shared with " + plural(n, "other computer") if n else "Sharing is on; no other computer is linked"
