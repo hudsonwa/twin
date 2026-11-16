@@ -8,6 +8,12 @@
   runs in instead of asking which twin. `hermes twin setup --auto` restarts the twin gateways that were running
   through one helper (twin/gateways.py) that waits for each, starts it again when a restart left it stopped, and
   names any twin still offline in the PASS line; `--no-gateway-restart` leaves them as they are.
+- twin#74: a from-hermes / one-prompt import whose behaviour test fails names each failed case and a short fixed
+  reason (`failed twice: memory-2 (no tool call)`), never bot content. Every failed case is retried once; a case
+  fails only when it fails twice. When only model-behaviour cases (memory, live tool calls) still fail, the import
+  is kept and the twin marked "test failing" (setting `import_test_failing: rollback` rolls back instead); a data
+  case (persona, instructions, skills, gateway) still rolls back. `hermes twin test` drops a model answer or reason
+  that looks like a credential from its report (its verdict kept) instead of refusing, the botport 0.3.3 rule.
 
 ## 0.5.1 (17 November 2026)
 

@@ -155,7 +155,7 @@ def tested_words(t: Any) -> str:
     """" · test 5/6 ✗ 2 h ago" for a twin's row, or "" when it was never tested."""
     if not isinstance(t, dict) or not isinstance(t.get("total"), int):
         return ""
-    return f" · test {t['passed']}/{t['total']} {'✓' if t.get('ok') else '✗'} {ago(t.get('at'))}"
+    return f" · test {t['passed']}/{t['total']} {'✓' if t.get('ok') else '✗ test failing'} {ago(t.get('at'))}"
 
 
 def cmd_test(a) -> int:

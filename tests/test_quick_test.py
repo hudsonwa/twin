@@ -282,12 +282,34 @@ def test_a_model_flaky_case_is_retried_once_and_passes_only_if_the_retry_passes(
     assert len([c for c in flaky.calls if c[0] == "test"]) == 2
 
 
-def test_no_retry_when_a_content_case_fails(svc, real_twin, monkeypatch):
+def test_every_failed_case_is_retried_once_and_named_with_a_fixed_reason(svc, real_twin, monkeypatch):
+    """twin#74: a content case is retried once too; a case still failing is listed by id, kind and fixed words."""
     _fake, export = real_twin
-    flaky = FlakyEngine(persona_ok=False)
+    flaky = FlakyEngine(persona_ok=False, retry_passes=False)
     monkeypatch.setattr(svc, "engine_for", lambda pid: flaky)
     res = svc.behaviour_test("acme-support", from_export=str(export))
-    assert res["ok"] is False and "retried" not in res and len([c for c in flaky.calls if c[0] == "test"]) == 1
+    assert res["ok"] is False and sorted(res["retried"]) == ["live-skills", "persona"]
+    assert [c[5] for c in flaky.calls if c[0] == "test"][1] == ["persona", "live-skills"]
+    assert res["failed_cases"] == [{"id": "persona", "kind": "data", "reason": "answer did not match"},
+                                   {"id": "live-skills", "kind": "behaviour", "reason": "expected tool not called"}]
+
+
+def test_a_secret_looking_answer_is_dropped_not_refused(svc, real_twin, monkeypatch):
+    """twin#74 (botport 0.3.3 rule): a model reply that looks like a key is dropped from the report, verdict kept."""
+    from twin_testlib import fake_key
+    _fake, export = real_twin
+    key = fake_key()
+
+    class Leaky(FakeEngine):
+        def behaviour_test(self, profile, battery, hermes, out, only=None, timeout=None):
+            rows = [{"id": "persona", "family": "persona", "pass": True, "why": [], "answer": f"Key: {key}"},
+                    {"id": "memory-1", "family": "memory", "pass": True, "why": [f"saw {key}"]}]
+            return {"pass": 2, "total": 2, "results": rows}
+    monkeypatch.setattr(svc, "engine_for", lambda pid: Leaky())
+    res = svc.behaviour_test("acme-support", from_export=str(export))
+    assert res["ok"] is True and key not in json.dumps(res)
+    assert behaviour.keepable({"id": "x", "pass": True, "answer": f"Key: {key}"})["answer"].startswith("(not kept")
+    assert behaviour.keepable({"id": "x", "pass": True, "answer": "I plan meals."})["answer"] == "I plan meals."
 
 
 def test_engine_test_only_flag(fake_bp):
