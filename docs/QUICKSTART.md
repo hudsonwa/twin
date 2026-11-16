@@ -55,7 +55,8 @@ Pick a provider and paste its key or sign in. Your twins use this model unless y
 ## 5. Twin a real bot (needs the Grok app on this Mac)
 
 ```sh
-hermes twin setup                     # downloads botport, the free copying engine, when it asks; then again, answer yes
+hermes twin setup                     # says where to download botport (the free copying engine) in your browser
+hermes twin setup --file ~/Downloads/botport-aarch64-apple-darwin.tar.gz   # the file you downloaded; answer yes
 hermes twin from-hermes "Acme Support"  # your bot's name as Grok shows it (experimental)
 hermes twin                           # your twins and the one next step
 ```
@@ -63,6 +64,11 @@ hermes twin                           # your twins and the one next step
 `from-hermes` asks the bot in Grok for its own export (one Grok turn of your plan's usage), checks it and makes
 the twin. It ends with one line: `PASS: Acme Support twinned to Hermes (profile acme-support): ...`. Chat with the
 twin: `hermes -p acme-support`.
+
+Do step 4 before this step. A `from-hermes` run before a model is chosen leaves the twin on Hermes' template
+model (a placeholder from Hermes' example config, not yours), and running `from-hermes` again does not change it.
+If that happened, give the twin your model: `hermes twin finish acme-support --model MODEL --endpoint HOST:PORT --yes`
+(`--endpoint` only for your own model server), then `hermes twin check-model acme-support`.
 
 A FAIL line says what to do instead; usually it is the one prompt in the bot's own chat, "Clone yourself to
 Hermes", set up once per bot as in [ONE-PROMPT.md](ONE-PROMPT.md#set-it-up-once-per-bot). On a computer

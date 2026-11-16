@@ -42,6 +42,18 @@ exported again, routine chat sync is at most hourly and shows its weekly cost fi
 
 Fixes #74, fixes #75, fixes #76.
 
+- Release rehearsal fixes: a test line that tripped Hermes' install scan (CAUTION verdict, so a non-interactive
+  `hermes plugins install --enable` was refused) is split, and a guard test checks every line; the reserved
+  `twin-to-hermes` skill is never imported or secret-checked (it refused every from-hermes export when the bot had
+  made it); `twin add` on the owner's own model server also sets the endpoint and key by reference; `finish` says
+  when a model key was not kept (× line, rc 1) instead of only "model set".
+- `from-hermes` on a computer without the Grok app downloads nothing.
+- `setup --auto` gateway restarts have an overall hard time cap (default 180 s, `--gateway-restart-cap`); twins left
+  untouched are named with their restart command. Changing a twin's safety preset says when its browser went
+  headless and how to turn it back.
+- Docs: new QUICKSTART.md (from nothing to a first twin); it says botport is downloaded in the browser (setup never
+  downloads it) and that a from-hermes run before choosing a model leaves the twin on a placeholder model
+  (`hermes twin finish` fixes it).
 - Review fixes (rc/0.5.2): a literal model key never overwrites a different stored key of the same name;
   `remote-create` fills only the link step with the link code and never prints it; a strict twin's own Telegram bot
   also needs manual approvals; the Telegram bot request uses the route's gateway, never a twin's, and `stop` always
