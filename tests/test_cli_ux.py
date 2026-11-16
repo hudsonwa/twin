@@ -132,8 +132,11 @@ def test_help_is_grouped_in_three(svc):
     # every command in the overview exists, and every command is in the overview
     sub = next(x for x in cli.build_parser()._actions if getattr(x, "choices", None) and "status" in x.choices)
     aliases = {"sync", "move", "restore-points", "parity", "mirror", "attest", "remove"}
-    for name in set(sub.choices) - aliases:
+    experimental = {"remote-create"}  # twin#70 prototype, hidden on purpose (docs/design/remote-create.md)
+    for name in set(sub.choices) - aliases - experimental:
         assert name in text, name
+    for name in experimental:
+        assert name in sub.choices and name not in text, name
     assert aliases <= set(sub.choices)
 
 
