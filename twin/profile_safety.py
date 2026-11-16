@@ -24,7 +24,8 @@ A twin's Hermes profile gets one of four tool presets, chosen by rule, never by 
 The rule: every twin gets ``parity`` (fast by default, safety opt-in). The risky words its instructions, skills
 or routines mention (shell, ssh, terminal, servers, trading, brokers, wallets or credentials: ``RISKY``) are
 recorded and named, never silently acted on; ``choose`` still says which narrower preset they suggest (``strict``
-for those words, else ``standard``). Narrowing or widening is one command: ``hermes twin safety TWIN strict|standard`` (``--allow TOOLSET``),
+for those words, else ``standard``). The plugin's own skill pack is not the bot's text and is never read for
+them. Narrowing or widening is one command: ``hermes twin safety TWIN strict|standard`` (``--allow TOOLSET``),
 ``parity`` or ``open``. A twin whose preset the rule chose before 0.5.1 (standard or strict) is moved to parity
 once by ``hermes twin setup --auto`` (``migrate_to_parity``), which says what changed; an owner's choice is kept. Every write keeps a dated copy of the
 config next to it (the newest BACKUPS_KEPT), and the first one keeps ``.twin-pre-safety.yaml``, put back when
@@ -44,7 +45,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
-from . import safe, store
+from . import safe, skill_pack, store
 
 PRESETS = ("parity", "strict", "standard", "open")
 DEFAULT_PRESET = "parity"
@@ -116,6 +117,8 @@ def profile_texts(home: Path) -> list:
     skills = home / "skills"
     if skills.is_dir():
         for p in sorted(skills.rglob("SKILL.md"))[:200]:
+            if skill_pack.is_pack_dir(p.relative_to(skills).parts[0]):
+                continue  # twin#65: the plugin's own skill pack (twin-update names "terminal") is not the bot's
             cands.append(p)
     total = 0
     for p in cands:

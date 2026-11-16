@@ -148,3 +148,20 @@ def test_git_history_leaves_the_pack_out(svc, home):  # noqa: F811
     own.mkdir(parents=True)
     (own / "SKILL.md").write_text("Check the order.\n", encoding="utf-8")
     assert sorted(git_mirror._tree(h, "skills", "skills")) == ["skills/support/refunds/SKILL.md"]
+
+
+# ---- twin#65 follow-up: the safety rule never reads the pack as the bot's text -----------------------------------
+def test_harmless_twin_with_the_pack_stays_standard_and_names_no_words(svc, home):  # noqa: F811
+    from hermes_plugins.grok_bot_twin.twin import profile_safety as ps
+    h = _register(svc, "meals")
+    (h / "SOUL.md").write_text("Plan weekly meals.", encoding="utf-8")
+    assert skill_pack.install_home(h)  # the real pack: twin-update's text names "terminal"
+    pack_text = " ".join(p.read_text(encoding="utf-8") for p in (h / "skills" / skill_pack.PACK_DIR).rglob("SKILL.md"))
+    assert "terminal" in ps.risky_words([pack_text])
+    assert ps.choose(ps.profile_texts(h)) == ("standard", [])  # (before: strict, because of "terminal")
+    got = ps.apply_default("meals")
+    assert got["preset"] == "parity" and got["words"] == []
+    own = h / "skills" / "ops" / "SKILL.md"  # the bot's own skills are still read
+    own.parent.mkdir(parents=True)
+    own.write_text("Use ssh to check the server.", encoding="utf-8")
+    assert ps.choose(ps.profile_texts(h))[0] == "strict"
