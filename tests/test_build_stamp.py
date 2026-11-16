@@ -58,3 +58,13 @@ def test_the_real_reader_takes_only_plain_revisions(tmp_path, monkeypatch):
     if f.exists():
         pytest.skip("a stamped tree")
     assert auto_setup.build_stamp() == {}
+
+
+def test_hermes_revision_key_is_read(plug):
+    """Hermes' own install record names the commit as "revision" (seen on a real v0.5.0 install)."""
+    _record, stamp = plug
+    (auto_setup.PLUGIN_DIR.parent / ".install-metadata.json").write_text(
+        json.dumps({"grok-bot-twin": {"pinned": True, "revision": NEW, "source": "https://example.invalid/twin.git"}}))
+    stamp(NEW)
+    res = auto_setup.install_check()
+    assert res["ok"] is True and "matches" in res["message"]

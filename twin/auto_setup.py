@@ -402,7 +402,8 @@ def install_record_ref() -> str:
         except (OSError, ValueError):
             continue
         entry = data.get(PLUGIN_NAME) if isinstance(data.get(PLUGIN_NAME), dict) else data
-        ref = _hexref(entry.get("commit") or entry.get("ref") if isinstance(entry, dict) else None)
+        ref = _hexref((entry.get("revision") or entry.get("commit") or entry.get("ref"))
+                     if isinstance(entry, dict) else None)  # Hermes writes "revision"
         if ref:
             return ref
     return ""
