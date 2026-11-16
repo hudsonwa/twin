@@ -218,3 +218,17 @@ def test_literal_key_never_overwrites_a_different_key_of_the_same_name(world, ho
     res = world.set_model(pid, "local-model", endpoint="Homebox")
     assert res["key"]["name"] == "HOMEBOX_API_KEY" and "different key" in res["key"]["not_kept"]
     assert mem.data == {"HOMEBOX_API_KEY": "another-key-entirely"} and VALUE not in str(res)
+
+
+def test_set_preset_says_the_browser_went_headless_and_how_to_undo_it(home, monkeypatch):
+    # review rc052 #10: set_preset computed the note and dropped it; the note names the way back
+    prof = home / "profiles" / "acme-support"
+    prof.mkdir(parents=True)
+    (prof / "config.yaml").write_text("browser:\n  headed: true\n", encoding="utf-8")
+    monkeypatch.setattr(gui, "has_gui", lambda *a, **k: False)
+    got = profile_safety.set_preset("acme-support", "standard", home=prof)
+    assert got["headless"] == gui.NOTE and "browser.headed: true" in gui.NOTE
+    assert "headless" not in profile_safety.records()["acme-support"]
+    monkeypatch.setattr(gui, "has_gui", lambda *a, **k: True)
+    (prof / "config.yaml").write_text("browser:\n  headed: true\n", encoding="utf-8")
+    assert profile_safety.set_preset("acme-support", "standard", home=prof)["headless"] == ""

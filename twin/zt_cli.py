@@ -99,7 +99,9 @@ def cmd_safety(a: Any) -> int:
         if a.model_policy:
             ps.set_model_policy(prof, a.model_policy)
         if a.preset:
-            ps.set_preset(prof, a.preset, allow=getattr(a, "allow", None) or ())
+            got = ps.set_preset(prof, a.preset, allow=getattr(a, "allow", None) or ())
+            if got.get("headless"):
+                print(f"{safe.clean_name(prof, 60)}: {got['headless']}")
         elif a.apply:
             got = ps.apply_default(prof)
             if got["words"]:

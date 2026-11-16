@@ -24,7 +24,8 @@ import sys
 from typing import Callable, Mapping, Optional
 
 SSH_VARS = ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")
-NOTE = "browser headless (this session has no screen, so screenshots go the headless way)"
+NOTE = ("browser headless (this session has no screen, so screenshots go the headless way; this stays in the twin's "
+        "config: for a gateway run on a screen, set browser.headed: true there)")
 
 
 def _launchctl_session() -> str:
