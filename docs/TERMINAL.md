@@ -69,7 +69,8 @@ OS secret store, or a locked one (the Keychain in an ssh session), the value goe
 a key with no value anywhere is not kept; the line says why.
 
 A twin made before you chose any model (Hermes' template model, provider `auto`) takes your Hermes model the next
-time `from-hermes` or `twin add` runs for it, and the PASS line says so; a model anyone chose is never replaced.
+time `from-hermes` runs for it, and the PASS line says so; a model anyone chose is never replaced. (`twin add` skips a
+bot that already has a twin, so it does not change one; a new twin gets your model when you have chosen one.)
 
 The Grok app's debug port is closed at the end of every `from-hermes` run; when that restore fails (for example the
 app could not be started again) it is tried once more after a few seconds, and the FAIL line says it was tried twice.
