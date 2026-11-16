@@ -194,7 +194,8 @@ def test_token_never_in_files_logs_output_or_model_context(world, caplog, capsys
     seen = "\n".join([line, out.getvalue(), caplog.text, str(capsys.readouterr()), str(block or ""),
                       all_text_under(world["home"]), repr(tg_bots.state())])
     assert SENTINEL not in seen and GATEWAY_TOKEN not in seen.replace(
-        (world["home"] / ".env").read_text(), "")  # (the gateway's own .env is the owner's, not ours)
+        (world["home"] / ".env").read_bytes().decode("utf-8"), "")  # (the gateway's own .env is the owner's; read
+        # as bytes like all_text_under, so Windows CRLF matches)
     for p in world["twin"].rglob("*"):
         if p.is_file():
             assert SENTINEL not in p.read_text(errors="replace"), p
