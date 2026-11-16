@@ -253,7 +253,7 @@ def snapshot(pid: str, home: Path, svc: Any = None, parts: tuple = SNAPSHOT_PART
             if kind == "file":
                 shutil.copy2(extra, dest / f"extra-{i}")
     store.atomic_write_json(dest / MANIFEST, manifest)
-    (dest / ".complete").write_text(now_iso(), encoding="utf-8", newline="\n")
+    (dest / ".complete").write_bytes(now_iso().encode("utf-8"))
     old = sorted(p for p in base.iterdir() if p.is_dir() and not p.is_symlink())
     for p in old[:-SNAPSHOTS_KEPT]:
         _SNAP_SVC.pop(str(p), None)

@@ -333,8 +333,11 @@ def engine_check(eng: Any, open_port: bool = False, saved: Optional[bool] = None
 
 # ---- the run -----------------------------------------------------------------------------------------------------
 def run(svc: Any, open_port: bool = False, fetch: Optional[Fetch] = None, runner: Optional[Run] = None,
-        engine: Any = None, say: Callable[[str], None] = print, link_profile: bool = False) -> tuple:
-    """(exit code, the one PASS/FAIL line). Progress goes to `say`; nothing is asked."""
+        engine: Any = None, say: Callable[[str], None] = print, link_profile: bool = False,
+        gateways: Optional[Callable[[], dict]] = None) -> tuple:
+    """(exit code, the one PASS/FAIL line). Progress goes to `say`; nothing is asked. `gateways` (twin#75): restart
+    the twin gateways that were running (gateways.restart_running) once setup passed; the PASS line names any that
+    is offline after it. None: not restarted (tests, and setup --auto --no-gateway-restart)."""
     step = "botport"
     if not engine_pinned():  # (the pinned release has no Grok engine: say so before downloading anything)
         return 1, f"FAIL: hermes twin setup --auto: {engine_needed_line()}"
@@ -368,6 +371,13 @@ def run(svc: Any, open_port: bool = False, fetch: Optional[Fetch] = None, runner
     from . import origin
     origin.refresh(svc)  # twin#64: the origin note in every twin follows this install's versions
     moved = parity_note(svc, say)
+    if gateways is not None:
+        from . import gateways as gw
+        say("Restarting the twin gateways that are running, so they load this version (this can take minutes)…")
+        try:
+            moved += gw.note(gateways())
+        except Exception as exc:  # noqa: BLE001  (never ends setup; named instead)
+            moved += f"; twin gateways not restarted ({type(exc).__name__}); check with hermes -p TWIN gateway status"
     return 0, (f"PASS: hermes twin setup --auto: botport {bp['tag']} verified, engine ready (preset {eng['preset']}, "
                f"port {eng['port']}), reachable from profile {prof}"
                + (" (plugin linked and enabled there)" if how == "linked" else "")

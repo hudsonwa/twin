@@ -175,7 +175,7 @@ def _write(repo: Path, files: dict) -> None:
     for k, text in files.items():
         target = store.safe_child(repo, *k.split("/"))
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8", newline="\n")
+        target.write_bytes(text.encode("utf-8"))
 
 
 # ---- git ------------------------------------------------------------------------------------------------------
