@@ -27,6 +27,24 @@ Fixes #64, fixes #65, fixes #66, fixes #69.
   ("Acme Support 2", `acme-support-2`, `acme_support_2_twin_bot`); the sharing computer picks the lowest free number
   across the fleet (#69).
 
+### Fixed
+
+Fixes #71, fixes #72, fixes #73.
+
+- A twin can do what its Grok bot can do (#71). The default preset is now `parity`: browser, web and X search,
+  shell, files, code, image generation and computer use stay on, in the desktop app and Telegram alike. Risky
+  actions still ask first in the chat they came from (Telegram's buttons or `/approve`), and the hard floors hold
+  (manual approvals, deny when nobody is there, no agent scheduling or delegation, no terminal environment
+  passthrough). The create and import PASS lines and `hermes twin safety` list every capability and its state;
+  `strict` and `standard` are your opt-in. `hermes twin setup --auto` moves twins the rule set to `standard` or
+  `strict` earlier to `parity` once and says what it turned on; a preset you chose is kept.
+- A failed `hermes twin from-hermes` no longer leaves the Grok app running with its debug port open (#72):
+  `botport grok restore` runs on every exit (PASS, FAIL, rollback, timeout, an error, Ctrl-C), a FAIL line says the
+  port was closed, and a restore that failed is said first.
+- `hermes twin doctor` reads the `revision` key of Hermes' install record for the build-stamp check (#73).
+- The safety rule no longer reads the plugin's own skill pack as the bot's text (its `twin-update` skill names
+  "terminal", which marked every twin risky).
+
 ## 0.5.0 (16 November 2026)
 
 Grok Bot Twin 0.5.0 ↔ botport 0.3.3.
