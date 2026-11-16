@@ -1706,7 +1706,18 @@ def cmd_doctor(a) -> int:
         tail = (f"\n     ({fix[0].lower()}{fix[1:]})" if fix.startswith(NOT_NEEDED) else f"\n     fix: {fix}") if fix else ""
         _out(f" {mark} {c['message']}{tail}")
     hard = [c for c in checks if not c["ok"] and c["id"] in ("data_dir",)]
+    _out(_gateway_doctor_line())
     return 1 if hard else 0
+
+
+def _gateway_doctor_line(run=None, hermes=None) -> str:
+    """The twin gateways check (read-only: `gateway status` only, never a restart). Last line of doctor."""
+    from . import gateways
+    from .zt_cli import twin_profiles
+    try:
+        return gateways.doctor_line(gateways.check_all(twin_profiles(_svc()), hermes=hermes, run=run))
+    except Exception as exc:  # (doctor must always finish with its line)
+        return f"FAIL twin gateways: not checked ({type(exc).__name__}); check with hermes -p TWIN gateway status"
 
 
 def cmd_demo(a) -> int:
