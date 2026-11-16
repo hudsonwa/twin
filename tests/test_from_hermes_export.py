@@ -97,7 +97,7 @@ def test_reply_route_twins_with_no_local_command(svc, world, stub, home):
     assert "History: 2 message(s) read by the engine; routines: 1 from the engine, all switched off" in line
     assert "setting reads Ask every time as before; no approval card in the export turn" in line
     # the order: setting, history and routines from the engine, then the one ask, then the setting again
-    assert cmds(stub) == ["bots", "status", "read", "routines", "ask", "status"]
+    assert cmds(stub) == ["bots", "status", "read", "routines", "ask", "status", "restore"]
     prompt = [a for a in stub.calls() if a[1] == "ask"][0][3]
     assert "use no local-computer tools" in prompt and "hermes twin" not in prompt and BE.FORMAT in prompt
     prof = store.profile_home("acme-support")
@@ -138,7 +138,7 @@ def test_file_route_fetches_through_the_engine_and_keeps_nothing(svc, world, stu
     sha = hashlib.sha256(content.encode()).hexdigest()
     assert f"(the bot sent its export as a file (fetched by the engine, sha256 {sha[:12]})" in res["line"]
     assert "asked to delete the export file and answered DONE" in res["line"]
-    assert cmds(stub) == ["bots", "status", "read", "routines", "ask", "files", "ask", "status"]
+    assert cmds(stub) == ["bots", "status", "read", "routines", "ask", "files", "ask", "status", "restore"]
     fetch = [a for a in stub.calls() if a[1] == "files"][0]
     assert fetch[2:5] == [ACME["id"], "fetch", "t9s1"]
     out_dir = fetch[fetch.index("--out") + 1]
@@ -568,3 +568,85 @@ def _without_origin(text):
     """The SOUL.md text without the plugin's origin note (twin#64), which goes first and leaves the rest as it was."""
     from hermes_plugins.grok_bot_twin.twin import fleet_profiles, origin
     return fleet_profiles.set_block(text, origin.BEGIN, origin.END, None)
+
+
+# ---- twin#72 (floor 5): the debug port is closed on every exit path ------------------------------------------------
+PORT_NOTE = "Grok app: port closed; checked process args and port file."
+
+
+def _import_fails(monkeypatch, line="FAIL: Acme Support: behaviour test 5/6. The twin was put back as it was before "
+                                    "this call."):
+    monkeypatch.setattr(one_prompt, "twin_from_grok", lambda s, a, n, **kw: {"ok": False, "line": line,
+                                                                             "pair_id": None})
+
+
+def _raises(exc):
+    def boom(*a, **kw):
+        raise exc
+    return boom
+
+
+def test_72_pass_restores_the_port(svc, world, stub):
+    play(stub, ask_answer(fenced(export())))
+    res = run(svc, stub)
+    assert res["ok"] and res["port"] == "closed" and cmds(stub)[-1] == "restore"
+    assert PORT_NOTE not in res["line"]  # (the PASS line is unchanged)
+
+
+def test_72_fail_at_export_restores_and_says_so(svc, world, stub, home):
+    play(stub, ask_answer(fenced(export(format="nope"))))
+    res = run(svc, stub)
+    assert not res["ok"] and res["line"].endswith(PORT_NOTE) and cmds(stub)[-1] == "restore"
+    nothing_written(world, home)
+
+
+def test_72_fail_at_import_restores(svc, world, stub, monkeypatch):
+    _import_fails(monkeypatch, "FAIL: Acme Support: the importer could not write the profile.")
+    play(stub, ask_answer(fenced(export())))
+    res = run(svc, stub)
+    assert not res["ok"] and res["line"].endswith(PORT_NOTE) and cmds(stub).count("restore") == 1
+
+
+def test_72_behaviour_test_fail_and_rollback_restores(svc, world, stub, monkeypatch):
+    _import_fails(monkeypatch)
+    play(stub, ask_answer(fenced(export())))
+    res = run(svc, stub)
+    assert not res["ok"] and "behaviour test 5/6" in res["line"] and res["line"].endswith(PORT_NOTE)
+    assert cmds(stub)[-1] == "restore" and res["port"] == "closed"
+
+
+def test_72_engine_timeout_restores(svc, world, stub):
+    play(stub, {"rc": 2, "stdout": {"bot": ACME, "state": "working"}})
+    res = run(svc, stub, timeout_s=1)
+    assert not res["ok"] and res["line"].endswith(PORT_NOTE) and cmds(stub)[-1] == "restore"
+
+
+@pytest.mark.parametrize("exc", [KeyboardInterrupt(), RuntimeError("boom")])
+def test_72_interrupt_or_crash_still_restores(svc, world, stub, monkeypatch, exc):
+    monkeypatch.setattr(one_prompt, "twin_from_grok", _raises(exc))
+    play(stub, ask_answer(fenced(export())))
+    with pytest.raises(type(exc)):
+        run(svc, stub)
+    assert cmds(stub)[-1] == "restore"
+
+
+def test_72_a_failed_restore_is_said_first_and_turns_a_pass_into_a_fail(svc, world, stub, monkeypatch):
+    bad = [{"rc": 1, "stdout": "", "stderr": "FAIL: Grok still has the flag"}]
+    play(stub, ask_answer(fenced(export())), restore=bad)
+    res = run(svc, stub)
+    assert not res["ok"] and res["port"] == "open"
+    assert res["line"].startswith("FAIL: the Grok app's debug port could NOT be closed (botport grok restore: Grok "
+                                  "still has the flag); run botport grok restore. the import itself passed:")
+    _import_fails(monkeypatch)
+    play(stub, ask_answer(fenced(export())), restore=bad)
+    res = run(svc, stub)
+    assert res["line"].startswith("FAIL: the Grok app's debug port could NOT be closed")
+    assert res["line"].index("could NOT be closed") < res["line"].index("behaviour test 5/6")
+
+
+def test_72_no_engine_nothing_to_restore(svc, monkeypatch):
+    monkeypatch.setattr(from_hermes.ge, "from_service", _raises(from_hermes.ge.Unavailable("no botport")))
+    from hermes_plugins.grok_bot_twin.twin import engine
+    monkeypatch.setattr(engine, "engine_pinned", lambda: False)
+    res = from_hermes.run(svc, ["Acme Support"])
+    assert not res["ok"] and "port" not in res

@@ -18,6 +18,9 @@ Two routes (`--route`, plugin setting `from_hermes_route`):
      secret grep, rolled back on any FAIL;
   6. the PASS line is checked again here: the one-prompt log holds the importer's PASS, the Grok setting reads the
      same as in step 1, and the export turn held no approval card. With a file, the bot is then asked to delete it.
+  On every exit (PASS, FAIL, rollback, timeout, an exception, Ctrl-C) the run ends with `botport grok restore`
+  (twin#72, floor 5): a FAIL line says the port was closed; a restore that failed makes the line a FAIL that says
+  so first.
   Chat sync (mode pull) starts from after the export turn, so the request and the export never land in Hermes chats.
 - "shell" (kept as an option only): the bot runs `hermes twin from-grok` on this computer with its local-command
   tool (needs the twin skill in the bot and, under "Ask every time", an Allow per run in Grok; --wait picks up a run
@@ -523,10 +526,16 @@ def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_onl
     downloads only the pinned, SHA-256-checked botport and never changes a Grok setting. A setup FAIL is the
     fallback FAIL with setup's reason. A closed port (engine exit 5) is not "missing": no setup, the fallback."""
     shown = (names or ["your Grok bots"])[0] if not all_bots else "your Grok bots"
+    held: dict = {"eng": eng}
     try:
         with one_prompt.engine_lock():  # a chat-sync tick never closes the port during this run (and waits for one)
-            res = _run(svc, names, all_bots, wait_only, timeout_s, eng, how, force_file, take_shared, setup_first,
-                       only, shown)
+            port: Optional[dict] = None
+            try:
+                res = _run(svc, names, all_bots, wait_only, timeout_s, eng, how, force_file, take_shared, setup_first,
+                           only, shown, held)
+            finally:  # twin#72 (floor 5): every exit path (PASS, FAIL, rollback, timeout, an exception, Ctrl-C)
+                port = close_port(held.get("eng"))
+            res = with_port(res, port)
     except one_prompt.Refused as exc:
         return {**_fail(shown, str(exc)), "bots": []}
     from . import origin
@@ -536,10 +545,12 @@ def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_onl
 
 def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeout_s: int,
          eng: Optional[ge.GrokEngine], how: Optional[str], force_file: bool, take_shared: bool, setup_first: Any,
-         only: Optional[list], shown: str) -> dict:
+         only: Optional[list], shown: str, held: Optional[dict] = None) -> dict:
     started = time.monotonic()
+    held = held if held is not None else {}
     try:
         eng = eng or ge.from_service(svc)
+        held["eng"] = eng
     except ge.Unavailable as exc:
         why = str(exc)
         from .engine import engine_needed_line, engine_pinned
@@ -558,6 +569,7 @@ def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeo
             return {**_unavailable(shown, f"{why}; setup --auto: {safe.clean_summary(said, 300)}"), "bots": []}
         try:
             eng = ge.from_service(svc)
+            held["eng"] = eng
         except ge.Unavailable as exc2:
             return {**_unavailable(shown, f"{exc2} (after setup --auto PASSed)"), "bots": []}
     listed = eng.bots()
@@ -598,6 +610,42 @@ def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeo
                          "result": "PASS" if ok else "FAIL", "bots": len(results), "route": how,
                          "passed": sum(1 for r in results if r["ok"]), "ms": int((time.monotonic() - started) * 1000)})
     return {**(results[0] if len(results) == 1 else {}), "ok": ok, "line": line, "bots": results}
+
+
+# ---- twin#72: the debug port is closed on every exit path ----------------------------------------------------------
+def close_port(eng: Optional[ge.GrokEngine]) -> Optional[dict]:
+    """`botport grok restore` (the Grok app back to normal, debug port and DevToolsActivePort file gone; botport
+    checks the process args and the port file). Never raises. -> None when no engine was reached (nothing could
+    have opened the port), else {"ok", "proof"}."""
+    if eng is None:
+        return None
+    try:
+        got = eng.restore()
+    except Exception as exc:  # noqa: BLE001  (a finally step: report it, never mask the run's own result)
+        return {"ok": False, "proof": type(exc).__name__}
+    proof = safe.clean_summary(got.proof.removeprefix("PASS: ").removeprefix("FAIL: "), 200) if got.proof else ""
+    return {"ok": got.exit == ge.DONE, "proof": proof or ge.EXIT_WORDS.get(got.exit, "no answer")}
+
+
+PORT_CLOSED = "port closed; checked process args and port file"
+
+
+def with_port(res: dict, port: Optional[dict]) -> dict:
+    """The result with the port state: a FAIL says the port was closed; a restore that failed turns any result
+    into a FAIL that says so first, before the import's own reason."""
+    if port is None:
+        return res
+    res = {**res, "port": "closed" if port["ok"] else "open"}
+    if not port["ok"]:
+        why = ("FAIL: the Grok app's debug port could NOT be closed (botport grok restore: "
+               f"{port['proof']}); run botport grok restore")
+        rest = res.get("line") or ""
+        rest = (rest.removeprefix("FAIL: ") if rest.startswith("FAIL: ")
+                else "the import itself passed: " + rest.removeprefix("PASS: "))
+        res.update(ok=False, line=f"{why}. {rest}")
+    elif not res.get("ok"):
+        res["line"] = (res.get("line") or "FAIL: not twinned").rstrip() + f" Grok app: {PORT_CLOSED}."
+    return res
 
 
 # ---- the command line and the Hermes tool -------------------------------------------------------------------------

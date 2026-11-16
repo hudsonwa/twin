@@ -68,6 +68,7 @@ class Stub:
 
     def play(self, **answers):
         answers.setdefault("status", [ALWAYS])  # (the Mac's Grok setting reads Always allow unless a test says not)
+        answers.setdefault("restore", [{"rc": 0, "stdout": {"proof": "PASS: restored; checked process args and port file"}}])
         self.scen.write_text(json.dumps(answers), encoding="utf-8")
         seen = Path(str(self.scen) + ".seen")
         if seen.exists():
