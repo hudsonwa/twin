@@ -15,6 +15,7 @@ Every Hermes call goes through an injectable runner, so tests never start or sto
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from typing import Any, Callable, Iterable, Optional
@@ -27,6 +28,15 @@ STATUS_TIMEOUT_S = 30.0
 WAIT_S = 120.0             # how long a gateway may take to say it is running after restart/start
 POLL_S = 3.0
 _NOT_RUNNING = ("not running", "stopped", "inactive", "not loaded", "no gateway", "dead", "failed")
+# review rc052 #9: these count only as status words, never inside other text: "running, 0 failed" or
+# "restarts: 2 failed" is a running gateway: a word counts when it is a whole word and not a count (after a number).
+_NOT_RUNNING_RE = re.compile(r"(?<!\d )(?<!\d)\b(?:" + "|".join(re.escape(n) for n in _NOT_RUNNING) + r")\b")
+_RUNNING_RE = re.compile(r"(?<!not )\brunning\b")
+
+
+def says_running(text: str) -> bool:
+    """Status words (already casefolded) say running, and no status word says otherwise."""
+    return bool(_RUNNING_RE.search(text)) and not _NOT_RUNNING_RE.search(text)
 
 
 def _run(argv: list, timeout: float) -> tuple:
@@ -46,7 +56,7 @@ def is_running(hermes: str, profile: str, run: Run = _run) -> bool:
     except (OSError, subprocess.SubprocessError):
         return False
     words = (_text(out) + " " + _text(err)).casefold()
-    return rc == 0 and "running" in words and not any(n in words for n in _NOT_RUNNING)
+    return rc == 0 and says_running(words)
 
 
 def _call(hermes: str, profile: str, verb: str, timeout: float, run: Run) -> None:
@@ -136,7 +146,7 @@ def check_one(hermes: str, profile: str, run: Optional[Run] = None) -> dict:
     words = text.casefold()
     # (the Telegram lines are judged on their own: "telegram: disconnected" must not make the gateway "stopped")
     head = "\n".join(ln for ln in words.splitlines() if "telegram" not in ln)
-    running = rc == 0 and "running" in head and not any(n in head for n in _NOT_RUNNING)
+    running = rc == 0 and says_running(head)
     return {"profile": profile, "running": running, "telegram": telegram_state(text) if running else "down"}
 
 

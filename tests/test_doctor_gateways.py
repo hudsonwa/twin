@@ -66,3 +66,21 @@ def test_doctor_ends_with_the_gateway_line(svc, monkeypatch, capsys):  # noqa: F
     last = capsys.readouterr().out.rstrip("\n").splitlines()[-1]
     assert last.startswith("FAIL twin gateways") and "hermes -p acme-support gateway restart" in last
     assert calls and all(c[3:] == ["gateway", "status"] for c in calls)
+
+
+# ---- review rc052 #9: "failed" counts only as a status word, never as a count -----------------------------------
+def _status(text: str, rc: int = 0):
+    return lambda argv, timeout: (rc, text.encode(), b"")
+
+
+def test_a_count_of_failures_is_not_offline():
+    for text in ("Gateway running, 0 failed", "gateway: running (restarts: 2 failed)", "running; 3 dead letters"):
+        assert gateways.is_running("hermes", "acme", run=_status(text)), text
+        assert gateways.check_one("hermes", "acme", run=_status(text))["running"], text
+
+
+def test_status_words_still_mean_offline():
+    for text in ("Gateway not running", "gateway: failed", "running -> failed", "status: stopped", "dead",
+                 "gateway failed to start (was running)", "inactive (not loaded)", "running"[:0] + "idle"):
+        assert not gateways.is_running("hermes", "acme", run=_status(text)), text
+    assert not gateways.is_running("hermes", "acme", run=_status("running", rc=1))
