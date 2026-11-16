@@ -132,7 +132,25 @@ def test_request_sends_one_private_button(world):
 def test_new_twin_with_setting_on_costs_one_tap(world, svc):
     note = svc._safe_defaults(TWIN)
     assert "PASS: telegram bot: asked the owner" in note
+    assert "EXPERIMENTAL:" in note and "not usable yet" in note  # review rc052 #7: not wired yet
     assert world["api"].methods().count("sendMessage") == 1
+
+
+def test_enabled_bot_command_prints_not_wired_notice_first(world, svc, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import zt_cli
+    monkeypatch.setattr(zt_cli, "resolve_profile", lambda s, n: n)
+    monkeypatch.setattr(zt_cli, "twin_profiles", lambda s: (TWIN,))
+    monkeypatch.setattr(zt_cli, "_svc", lambda: svc)
+    out = io.StringIO()
+    with redirect_stdout(out):
+        rc = zt_cli.cmd_telegram(type("A", (), {"action": "bot", "twins": [TWIN]})())
+    lines = out.getvalue().splitlines()
+    assert rc == 0 and lines[0] == tg_bots.NOT_WIRED and lines[1].startswith("PASS")
+    assert "not usable yet" in tg_bots.NOT_WIRED
+
+
+def test_off_prints_no_experimental_notice(home, monkeypatch):
+    assert tg_bots.request(TWIN, tg_bots.default_api()) == tg_bots.OFF and "EXPERIMENTAL" not in tg_bots.OFF
 
 
 def test_bot_management_mode_off_fails_with_the_owner_step(world):

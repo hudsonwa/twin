@@ -382,8 +382,9 @@ else at the next check (every 60 s); nothing while Hermes is closed.
 | This computer's name | `machine_name` | `""` (the computer's own name) | how this computer is called on your other computers and in each twin's note about where its copies are |
 | Port for sharing with your other computers (advanced) | `share_port` | 18777 | the port the computer with the Grok app listens on while sharing is on; set the same number on every computer if you change it |
 | Address to share on (advanced) | `share_address` | `""` | empty: this computer's Tailscale address, else its home-network address. Only one of its own private addresses is accepted |
+| Warn when twin uses more Grok turns in a week | `grok_turn_budget_week` | `0` | 0: no warning. A number: `hermes twin status` warns when twin's turns this week pass it (else botport's own `usage_budget_week` is used) |
 | When an import's behaviour test fails only on the model | `import_test_failing` | `keep` | a from-hermes or one-prompt import whose test still fails after one retry per case, only on model-behaviour cases (memory, live tool calls): `keep` keeps the twin and marks it "test failing"; `rollback` puts everything back. A failing data case (persona, instructions, skills, gateway) always rolls back. Terminal or `config.yaml` only |
-| Give each twin its own Telegram bot (experimental) | `telegram_bot_per_twin` | `false` | off by default. On, a new twin (or `hermes twin telegram bot TWIN`) makes your Hermes Telegram bot send you one "create bot" button with the twin's name. See [A Telegram bot per twin](TERMINAL.md#a-telegram-bot-per-twin-experimental) for what it needs and what is not finished |
+| Give each twin its own Telegram bot (experimental) | `telegram_bot_per_twin` | `false` | not usable yet, keep it off (on, it prints an `EXPERIMENTAL` not-wired notice). On, a new twin (or `hermes twin telegram bot TWIN`) makes your Hermes Telegram bot send you one "create bot" button with the twin's name. See [A Telegram bot per twin](TERMINAL.md#a-telegram-bot-per-twin-experimental) for what it needs and what is not finished |
 | Show the sample in this Hermes profile (advanced) | `demo_profile` | `""` | empty: the sample stays out of all your chats; a profile name lets that profile's chats see the sample |
 
 ## Uninstall
@@ -470,7 +471,7 @@ column says why. Watch its first runs.
 | Skills, routines and memory between your computers; asking a twin on another computer | experimental | off by default. [Sharing](SHARING.md#skills-between-your-computers) |
 | Skill sync and Hermes → Grok through a sync bot in your Grok account | experimental | off; tested only against a pretend Grok. [Skill sync](#skill-sync-optional) |
 | A twin's whole conversations (archive and search) | experimental | off by default. [Archive](#a-twins-whole-conversations-archive-and-search) |
-| A same-named Telegram bot per twin (`telegram_bot_per_twin`) | experimental | new in 0.5.2; off by default; tested only against a pretend Telegram, and the last step is not connected yet. [Telegram bot per twin](TERMINAL.md#a-telegram-bot-per-twin-experimental) |
+| A same-named Telegram bot per twin (`telegram_bot_per_twin`) | experimental, not usable yet | new in 0.5.2; off by default, keep it off; tested only against a pretend Telegram, and the last step is not connected yet. [Telegram bot per twin](TERMINAL.md#a-telegram-bot-per-twin-experimental) |
 | A twin on another computer over SSH (`remote-create`) | experimental, hidden | new in 0.5.2; not in `--help`, nothing calls it, prints `EXPERIMENTAL` first. [Design](design/remote-create.md) |
 
 ## Pictures

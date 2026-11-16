@@ -11,10 +11,17 @@ exported again, routine chat sync is at most hourly and shows its weekly cost fi
 
 ### Added
 
-- Per-twin Telegram bots through Telegram managed bots (`telegram_bot_per_twin`, off by default, #67, #68): one
+- Per-twin Telegram bots through Telegram managed bots (`telegram_bot_per_twin`, off by default, #67, #68), **not
+  usable yet**: the step that receives Telegram's answer after the tap is not wired, so turning it on prints an
+  `EXPERIMENTAL ... not usable yet` line first. What exists: one
   request button in the owner's DM; the token goes straight to the OS secret store and reaches the twin's profile
   only by reference; the bot answers the owner's DM only, with strict tools and manual approvals. `stop`/`remove`
   turn it off and forget the token.
+- `hermes twin doctor` ends with one read-only twin gateways line: PASS when every twin gateway runs with Telegram
+  up, else FAIL naming each offline twin and the `hermes -p TWIN gateway restart` that fixes it.
+- `hermes twin status` shows this week's Grok usage (read through the engine, 0 turns) and twin's own turns, with a
+  warning past `grok_turn_budget_week`; a read that opened the Grok port closes it again, and a good reading is
+  kept 15 minutes.
 - Experimental, hidden `hermes twin remote-create COMPUTER TWIN --plan|--yes` (#70): sets a twin up on another
   computer over SSH, with the local link code and linked-shared secrets pulled by reference; design in
   `docs/design/remote-create.md`.
@@ -22,14 +29,21 @@ exported again, routine chat sync is at most hourly and shows its weekly cost fi
 ### Changed
 
 - `hermes twin from-hermes` skips the export turn for a bot that reads the same as at its last PASS (name,
-  description, routines, last activity) with its twin still there: 0 turns, and the line says why. `--force`
-  exports anyway.
+  description, routines, last activity) with its twin still there: 0 turns, and the line says why and what is not
+  compared (instructions, memory and skills edited without a chat message). A skip lasts at most 7 days; then the
+  bot is exported again. `--force` exports anyway.
 - Chat sync routine mode refuses `chat_sync_minutes` below 60 and shows the weekly turn estimate before asking the
   bot for the routine, in the PASS line and in `chat-sync --status`. Pull stays the default.
 
 ### Fixed
 
 Fixes #74, fixes #75, fixes #76.
+
+- Review fixes (rc/0.5.2): a literal model key never overwrites a different stored key of the same name;
+  `remote-create` fills only the link step with the link code and never prints it; a strict twin's own Telegram bot
+  also needs manual approvals; the Telegram bot request uses the route's gateway, never a twin's, and `stop` always
+  forgets the token; a gateway status such as "running, 0 failed" no longer counts as offline (only whole status
+  words, not counts, mean stopped).
 
 - twin#75: `tools/stamp_build.py` (and two plugin writes) no longer use `write_text(newline=)`, which is Python
   3.10+; the macOS system Python 3.9 runs it. `hermes -p TWIN twin check-model` checks the twin whose profile it

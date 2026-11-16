@@ -67,6 +67,8 @@ def cmd_telegram(a: Any) -> int:
         if action == "token":
             return tg_bots.print_token(prof)
         line = tg_bots.request(prof, tg_bots.default_api(), twin_profiles=twin_profiles(svc))
+        if tg_bots.enabled():
+            print(tg_bots.NOT_WIRED)
         print(line)
         return 0 if line.startswith("PASS") else 1
     if action == "off":

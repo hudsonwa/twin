@@ -35,6 +35,8 @@ PENDING_S = 15 * 60
 MIGRATE = "hermes gateway migrate"
 TOKEN_REF_KEY = tg_route.TOKEN_KEY
 _TOKENISH = re.compile(r"\d{5,}:[A-Za-z0-9_-]{8,}")
+NOT_WIRED = (f"EXPERIMENTAL: {SETTING} is on, but it is not usable yet: nothing receives Telegram's answer after "
+             "your tap, so no twin bot gets its token. Leave it off.")
 OFF = f"FAIL: telegram bot: {SETTING} is off (set it on in the plugin settings to give each twin its own bot)"
 
 

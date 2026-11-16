@@ -1408,6 +1408,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                                         twin_profiles=tuple({*_twin_profiles(self), str(profile)}))
             except Exception as exc:  # noqa: BLE001
                 asked = f"FAIL: telegram bot: {type(exc).__name__}"
+            asked = f"{tg_bots.NOT_WIRED} {asked}"
             note = f"{note}; {asked}" if note else asked
         return note
 

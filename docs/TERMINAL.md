@@ -83,7 +83,7 @@ With no Telegram bot in any profile it FAILs and names the one human step (@BotF
 
 ### A Telegram bot per twin (experimental)
 
-Off by default; set `telegram_bot_per_twin` on to try it. Then a new twin, or `hermes twin telegram bot TWIN`, makes
+Not usable yet: keep it off. Turning `telegram_bot_per_twin` on prints an `EXPERIMENTAL ... not usable yet` line first, because nothing receives Telegram's answer after your tap. Then a new twin, or `hermes twin telegram bot TWIN`, makes
 your Hermes Telegram bot send you one "Create NAME" button in your DM. You tap it and confirm in Telegram; Telegram
 makes a bot with the twin's name that belongs to you. The token is meant to go straight into the OS secret store and
 reach the twin's profile only by reference (`secrets.command`, which runs `hermes twin telegram token TWIN` for Hermes
@@ -248,7 +248,8 @@ nothing more.
 | `conflicts [TWIN]` / `resolve [TWIN] ITEM --keep hermes\|grok` | What changed in both places; keep one version. |
 | `instructions [TWIN]` | Grok's instructions kept in step: `check`, `on\|off`, `keep grok\|hermes`, `downloads on\|off`, `request`. |
 | `versions [TWIN]` / `restore [TWIN] NUMBER` | Earlier versions kept for undo; put one back. |
-| `doctor` | Check the setup and say what to fix. |
+| `doctor` | Check the setup and say what to fix. Its last line checks every twin gateway (read-only): `PASS twin gateways: running with Telegram up: ...`, or `FAIL twin gateways: offline, Telegram silent: TWIN (why). Fix: hermes -p TWIN gateway restart`. |
+| `status` | Your twins at a glance, plus one line for this week's Grok usage, read through the engine (0 turns): `Grok this week: 42% used (resets Mon); twin used 7 turns`. Past your weekly budget (`grok_turn_budget_week`) a warning follows. If reading it opened the Grok app's port, the port is closed again afterwards; a reading is kept 15 minutes. Without the engine the line is left out and a note says why. |
 | `setup` | Set up this computer or finish what is left ([below](#one-setup-command)). |
 
 **One prompt in Grok** ([ONE-PROMPT.md](ONE-PROMPT.md))
