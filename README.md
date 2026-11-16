@@ -63,6 +63,7 @@ in Grok. Both are below; the table says how they differ.
 | What comes over | Instructions, skills, memory, routines (off), recent conversations | Name, description; instructions and routines from a setup export |
 | Keeps in step | Each time you say the prompt | Name and description in seconds, by itself |
 | Bot size | Up to about 6 KB of instructions, skills and memory (a long command is refused by Grok) | Any |
+| Grok usage | Each prompt is a Grok turn. From Hermes (`from-hermes`), an unchanged bot is skipped at 0 turns. Chat sync by pull (default) costs none; by routine one turn per run, at most hourly (about 168 a week) | None, unless you set up optional skill sync, whose sync bot spends Grok credit |
 | State | Experimental (new) | Ready ([what that means](docs/GUIDE.md#ready-or-experimental)) |
 
 > **Pick one per bot.** The first one-prompt run makes that bot's twin *bot-driven* for good
@@ -134,8 +135,7 @@ This table is for the Twins page. The one prompt copies more: memory and recent 
 ## More
 
 [One prompt](docs/ONE-PROMPT.md) · [Guide](docs/GUIDE.md) (Twins page, settings, troubleshooting, uninstall, words
-used) · [Other computers](docs/SHARING.md) · [Every command](docs/TERMINAL.md) · [API keys](docs/SECRETS.md) ·
-[Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [For coding agents](AGENTS.md)
+used) · [Other computers](docs/SHARING.md) · [Every command](docs/TERMINAL.md) · [API keys](docs/SECRETS.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) · [For coding agents](AGENTS.md)
 
 ## Disclosure
 

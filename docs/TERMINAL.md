@@ -54,16 +54,52 @@ checked, its `fast` preset set only if no Grok policy was saved; Grok's Executio
 never written. `--open-port` also opens the Grok port now (restarts the Grok app); without it the port opens on
 demand. `hermes twin setup --install-line` prints the pinned one-line install for this plugin version.
 
+After an update, a twin's own gateway (its Telegram bot) still runs the old code until it restarts, and an
+interrupted `gateway restart` can leave it stopped. So `setup --auto` restarts only the twin gateways that were
+running, one at a time: it waits until each says it is running again, starts it once more when the restart left it
+stopped, and the PASS line names any twin still offline and the command to start it. A gateway that was not running
+is left alone. `--no-gateway-restart` leaves all of them as they are (they then keep the old code until you restart
+them yourself).
+
+When a new twin uses a model server that needs a key, the key is kept by reference: the twin's `config.yaml` says
+`api_key: ${NAME}` and the value goes through your OS secret store into the twin's own private `.env`, taken from
+your model setup or the source profile. The PASS line names the key and where it came from, never its value. With no
+OS secret store the line says the key was not kept, and why; give the twin its key yourself then.
+
+When Hermes runs with no screen (started over ssh on a Mac, or no display on Linux), a twin's profile gets a headless
+browser (`browser.headed` off), so its screenshots do not time out; the PASS line says so.
+
 `hermes twin telegram on TWIN...` (or `--all`) lets you reach twins through the Telegram bot one of your Hermes
 profiles already has: no BotFather, no new token. In that bot's chat: `/twin to TWIN TEXT`, or `/twin use TWIN`
 and then `/twin say TEXT` (`/twin use off` to stop). Only direct messages from your own numeric Telegram id (the
 one the profile already allows; `--owner ID` when it allows several) are answered; groups and other people are
-refused. Approvals in the twin's turn are answered "deny". The token is never read, copied or written: the plugin
+refused. A step in the twin's turn that needs approval is asked in your DM ("Approve once" / "Deny", the step
+redacted like every reply), the same as on a twin's own bot; no answer counts as deny. The token is never read, copied or written: the plugin
 only checks that the profile has one. `telegram on` links this plugin into that profile and enables it there
 (`hermes -p PROFILE plugins enable grok-bot-twin`) when it does not have it yet, and the PASS line says so; only
 that profile's bot answers `/twin to|use|say`. `--via PROFILE` picks the profile; `telegram off`, `telegram status`.
 Stopping a twin takes it off the route.
 With no Telegram bot in any profile it FAILs and names the one human step (@BotFather).
+
+### A Telegram bot per twin (experimental)
+
+Off by default; set `telegram_bot_per_twin` on to try it. Then a new twin, or `hermes twin telegram bot TWIN`, makes
+your Hermes Telegram bot send you one "Create NAME" button in your DM. You tap it and confirm in Telegram; Telegram
+makes a bot with the twin's name that belongs to you. The token is meant to go straight into the OS secret store and
+reach the twin's profile only by reference (`secrets.command`, which runs `hermes twin telegram token TWIN` for Hermes
+alone; you never run that yourself). The twin's bot answers only you, only in a direct chat, with strict tools and
+manual approvals. `hermes twin stop` turns it off and forgets the token.
+
+It FAILs, and says why, before asking anything when: Bot Management Mode is off for your Hermes bot, the computer runs
+one gateway per profile (run `hermes gateway migrate` yourself first), the bot's profile allows more than one Telegram
+user, there is no OS secret store, or the twin's safe defaults were not applied.
+
+What still needs you: making your first Hermes Telegram bot with @BotFather; switching on Bot Management Mode for it
+in BotFather's Mini App; one tap and confirm per twin bot (a button not tapped within 15 minutes expires; run the
+command again); deleting a twin's bot in Telegram. Not finished in this release candidate: the code that takes
+Telegram's answer after your tap (and stores the token) is tested only against a pretend Telegram, and nothing in
+Hermes hands it that answer yet, so a real tap does not finish the twin's bot. Design and open questions:
+[design/managed-bots.md](design/managed-bots.md).
 
 `hermes twin safety [TWIN] [parity|strict|standard|open]` shows or sets a twin's tool preset. By default every twin
 gets `parity` (twin#71): what its Grok bot can do (browser, web, X search, shell, files, code, image generation,
@@ -81,7 +117,7 @@ the check until you record `--model-policy any`. Every write keeps a dated copy 
 Stopping a twin puts its config.yaml back as it was before the safe defaults when nothing changed it since;
 otherwise the stop names the kept copy (`.twin-pre-safety.yaml`).
 
-`hermes twin check-model [TWIN]` sends the twin one fixed message, "Reply with the model and endpoint you are
+`hermes twin check-model [TWIN]` (with no TWIN under `hermes -p TWIN`, the twin whose profile it runs in) sends the twin one fixed message, "Reply with the model and endpoint you are
 configured to use", once through a Hermes turn and, when the twin is on the Telegram route, once through that
 route, and compares each reply with the model in the twin's config.yaml. PASS when every reply names that model;
 a FAIL names the channel that was wrong or silent. The terminal line may show the full endpoint address; anything
@@ -221,7 +257,7 @@ nothing more.
 |---|---|
 | `skill-text` | Print the skill to give a Grok bot once. |
 | `from-grok --bot NAME` / `back-to-grok --bot NAME` | Run by the Grok bot itself, with its state as JSON on stdin. You do not run these by hand. |
-| `from-hermes BOT` / `--all` | From Hermes, through botport's Grok engine: the bot exports its instructions, memory and skills with its own tools (no local command, no approval), Hermes checks the export as untrusted data and imports it; history and routines are read by the engine. `--file` asks for the file route, `--shared-skills` also imports skills other bots made, `--route shell` the old route (the bot runs from-grok here; `--wait` for a run left waiting); `--timeout S`; `--json`. Needs botport 0.3.0 or newer (`botport grok`; this version pins 0.3.3) ([ONE-PROMPT.md](ONE-PROMPT.md#from-hermes-and-chat-sync)). |
+| `from-hermes BOT` / `--all` | (A bot whose name, description, routines and last activity read the same as at its last PASS, with its twin still there, is skipped: 0 Grok turns, and the line says so; `--force` exports it anyway.) From Hermes, through botport's Grok engine: the bot exports its instructions, memory and skills with its own tools (no local command, no approval), Hermes checks the export as untrusted data and imports it; history and routines are read by the engine. `--file` asks for the file route, `--shared-skills` also imports skills other bots made, `--route shell` the old route (the bot runs from-grok here; `--wait` for a run left waiting); `--timeout S`; `--json`. Needs botport 0.3.0 or newer (`botport grok`; this version pins 0.3.3) ([ONE-PROMPT.md](ONE-PROMPT.md#from-hermes-and-chat-sync)). |
 | `chat-sync` | Chat sync: `--status` (mode, interval, each twin's last run), `--pull [TWIN\|--all]` (read new messages through the engine now). `--bot NAME` is what the bot's routine runs, with its new messages as JSON on stdin. |
 | `git on\|off\|status [TWIN\|--all]` | Optional git history of a twin (`--remote URL` to push, `--with-history`). |
 | `bot-driven [TWIN]` | Your own step, once, for a twin made on the Twins page before its first one prompt ([below](#bot-driven)); `--dry-run` shows what changes. |
@@ -280,7 +316,14 @@ skipped. `--from-file FILE` or `--stdin` takes the setup export directly, with n
 twin: botport asks the twin each case and checks the answer, so each run costs what those chats cost.
 `--from-export` makes the cases from a setup export once and keeps them; `--battery` uses your own. It prints
 passed of total and one line per case, exits 1 when a case fails, and `hermes twin status` then shows
-"test 5/6 ✗". Every one-prompt run also runs it.
+"test 5/6 ✗". Every one-prompt run also runs it. A model answer or reason that looks like a password or key is left
+out of the report (the verdict stays), the same rule as botport 0.3.3.
+
+In a from-hermes or one-prompt import, every failed case is asked once more and fails only when it fails twice. The
+line names each failed case with a short fixed reason (`failed twice: memory-2 (no tool call)`), never the bot's
+text. When only model-behaviour cases (memory, live tool calls) still fail, the import is kept and the twin marked
+"test failing", since a different or better model may pass; set `import_test_failing: rollback` to put everything
+back instead. A failing data case (persona, instructions, skills, gateway) always rolls back.
 
 ### bot-driven
 
