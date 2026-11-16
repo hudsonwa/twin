@@ -10,10 +10,12 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import random
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -31,20 +33,44 @@ WIRE_KEYS = {
 }
 
 
-_NEXT_PORT = [0]
+_PORT_LO, _PORT_HI = 20000, 32000  # below every system's ephemeral range (Linux 32768+, Windows and macOS 49152+)
+_PORT_LOCKS: dict = {}  # port -> open lock file, held until this process ends
+_PORT_DIR = Path(tempfile.gettempdir()) / "twin-test-ports"
+_NEXT_PORT = [random.SystemRandom().randrange(_PORT_HI - _PORT_LO)]
+
+
+def _claim(port: int) -> bool:
+    """Take the computer-wide claim on `port` for this process (a lock on a file named for it, released by the
+    system when the process ends, however it ends). Every test process on the computer claims before it uses a port,
+    so two suites run at once never hand the same port out (seen as "Another program on this computer is in the way
+    of sharing" when two full suites ran side by side: each worker of each run took the same fixed block)."""
+    _PORT_DIR.mkdir(parents=True, exist_ok=True)
+    f = open(_PORT_DIR / f"{port}.lock", "a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return False
+    _PORT_LOCKS[port] = f
+    return True
 
 
 def free_port() -> int:
-    """A port free right now, below every system's ephemeral range (Linux 32768+, Windows and macOS 49152+), in a
-    block of its own per pytest-xdist worker. A port the kernel hands out with bind(0) is an ephemeral one, so the
-    client side of any other connection on the computer could take it between this call and the share server's
-    bind (seen as "Another program on this computer is in the way of sharing" under -n 8)."""
-    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
-    n = int(worker[2:]) if worker[2:].isdigit() else 0
-    base = 20000 + (n % 12) * 1000
-    for _ in range(1000):
-        port = base + _NEXT_PORT[0] % 1000
+    """A port free right now that no other test process on this computer has handed out, below every system's
+    ephemeral range: a port the kernel hands out with bind(0) is an ephemeral one, so the client side of any other
+    connection on the computer could take it between this call and the share server's bind. A process keeps its
+    claims until it ends and never hands the same port out twice."""
+    span = _PORT_HI - _PORT_LO
+    for _ in range(span):
+        port = _PORT_LO + _NEXT_PORT[0] % span
         _NEXT_PORT[0] += 1
+        if port in _PORT_LOCKS or not _claim(port):
+            continue
         s = socket.socket()
         try:
             s.bind(("127.0.0.1", port))
@@ -53,7 +79,7 @@ def free_port() -> int:
         finally:
             s.close()
         return port
-    raise RuntimeError("no free test port in this worker's block")
+    raise RuntimeError("no free test port")
 
 
 def wait_until(check, timeout: float = 20.0, step: float = 0.1, what: str = "the condition"):

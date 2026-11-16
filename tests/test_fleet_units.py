@@ -975,10 +975,8 @@ def test_a_short_terminal_command_never_holds_the_share_port(home, tmp_path, cap
     taken; the process that stays (Hermes, or `hermes twin fleet run`) takes it at its next look."""
     import socket
     from hermes_plugins.grok_bot_twin.twin import cli
-    probe = socket.socket()
-    probe.bind(("127.0.0.1", 0))
-    port = probe.getsockname()[1]
-    probe.close()
+    from fleet_testlib import free_port
+    port = free_port()
     config.set_override({"botport_path": str(tmp_path / "no-botport-here"), "share_address": "127.0.0.1",
                          "share_port": port, "machine_name": "mini"})
     _registry(home, [("test-scout", "Test Scout", "Finds trails.")])
