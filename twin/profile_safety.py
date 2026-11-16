@@ -660,7 +660,7 @@ def set_preset(profile: str, preset: str, home: Optional[Path] = None, allow: It
         raise ValueError("unknown preset")
     allow = [a for a in allow if a in WIDENABLE]
     home = home or store.profile_home(profile)
-    extra = {}
+    extra, headless = {}, ""
     if preset != "open":
         wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home))
         from . import gui  # twin#76: no screen in this session -> a headless browser, whose screenshots work
@@ -668,7 +668,8 @@ def set_preset(profile: str, preset: str, home: Optional[Path] = None, allow: It
         path = write_config(home, wanted)
         extra["wrote_sha"] = hashlib.sha256(path.read_bytes()).hexdigest()  # (stop still puts the old one back)
         extra["wrote_owned"] = owned_sha(load_config(home))
-    return record(profile, preset=preset, chosen_by="owner", allow=sorted(set(allow)), **extra)
+    rec = record(profile, preset=preset, chosen_by="owner", allow=sorted(set(allow)), **extra)
+    return {**rec, "headless": headless}  # (review rc052 #10: said, not stored in the record)
 
 
 def set_model_policy(profile: str, policy: str) -> dict:

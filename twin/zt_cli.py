@@ -43,7 +43,9 @@ def cmd_setup_auto(a: Any) -> int:
     from . import gateways
     svc = _svc()
     restart = None if getattr(a, "no_gateway_restart", False) else (
-        lambda: gateways.restart_running(twin_profiles(svc)))
+        lambda: gateways.restart_running(
+            twin_profiles(svc), total_s=gateways.TOTAL_S if getattr(a, "gateway_restart_cap", None) is None
+            else float(a.gateway_restart_cap)))
     rc, line = auto_setup.run(svc, open_port=bool(getattr(a, "open_port", False)),
                               link_profile=bool(getattr(a, "link_profile", False)), gateways=restart)
     print(line)
@@ -97,7 +99,9 @@ def cmd_safety(a: Any) -> int:
         if a.model_policy:
             ps.set_model_policy(prof, a.model_policy)
         if a.preset:
-            ps.set_preset(prof, a.preset, allow=getattr(a, "allow", None) or ())
+            got = ps.set_preset(prof, a.preset, allow=getattr(a, "allow", None) or ())
+            if got.get("headless"):
+                print(f"{safe.clean_name(prof, 60)}: {got['headless']}")
         elif a.apply:
             got = ps.apply_default(prof)
             if got["words"]:
@@ -184,6 +188,9 @@ def add_setup_flags(p: Any) -> None:
     p.add_argument("--no-gateway-restart", action="store_true",
                    help="With --auto: leave running twin gateways as they are (by default each is restarted to load "
                         "this version and checked to be running again; any offline twin is named)")
+    p.add_argument("--gateway-restart-cap", type=float, default=None, metavar="SECONDS",
+                   help="With --auto: stop restarting further twin gateways after this many seconds (default 180); "
+                        "the rest are left as they were and named with the command to restart them")
     p.add_argument("--install-line", action="store_true",
                    help="Print the pinned one-line install for this plugin version")
 
