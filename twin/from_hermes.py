@@ -349,7 +349,47 @@ def _has_approval(msgs: list) -> bool:
     return any(m.get("kind") == "approval" for m in msgs)
 
 
-def export_one(eng: ge.GrokEngine, bot: dict, force_file: bool = False, timeout_s: int = EXPORT_TIMEOUT_S) -> dict:
+# ---- quota: an unchanged bot is not exported again (0 turns) ----------------------------------------------------
+FINGERPRINTS = "export-fingerprints.json"
+
+
+def _fp_path():
+    return one_prompt._folder() / FINGERPRINTS
+
+
+def _fingerprints() -> dict:
+    st = store.read_json(_fp_path(), {}) if _fp_path().is_file() else {}
+    return st if isinstance(st, dict) else {}
+
+
+def fingerprint(bot: dict, routines: Optional[list], last_key: Optional[str]) -> str:
+    """What the engine reads (0 turns) about a bot: its name, description, routines and last activity id."""
+    import hashlib
+    doc = {"name": bot.get("name"), "description": bot.get("description"), "routines": routines,
+           "last": last_key}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _remember(exp: dict, res: dict) -> None:
+    """After a PASS: the bot as it is now (after the export turn), so the next run can skip it."""
+    if not res.get("ok") or not exp.get("bot_id"):
+        return
+    st = _fingerprints()
+    st[exp["bot_id"]] = {"fp": fingerprint(exp["bot_row"], exp.get("routines"), exp.get("after_key")),
+                         "profile": res.get("profile"), "at": now_iso()}
+    store.atomic_write_json(_fp_path(), st)
+
+
+def _unchanged(bot: dict, routines: Optional[list], last_key: Optional[str]) -> bool:
+    rec = _fingerprints().get(bot["id"])
+    if not isinstance(rec, dict) or rec.get("fp") != fingerprint(bot, routines, last_key):
+        return False
+    prof = rec.get("profile")
+    return not prof or store.profile_home(str(prof)).is_dir()  # a twin removed since is exported again
+
+
+def export_one(eng: ge.GrokEngine, bot: dict, force_file: bool = False, timeout_s: int = EXPORT_TIMEOUT_S,
+               force: bool = False) -> dict:
     """Steps 1-4 of the export route for one bot: nothing is written in Hermes here. -> {"ok", "line" on FAIL,
     "clean" (validated export), "history" (engine messages), "routines" (engine list or None), "after_key", "how",
     "sha256", "perm"}. Never raises."""
@@ -364,11 +404,17 @@ def export_one(eng: ge.GrokEngine, bot: dict, force_file: bool = False, timeout_
     hist = eng.read(bot["id"], None, HISTORY_LIMIT)
     if hist.exit != ge.DONE:
         return {**out, **_engine_fail(name, hist, "reading the chat")}
-    out["history"] = [m for m in ge.messages_of(hist) if m.get("kind") in ("text", "question")]
+    read_msgs = ge.messages_of(hist)
+    out["history"] = [m for m in read_msgs if m.get("kind") in ("text", "question")]
+    out["bot_row"] = bot
     rr = eng.routines(bot["id"])
     if rr.exit in (ge.UNAVAILABLE, ge.REFUSED):
         return {**out, **_engine_fail(name, rr, "listing the routines")}
     out["routines"] = ge.routines_of(rr) if rr.exit == ge.DONE else None
+    if not force and _unchanged(bot, out["routines"], read_msgs[-1]["key"] if read_msgs else None):
+        return {**out, "ok": True, "skipped": True,
+                "line": f"PASS: {name}: unchanged since its last export (name, routines and last activity read by "
+                        "the engine match); not asked, 0 turns. --force exports it again."}
     deadline = time.monotonic() + timeout_s
     asked = _drive(eng, bot["id"], bot_export.REQUEST_FILE if force_file else bot_export.REQUEST, None, deadline)
     if asked.exit != ge.DONE:
@@ -499,25 +545,33 @@ def import_one(svc: Any, eng: ge.GrokEngine, exp: dict, claimed: Optional[set] =
 
 
 def run_export(svc: Any, eng: ge.GrokEngine, names: list, bots: list, force_file: bool = False,
-               take_shared: bool = False, timeout_s: int = EXPORT_TIMEOUT_S) -> list:
+               take_shared: bool = False, timeout_s: int = EXPORT_TIMEOUT_S, force: bool = False) -> list:
     """Every bot's export first (nothing written), then each import. A bot's twin gets the skills it marks mine;
     a skill several bots claim goes into each claimant's twin and is named (06)."""
     exps = []
     for n in names:
         bot, why = _pick(bots, n)
-        exps.append(_fail(n, why) if bot is None else export_one(eng, bot, force_file, timeout_s))
-    good = [e for e in exps if e.get("ok")]
+        exps.append(_fail(n, why) if bot is None else export_one(eng, bot, force_file, timeout_s, force))
+    good = [e for e in exps if e.get("ok") and not e.get("skipped")]
     claimed = bot_export.claimed_by_many([e["clean"] for e in good]) if len(good) > 1 else set()
-    return [import_one(svc, eng, e, claimed, take_shared) if e.get("ok") else
-            {k: v for k, v in e.items() if k not in ("clean", "history")} for e in exps]
+    out = []
+    for e in exps:
+        if e.get("ok") and not e.get("skipped"):
+            res = import_one(svc, eng, e, claimed, take_shared)
+            _remember(e, res)
+            out.append(res)
+        else:
+            out.append({k: v for k, v in e.items() if k not in ("clean", "history", "bot_row")})
+    return out
 
 
 # ---- one or all ---------------------------------------------------------------------------------------------------
 def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_only: bool = False,
         timeout_s: int = TIMEOUT_S, eng: Optional[ge.GrokEngine] = None, how: Optional[str] = None,
         force_file: bool = False, take_shared: bool = False, setup_first: Any = None,
-        only: Optional[list] = None) -> dict:
-    """-> {"ok", "line", "bots": [per-bot results]}. Never raises.
+        only: Optional[list] = None, force: bool = False) -> dict:
+    """-> {"ok", "line", "bots": [per-bot results]}. Never raises. Export route: a bot unchanged since its last
+    export is skipped (0 turns) unless `force`.
 
     all_bots with `names`: just those bots (`--all --bot NAME ...`). all_bots with `only`: just the bots whose name
     holds one of these texts, case ignored (`--all --only TEXT ...`); both filters may be given.
@@ -533,7 +587,7 @@ def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_onl
             port: Optional[dict] = None
             try:
                 res = _run(svc, names, all_bots, wait_only, timeout_s, eng, how, force_file, take_shared, setup_first,
-                           only, shown, held)
+                           only, shown, held, force)
             finally:  # twin#72 (floor 5): every exit path (PASS, FAIL, rollback, timeout, an exception, Ctrl-C)
                 port = close_port(held.get("eng"))
             res = with_port(res, port)
@@ -546,7 +600,7 @@ def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_onl
 
 def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeout_s: int,
          eng: Optional[ge.GrokEngine], how: Optional[str], force_file: bool, take_shared: bool, setup_first: Any,
-         only: Optional[list], shown: str, held: Optional[dict] = None) -> dict:
+         only: Optional[list], shown: str, held: Optional[dict] = None, force: bool = False) -> dict:
     started = time.monotonic()
     held = held if held is not None else {}
     try:
@@ -596,7 +650,8 @@ def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeo
         return {**_fail(shown, "--wait is for --route shell only (the export route leaves nothing waiting)"),
                 "bots": []}
     if how == "export":
-        results = run_export(svc, eng, names or [], bots, force_file, take_shared, min(timeout_s, EXPORT_TIMEOUT_S))
+        results = run_export(svc, eng, names or [], bots, force_file, take_shared, min(timeout_s, EXPORT_TIMEOUT_S),
+                             force)
     else:
         results = [run_one(svc, eng, n, bots, wait_only=wait_only, timeout_s=timeout_s) for n in names or []]
     ok = bool(results) and all(r["ok"] for r in results)
@@ -604,7 +659,10 @@ def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeo
         line = results[0]["line"]
     else:
         good = sum(1 for r in results if r["ok"])
+        skipped = sum(1 for r in results if r.get("skipped"))
         line = (f"{'PASS' if ok else 'FAIL'}: {good}/{len(results)} Grok bots twinned through the engine"
+                + (f" ({skipped} unchanged since the last export, not asked: 0 turns; --force exports them again)"
+                   if skipped else "")
                 + ("" if ok else "; " + "; ".join(r["line"].removeprefix("FAIL: ").rstrip(".") for r in results
                                                   if not r["ok"])) + ".")
     one_prompt.log_call({"at": now_iso(), "tool": TOOL, "bot": safe.clean_name(shown, one_prompt.NAME_MAX),
@@ -665,7 +723,7 @@ def cmd(a: Any) -> int:
               "(chat_sync_mode pull costs none).")
     res = run(get_service(), names or None, all_bots=a.all, wait_only=a.wait,
               timeout_s=max(60, int(a.timeout)), how=a.route, force_file=a.file, take_shared=a.shared_skills,
-              only=only or None)
+              only=only or None, force=getattr(a, "force", False))
     if a.json:
         print(json.dumps(res, ensure_ascii=False, default=str))
     else:
@@ -688,6 +746,8 @@ def setup(subs: Any) -> None:
     q.add_argument("--route", choices=ROUTES, default=None,
                    help="export (default): the bot exports itself, Hermes imports; shell: the old route, the bot runs "
                         "hermes twin from-grok on this computer (needs the twin skill and an Allow in Grok)")
+    q.add_argument("--force", action="store_true",
+                   help="export route: export a bot again even when the engine reads it unchanged since the last export")
     q.add_argument("--file", action="store_true", help="export route: ask for the export as a file in any case")
     q.add_argument("--shared-skills", action="store_true",
                    help="export route: also import skills the bot did not make (Grok's skills are account-wide)")

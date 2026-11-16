@@ -650,3 +650,42 @@ def test_72_no_engine_nothing_to_restore(svc, monkeypatch):
     monkeypatch.setattr(engine, "engine_pinned", lambda: False)
     res = from_hermes.run(svc, ["Acme Support"])
     assert not res["ok"] and "port" not in res
+
+
+# ---- quota: a second --all over unchanged bots spends 0 turns -------------------------------------------------
+SCOUT = {"id": "33333333-3333-4333-8333-333333333333", "name": "Test Scout", "main": False, "state": "idle"}
+AFTER = {"rc": 0, "stdout": {"messages": [*HISTORY["stdout"]["messages"],
+                                          {"key": "t9s1", "role": "bot", "kind": "text", "text": "Here is my export."}]}}
+
+
+def _three(stub, read):
+    play(stub, [ask_answer(fenced(export())), ask_answer(fenced(export(bot_name="Recipe Planner")), bot=RECIPE),
+                ask_answer(fenced(export(bot_name="Test Scout")), bot=SCOUT)],
+         bots=[bots_answer(ACME, RECIPE, SCOUT)], read=[read])
+
+
+def test_second_all_over_unchanged_bots_takes_no_turn_and_says_why(svc, world, stub, monkeypatch):
+    _record_imports(monkeypatch)
+    _three(stub, HISTORY)
+    assert run(svc, stub, names=None, all_bots=True)["ok"]
+    assert cmds(stub).count("ask") == 3
+    _three(stub, AFTER)  # the engine reads each bot as the export left it
+    res = run(svc, stub, names=None, all_bots=True)
+    assert res["ok"], res["line"]
+    assert cmds(stub).count("ask") == 3  # no new ask: 0 turns
+    assert "3 unchanged since the last export, not asked: 0 turns" in res["line"]
+    assert all(r.get("skipped") and "unchanged since its last export" in r["line"] for r in res["bots"])
+    _three(stub, AFTER)
+    res = run(svc, stub, names=None, all_bots=True, force=True)
+    assert res["ok"] and cmds(stub).count("ask") == 6  # --force exports again
+
+
+def test_a_bot_with_new_activity_or_routines_is_exported_again(svc, world, stub, monkeypatch):
+    _record_imports(monkeypatch)
+    _three(stub, HISTORY)
+    assert run(svc, stub, names=None, all_bots=True)["ok"]
+    newer = {"rc": 0, "stdout": {"messages": [*AFTER["stdout"]["messages"],
+                                              {"key": "t10u", "role": "user", "kind": "text", "text": "Hi again"}]}}
+    _three(stub, newer)
+    res = run(svc, stub, names=None, all_bots=True)
+    assert res["ok"] and cmds(stub).count("ask") == 6 and "unchanged" not in res["line"]
