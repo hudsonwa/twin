@@ -1,8 +1,36 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 (unreleased, release candidate rc/0.5.2)
+
+Grok Bot Twin 0.5.2 ↔ botport 0.3.3 (pins unchanged; botport 0.3.4 is not released yet).
+
+**What this means for you:** installs and imports are sturdier (Python 3.9, model keys kept by reference, imports
+that fail only on model behaviour are kept and marked), and twin spends fewer Grok turns (unchanged bots are not
+exported again, routine chat sync is at most hourly and shows its weekly cost first). Two opt-in experiments arrive switched off: a same-named Telegram bot per twin and a hidden
+`remote-create`.
+
+### Added
+
+- Per-twin Telegram bots through Telegram managed bots (`telegram_bot_per_twin`, off by default, #67, #68): one
+  request button in the owner's DM; the token goes straight to the OS secret store and reaches the twin's profile
+  only by reference; the bot answers the owner's DM only, with strict tools and manual approvals. `stop`/`remove`
+  turn it off and forget the token.
+- Experimental, hidden `hermes twin remote-create COMPUTER TWIN --plan|--yes` (#70): sets a twin up on another
+  computer over SSH, with the local link code and linked-shared secrets pulled by reference; design in
+  `docs/design/remote-create.md`.
+
+### Changed
+
+- `hermes twin from-hermes` skips the export turn for a bot that reads the same as at its last PASS (name,
+  description, routines, last activity) with its twin still there: 0 turns, and the line says why. `--force`
+  exports anyway.
+- Chat sync routine mode refuses `chat_sync_minutes` below 60 and shows the weekly turn estimate before asking the
+  bot for the routine, in the PASS line and in `chat-sync --status`. Pull stays the default.
 
 ### Fixed
+
+Fixes #74, fixes #75, fixes #76.
+
 - twin#75: `tools/stamp_build.py` (and two plugin writes) no longer use `write_text(newline=)`, which is Python
   3.10+; the macOS system Python 3.9 runs it. `hermes -p TWIN twin check-model` checks the twin whose profile it
   runs in instead of asking which twin. `hermes twin setup --auto` restarts the twin gateways that were running
@@ -14,9 +42,6 @@
   is kept and the twin marked "test failing" (setting `import_test_failing: rollback` rolls back instead); a data
   case (persona, instructions, skills, gateway) still rolls back. `hermes twin test` drops a model answer or reason
   that looks like a credential from its report (its verdict kept) instead of refusing, the botport 0.3.3 rule.
-
-Fixes #76.
-
 - A new twin on a model server that needs a key gets the key by reference: the twin's `config.yaml` says
   `api_key: ${NAME}`, the value goes through the OS secret store into the twin's own private `.env`, taken from the
   model setup or the source profile; the PASS line names the key and where it came from, never its value. No OS
