@@ -244,3 +244,17 @@ def test_link_code_is_sent_but_never_printed():
     rc, out = _full(fake)
     assert rc == 0 and any("--link 7KQ4-M2XD-P9RA" in c for c in fake.calls)
     assert not any("7KQ4" in x for x in out)
+
+
+def test_link_code_only_fills_the_link_step_and_is_never_printed():
+    class Echo(FakeSSH):
+        def __call__(self, host, cmd, timeout):
+            if "--link" in cmd and "fleet --json" not in cmd:
+                self.calls.append(cmd)
+                return 1, "", f"bad code {cmd.split('--link ')[1].split(' ')[0]}"
+            return super().__call__(host, cmd, timeout)
+    fake = Echo()
+    rc, lines = run(fake, remote_hermes_home="/home/u/CODE/hermes-home")
+    link = [c for c in fake.calls if "--link" in c and "fleet" not in c][-1]
+    assert "/home/u/CODE/hermes-home" in link and "--link 7KQ4-M2XD-P9RA --yes" in link
+    assert rc == 1 and "7KQ4-M2XD-P9RA" not in "\n".join(lines) and "[link code]" in lines[-1]

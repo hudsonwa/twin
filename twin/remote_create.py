@@ -227,10 +227,12 @@ def execute(t: Target, twin: str, *, ref: str, install_hermes: bool, runner: Run
                             line(False, "link", "no link code: on this computer `hermes twin share code` needs "
                                                 "sharing on")
                             return 1
-                        cmd = cmd.replace(shlex.quote("CODE"), shlex.quote(code))
+                        cmd = cmd.replace("--link CODE --yes", f"--link {shlex.quote(code)} --yes")
                     rc, so, err = runner(t.host, cmd, s.timeout)
                     if rc != 0:
                         tail = (err.strip() or so.strip()).splitlines()[-1:] or ["exit " + str(rc)]
+                        if s.name == "link" and code:
+                            tail = [tail[0].replace(code, "[link code]")]  # the code is never printed
                         line(False, s.name, tail[0][:200])
                         return 1
                     line(True, s.name, "done")
