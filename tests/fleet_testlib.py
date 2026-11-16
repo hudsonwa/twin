@@ -25,7 +25,7 @@ SCHEMA = "grok-bot-twin.share.v1"
 WIRE_KEYS = {
     "": {"schema", "proto", "changed", "sharing", "rev", "generated_at", "source", "twins", "removed", "fleet"},
     "source": {"id", "name", "platform"},
-    "twins[]": {"id", "name", "description", "version", "updated_at"},
+    "twins[]": {"id", "name", "description", "version", "updated_at", "n"},  # n: twin#69, only from 2
     "removed[]": {"id", "removed_at"},
     "fleet[]": {"id", "name", "platform", "role"},
 }

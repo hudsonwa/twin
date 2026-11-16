@@ -468,17 +468,63 @@ def bot_in_the_way(name: Any) -> bool:
     return _hermes_deleted(base) or (os.path.lexists(home) and not is_leftover(home, patient=False))
 
 
-def unique_profile(name: Any, taken: Any = (), kept: bool = False) -> str:
+def unique_profile(name: Any, taken: Any = (), kept: bool = False, number: Any = 0, fleet: Any = ()) -> str:
     """`kept`: the name is for a kept twin's bot that comes back. A folder with nothing of the owner's in it
-    (is_leftover) does not take a name from it; the caller moves that folder aside (set_aside)."""
-    base = cand = slug(name)
-    n = 2
-    while cand == "default" or cand in taken or (name_taken(cand) and not (
-            kept and not _hermes_deleted(cand) and is_leftover(profiles_root() / cand))):
+    (is_leftover) does not take a name from it; the caller moves that folder aside (set_aside).
+    `number` (twin#69): the instance number the fleet gave this twin ("Acme Support 2"); it is tried first, and
+    the plain name is never taken for it. `fleet`: instance numbers other twins of the same name hold anywhere in
+    the fleet (1 = the plain name); none of them is taken here, so two computers never both make a "2"."""
+    base = slug(name)
+    used = {n for n in (fleet or ()) if isinstance(n, int) and not isinstance(n, bool)}
+    want = number if isinstance(number, int) and not isinstance(number, bool) and 2 <= number <= MAX_INSTANCE else 0
+
+    def numbered(n: int) -> str:
+        if n <= 1:
+            return base
         tail = f"-{n}"
-        cand = base[:64 - len(tail)].rstrip("-_") + tail
+        return base[:64 - len(tail)].rstrip("-_") + tail
+
+    def free(c: str) -> bool:
+        return not (c == "default" or c in taken or (name_taken(c) and not (
+            kept and not _hermes_deleted(c) and is_leftover(profiles_root() / c))))
+
+    if want and want not in used and free(numbered(want)):
+        return numbered(want)
+    if not want and 1 not in used and free(base):
+        return base
+    n = 2
+    while n in used or n == want or not free(numbered(n)):
         n += 1
-    return cand
+    return numbered(n)
+
+
+MAX_INSTANCE = 999
+
+
+def instance_number(profile: Any, name: Any) -> int:
+    """The instance number a twin's bot carries (twin#69): N for "Acme Support N" in folder `acme-support-N`,
+    1 for the plain name (or a folder that is not numbered the way unique_profile numbers it)."""
+    m = re.search(r" (\d{1,3})\Z", shown_name(profile, name)) if isinstance(profile, str) else None
+    plain = " ".join(name.split())[:100] if isinstance(name, str) else ""
+    if m and shown_name(profile, name) != plain:
+        return int(m.group(1))
+    return 1
+
+
+TG_USERNAME_RE = re.compile(r"\A[a-z][a-z0-9_]{3,30}bot\Z")
+
+
+def telegram_username(profile: Any) -> str:
+    """A suggested Telegram username for a twin's own bot, from its folder name (twin#69): `acme_support_2_twin_bot`
+    for `acme-support-2`. Telegram's rules: 5-32 characters of a-z, 0-9 and _, starting with a letter, ending in
+    "bot". A long name is cut before its number, so the number always stays."""
+    text = profile if isinstance(profile, str) else ""
+    m = re.search(r"-(\d{1,3})\Z", text)
+    stem, num = (text[:m.start()], m.group(1)) if m else (text, "")
+    stem = re.sub(r"_+", "_", re.sub(r"[^a-z0-9]+", "_", stem.lower())).strip("_")
+    stem = re.sub(r"\A[^a-z]+", "", stem) or "twin"
+    tail = (f"_{num}" if num else "") + "_twin_bot"
+    return stem[:32 - len(tail)].rstrip("_") + tail
 
 
 # ---- SOUL.md blocks ----------------------------------------------------------------------------------------------
