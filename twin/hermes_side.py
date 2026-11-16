@@ -261,6 +261,32 @@ def _allowed(value: Any, keys: tuple, as_list: bool = False) -> Any:
     return None
 
 
+# The model Hermes' own config template (cli-config.yaml.example) names, with provider "auto" and no server: what a
+# profile made before the owner chose any model is left on (rehearsal 17 Nov: from-hermes run before `hermes model`).
+TEMPLATE_MODELS = ("anthropic/claude-opus-4.6",)
+
+
+def has_template_model(profile_home: Optional[Path]) -> bool:
+    """True when this profile still has Hermes' template model (never chosen by anyone): the id from the template,
+    provider "auto" or none, no base_url and no key of its own. Anything else counts as a choice and is kept."""
+    if profile_home is None:
+        return False
+    text = _read_below_root(Path(profile_home) / "config.yaml", CONFIG_CAP)
+    if not text:
+        return False
+    try:
+        doc = _yaml_load(text)
+    except Exception:
+        return False
+    if not isinstance(doc, dict) or _model_of(doc) not in TEMPLATE_MODELS:
+        return False
+    m = doc.get("model")
+    if not isinstance(m, dict):
+        return True
+    return (str(m.get("provider") or "auto").strip().lower() == "auto"
+            and not m.get("base_url") and not m.get("api_key"))
+
+
 def copy_default_model(profile_home: Path, root: Path) -> Optional[str]:
     """Give a new twin that has no model the owner's default model (the one the default Hermes profile uses).
     Copied: `model`, `fallback_providers`, `fallback_model`, each kept to model ids and provider names. Returns the

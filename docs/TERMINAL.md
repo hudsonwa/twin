@@ -64,7 +64,15 @@ them yourself).
 When a new twin uses a model server that needs a key, the key is kept by reference: the twin's `config.yaml` says
 `api_key: ${NAME}` and the value goes through your OS secret store into the twin's own private `.env`, taken from
 your model setup or the source profile. The PASS line names the key and where it came from, never its value. With no
-OS secret store the line says the key was not kept, and why; give the twin its key yourself then.
+OS secret store, or a locked one (the Keychain in an ssh session), the value goes straight from the source profile's
+`.env` (or the model setup) into the twin's own private `.env` (0600), still by reference, and the line says so. Only
+a key with no value anywhere is not kept; the line says why.
+
+A twin made before you chose any model (Hermes' template model, provider `auto`) takes your Hermes model the next
+time `from-hermes` or `twin add` runs for it, and the PASS line says so; a model anyone chose is never replaced.
+
+The Grok app's debug port is closed at the end of every `from-hermes` run; when that restore fails (for example the
+app could not be started again) it is tried once more after a few seconds, and the FAIL line says it was tried twice.
 
 When Hermes runs with no screen (started over ssh on a Mac, or no display on Linux), a twin's profile gets a headless
 browser (`browser.headed` off), so its screenshots do not time out; the PASS line says so.

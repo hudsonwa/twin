@@ -3,6 +3,7 @@ gets a headless browser, whose screenshots work; (3) the /twin use route asks th
 Invented names and values only; the OS secret store is a mocked one, the Telegram chat a fake asker."""
 from __future__ import annotations
 
+import sys
 import time
 from types import SimpleNamespace
 
@@ -84,14 +85,57 @@ def test_env_reference_in_setup_and_value_already_in_the_store(world, home, serv
     assert _twin_files(home, pid)[0]["model"]["api_key"] == "${HOMEBOX_KEY}"
 
 
-def test_no_store_keeps_nothing_and_says_why(world, home, server):  # conftest: no OS store
-    server("  key_env: HOMEBOX_KEY\n", env=f"HOMEBOX_KEY={VALUE}\n")
+def test_no_store_still_gets_the_key_to_the_twin_by_reference(world, home, server):  # conftest: no OS store
+    """Rehearsal 17 Nov / round 4: with no OS store (the Keychain locked over SSH) the key was not kept and needed a
+    hand edit. The value is already in the source profile's own .env: it goes straight to the twin's own .env."""
+    server("  key_env: HOMEBOX_KEY\n", env=f"HOMEBOX_KEY={VALUE}\nOTHER=1\n")
     pid = TWINS[0][0]
     res = world.set_model(pid, "local-model", endpoint="Homebox")
-    assert res["key"]["name"] == "HOMEBOX_KEY" and "no OS secret store" in res["key"]["not_kept"]
+    assert res["key"] == {"name": "HOMEBOX_KEY", "from": "source profile", "store": "locked"}
     doc, env, raw = _twin_files(home, pid)
-    assert "api_key" not in doc["model"] and VALUE not in raw and VALUE not in env
+    assert doc["model"]["api_key"] == "${HOMEBOX_KEY}" and VALUE not in raw
+    assert f"HOMEBOX_KEY={VALUE}" in env and "OTHER" not in env
+    assert oct((home / "profiles" / pid / ".env").stat().st_mode & 0o777) == "0o600" or sys.platform == "win32"
+    line = model_key.note(res["key"])
+    assert line.startswith("; model key kept by reference (HOMEBOX_KEY, from the source profile;") and VALUE not in line
+    assert "locked" in line and VALUE not in str(res)
+
+
+class LockedStore(MemStore):
+    """A Keychain that is there but refuses to keep anything (locked, an SSH session)."""
+
+    def put(self, name, value):
+        raise secret_ref.NoStore("the Keychain refused to keep it (is it locked?)")
+
+
+def test_locked_store_still_gets_the_key_to_the_twin(world, home, server, monkeypatch, caplog):
+    monkeypatch.setattr(secret_ref, "_override", [LockedStore()])
+    server(f"  api_key: {VALUE}\n")  # a literal key in the model setup
+    pid = TWINS[0][0]
+    with caplog.at_level("DEBUG"):
+        res = world.set_model(pid, "local-model", endpoint="Homebox")
+    assert res["key"] == {"name": "HOMEBOX_API_KEY", "from": "model setup", "store": "locked"}
+    doc, env, raw = _twin_files(home, pid)
+    assert doc["model"]["api_key"] == "${HOMEBOX_API_KEY}" and VALUE not in raw and f"HOMEBOX_API_KEY={VALUE}" in env
+    assert VALUE not in caplog.text and VALUE not in str(res)
+
+
+def test_no_value_anywhere_keeps_nothing_and_says_why(world, home, server):  # conftest: no OS store
+    server("  key_env: HOMEBOX_KEY\n", env="OTHER=1\n")
+    pid = TWINS[0][0]
+    res = world.set_model(pid, "local-model", endpoint="Homebox")
+    assert res["key"]["name"] == "HOMEBOX_KEY" and "no value" in res["key"]["not_kept"]
+    doc, env, raw = _twin_files(home, pid)
+    assert "api_key" not in doc["model"] and "HOMEBOX_KEY" not in env
     assert model_key.note(res["key"]).startswith("; model key HOMEBOX_KEY not kept (")
+
+
+def test_one_prompt_pass_line_says_the_key_went_by_reference_with_the_store_locked():
+    res = {"ok": True, "counts": {}, "test": {"passed": 1, "total": 1}, "profile": "acme-support", "created": True,
+           "model_key": {"name": "HOMEBOX_KEY", "from": "source profile", "store": "locked"}}
+    line = one_prompt._line("Acme Support", res)
+    assert line.startswith("PASS") and "model key kept by reference (HOMEBOX_KEY, from the source profile;" in line
+    assert "twin's own private .env" in line
 
 
 def test_a_server_without_a_key_gets_none(world, home, server, mem):
@@ -237,7 +281,7 @@ def test_set_preset_says_the_browser_went_headless_and_how_to_undo_it(home, monk
 def test_batch_models_names_a_key_that_was_not_kept(world, home, server):  # conftest: no OS store
     """Rehearsal 17 Nov: `finish` reads batch_models, which dropped set_model's key result, so a key that was not
     kept was never said. Each result now carries the key's name and why (never its value)."""
-    server("  key_env: HOMEBOX_KEY\n", env=f"HOMEBOX_KEY={VALUE}\n")
+    server("  key_env: HOMEBOX_KEY\n", env="OTHER=1\n")  # (no value anywhere: a key with a value now goes by .env)
     got = world.batch_models([TWINS[0][0]], "local-model", "Homebox")["results"][0]
     assert got["state"] == "set" and got["key"]["name"] == "HOMEBOX_KEY" and got["key"]["not_kept"]
     assert VALUE not in str(got)

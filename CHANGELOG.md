@@ -40,6 +40,11 @@ exported again, routine chat sync is at most hourly and shows its weekly cost fi
 
 ### Fixed
 
+- Zero hand steps after the 17 Nov rehearsal: a model key reaches a new twin by reference even when the OS secret
+  store is locked (Keychain over ssh: straight into the twin's own 0600 `.env`, the PASS line says so); a twin still on
+  Hermes' template model takes the owner's model on the next `from-hermes` / `twin add`; a failed Grok port restore
+  is retried once, and its FAIL line says it was tried twice.
+
 Fixes #74, fixes #75, fixes #76.
 
 - Release rehearsal fixes: a test line that tripped Hermes' install scan (CAUTION verdict, so a non-interactive

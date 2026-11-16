@@ -11,14 +11,17 @@ failed. Now the key goes with it, by reference, the way docs/SECRETS.md keeps ev
 - The value goes into the OS secret store under NAME (it may already be there), and from there into the twin
   profile's own private `.env` (secret_ref.write_names, 0600), the place Hermes reads a profile's keys from.
 - The twin's config.yaml gets `api_key: ${NAME}`: the reference, never the value.
-- The caller's line names NAME and where it came from, never the value. No OS secret store, or no value under NAME:
-  nothing is written, and the line says the key was not kept and why.
+- The caller's line names NAME and where it came from, never the value. No OS secret store (or a locked one):
+  the value (already on this computer: the source profile's .env or the model setup) goes straight into the twin's
+  own private .env (0600) instead, and the line says so. No value under NAME anywhere: nothing is written, and the line
+  says the key was not kept and why.
 
 The value is never in a return value, a log line, an exception or argv.
 """
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
@@ -123,10 +126,15 @@ def carry(home: Path, base_url: str, twin: str, root: Optional[Path] = None) -> 
     if frm != "secret store":
         try:
             secret_ref.keep(name, value, kind=KIND, twin=twin, item="model")
-        except secret_ref.NoStore as e:
-            return {"name": name, "not_kept": str(e)}
-        except (ValueError, OSError):
+        except ValueError:
             return {"name": name, "not_kept": "the secret store did not keep it"}
+        except (secret_ref.NoStore, OSError, subprocess.SubprocessError):
+            # The OS secret store is locked or missing (the Keychain over SSH, rehearsal 17 Nov): the value is
+            # already on this computer in a file only the owner reads, so it goes straight into the twin's own
+            # private .env (0600), the reference in config.yaml as always. No hand edit; the line says how.
+            if not secret_ref.write_env(Path(home), name, value):
+                return {"name": name, "not_kept": "it could not be written to the twin's own .env"}
+            return {"name": name, "from": frm, "store": "locked"}
     if secret_ref.write_names(Path(home), [name]) != 1:
         return {"name": name, "not_kept": "it could not be written to the twin's own .env"}
     return {"name": name, "from": frm}
@@ -141,5 +149,7 @@ def note(key: Optional[dict]) -> str:
     if not isinstance(key, dict) or not key.get("name"):
         return ""
     if key.get("from"):
-        return f"; model key kept by reference ({key['name']}, from the {key['from']})"
+        via = ("; the OS secret store was locked, so it went straight to the twin's own private .env"
+               if key.get("store") == "locked" else "")
+        return f"; model key kept by reference ({key['name']}, from the {key['from']}{via})"
     return f"; model key {key['name']} not kept ({key.get('not_kept') or 'unknown'})"

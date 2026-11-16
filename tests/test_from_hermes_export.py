@@ -637,17 +637,32 @@ def test_72_interrupt_or_crash_still_restores(svc, world, stub, monkeypatch, exc
 
 
 def test_72_a_failed_restore_is_said_first_and_turns_a_pass_into_a_fail(svc, world, stub, monkeypatch):
+    monkeypatch.setattr(from_hermes, "_sleep", lambda s: None)
     bad = [{"rc": 1, "stdout": "", "stderr": "FAIL: Grok still has the flag"}]
     play(stub, ask_answer(fenced(export())), restore=bad)
     res = run(svc, stub)
-    assert not res["ok"] and res["port"] == "open"
+    assert not res["ok"] and res["port"] == "open" and cmds(stub).count("restore") == 2  # (one retry)
     assert res["line"].startswith("FAIL: the Grok app's debug port could NOT be closed (botport grok restore: Grok "
-                                  "still has the flag); run botport grok restore. the import itself passed:")
+                                  "still has the flag, tried twice); run botport grok restore; if the Grok app is "
+                                  "not running, open it, then run that. the import itself passed:")
     _import_fails(monkeypatch)
     play(stub, ask_answer(fenced(export())), restore=bad)
     res = run(svc, stub)
     assert res["line"].startswith("FAIL: the Grok app's debug port could NOT be closed")
     assert res["line"].index("could NOT be closed") < res["line"].index("behaviour test 5/6")
+
+
+def test_72_a_restore_that_could_not_start_the_app_is_retried_once(svc, world, stub, monkeypatch):
+    """Rehearsal 17 Nov run 3: restore failed ("could not start Grok Bot: open exited 1") and left the Grok app not
+    running until a hand `botport grok restore`. Now the run retries once itself; the second try passing is a PASS."""
+    waits = []
+    monkeypatch.setattr(from_hermes, "_sleep", waits.append)
+    flaky = [{"rc": 1, "stdout": "", "stderr": "FAIL: could not start Grok Bot: open exited 1"},
+             {"rc": 0, "stdout": {"proof": "PASS: restored; checked process args and port file"}}]
+    play(stub, ask_answer(fenced(export())), restore=flaky)
+    res = run(svc, stub)
+    assert res["ok"] and res["port"] == "closed" and cmds(stub).count("restore") == 2
+    assert waits == [from_hermes.RESTORE_RETRY_S] and "could NOT" not in res["line"]
 
 
 def test_72_no_engine_nothing_to_restore(svc, monkeypatch):

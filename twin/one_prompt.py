@@ -487,10 +487,24 @@ def same_server_as_owner(svc: Any, pid: str, home: Path, res: Optional[dict] = N
     from . import endpoints as _ep
     from . import hermes_side as hs
     m = hs.profile_model(home) or ""
+    adopt = ""
+    if hs.has_template_model(home):
+        # Made before the owner chose a model (Hermes' template one, rehearsal 17 Nov): take the owner's model now
+        # that there is one, also on a re-run of from-hermes or `twin add`; a model anyone chose is never replaced.
+        owner = hs.profile_model(store.hermes_root()) or ""
+        if owner and owner != m and not hs.has_template_model(store.hermes_root()):
+            m = adopt = owner
     hit = next((e for e in _ep.configured() if e["model"] == m and e["provider"].startswith("custom")), None)
+    if adopt and hit is None:  # the owner's model is not on their own server: the id (and its provider) only
+        got = svc.set_model(pid, m)
+        if res is not None and got.get("state") == "set":
+            res["model_adopted"] = m
+        return got.get("state") == "set"
     if not m or hit is None:
         return False
     got = svc.set_model(pid, m, _endpoint={"_base_url": hit["base_url"]})
+    if adopt and res is not None and got.get("state") == "set":
+        res["model_adopted"] = m
     if res is not None and isinstance(got.get("key"), dict):
         res["model_key"] = got["key"]
     return got.get("state") == "set"
@@ -576,7 +590,8 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             if not hasattr(eng, "bundle_sync"):
                 raise Refused("this twin is the sample; twin a real Grok bot")
             res["converted"] = make_bot_driven(svc, pid, home)  # (only a twin made just now can still be owned)
-            if made:
+            from .hermes_side import has_template_model
+            if made or has_template_model(home):  # (a re-run: a twin still on Hermes' template model)
                 with contextlib.suppress(Exception):  # (a twin without it still syncs; its test then says so)
                     res["model_server"] = same_server_as_owner(svc, pid, home, res)
             snap = snapshot(pid, home, svc)
@@ -779,6 +794,8 @@ def _line(name: str, res: dict) -> str:
                  f"{', '.join(m['grok_routines_paused']) or 'none'}.")
     scrubbed += _refs_note(res)
     from .model_key import note as _key_note
+    if res.get("model_adopted"):
+        scrubbed += f"; model set to your Hermes model {safe.clean_name(res['model_adopted'], 100)}"
     scrubbed += _key_note(res.get("model_key"))
     if res.get("capabilities"):
         scrubbed += f"; capabilities: {res['capabilities']}"

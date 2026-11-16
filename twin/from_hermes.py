@@ -699,6 +699,23 @@ def close_port(eng: Optional[ge.GrokEngine]) -> Optional[dict]:
     have opened the port), else {"ok", "proof"}."""
     if eng is None:
         return None
+    first = _restore_once(eng)
+    if first["ok"]:
+        return first
+    # Rehearsal 17 Nov (run 3): the restore could not start the Grok app again ("open exited 1") and left it not
+    # running until a hand `botport grok restore`, which then passed. One retry after a short wait does that step.
+    _sleep(RESTORE_RETRY_S)
+    second = _restore_once(eng)
+    if second["ok"]:
+        return {**second, "retried": True}
+    return {"ok": False, "proof": second["proof"] or first["proof"], "retried": True}
+
+
+RESTORE_RETRY_S = 3.0
+_sleep = time.sleep  # (tests put a no-wait one here)
+
+
+def _restore_once(eng: ge.GrokEngine) -> dict:
     try:
         got = eng.restore()
     except Exception as exc:  # noqa: BLE001  (a finally step: report it, never mask the run's own result)
@@ -717,8 +734,10 @@ def with_port(res: dict, port: Optional[dict]) -> dict:
         return res
     res = {**res, "port": "closed" if port["ok"] else "open"}
     if not port["ok"]:
+        tried = ", tried twice" if port.get("retried") else ""
         why = ("FAIL: the Grok app's debug port could NOT be closed (botport grok restore: "
-               f"{port['proof']}); run botport grok restore")
+               f"{port['proof']}{tried}); run botport grok restore"
+               + ("; if the Grok app is not running, open it, then run that" if port.get("retried") else ""))
         rest = res.get("line") or ""
         rest = (rest.removeprefix("FAIL: ") if rest.startswith("FAIL: ")
                 else "the import itself passed: " + rest.removeprefix("PASS: "))

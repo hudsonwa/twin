@@ -1006,6 +1006,76 @@ def test_a_new_twin_gets_the_owners_model_server(svc, home, monkeypatch):
 
 
 
+
+TEMPLATE = 'model:\n  default: "anthropic/claude-opus-4.6"\n  provider: "auto"\n'
+
+
+def test_a_rerun_adopts_the_owners_model_when_the_twin_still_has_hermes_template_one(svc, home, monkeypatch):
+    """Rehearsal 17 Nov: from-hermes run before any model was chosen left the twin on Hermes' template model, and a
+    re-run did not change it (a hand `twin finish --model --endpoint`). Now a re-run takes the owner's model."""
+    from hermes_plugins.grok_bot_twin.twin import endpoints
+    World(svc, monkeypatch)
+    prof = store.profile_home("acme-support")
+    orig = World._make
+
+    def make(self):
+        orig(self)
+        (prof / "config.yaml").write_text(TEMPLATE, encoding="utf-8")
+    monkeypatch.setattr(World, "_make", make)
+    seen = []
+    monkeypatch.setattr(svc, "set_model", lambda pid, m, **kw: seen.append((pid, m, kw)) or {"state": "set"})
+    (home / "config.yaml").write_text(TEMPLATE, encoding="utf-8")  # run 1: the owner has chosen nothing yet
+    monkeypatch.setattr(endpoints, "configured", lambda root=None: [])
+    res = call(svc)
+    assert res["ok"] and seen == [] and "model set to" not in res["line"]
+    # the owner chooses a model on their own server, then runs it again: the twin (still on the template) takes it
+    (home / "config.yaml").write_text('model:\n  default: "local-model"\n  provider: "custom"\n'
+                                      '  base_url: "http://10.0.0.5:8000/v1"\n', encoding="utf-8")
+    monkeypatch.setattr(endpoints, "configured", lambda root=None: [
+        {"name": "homebox", "provider": "custom", "base_url": "http://10.0.0.5:8000/v1", "model": "local-model"}])
+    res = call(svc)
+    assert res["ok"] and seen == [("acme-support", "local-model", {"_endpoint": {"_base_url": "http://10.0.0.5:8000/v1"}})]
+    assert res["model_adopted"] == "local-model" and "model set to your Hermes model local-model" in res["line"]
+
+
+def test_template_model_adopts_a_provider_model_by_id(svc, home, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import endpoints
+    prof = store.ensure_dir(store.profile_home("acme-support"))
+    (prof / "config.yaml").write_text(TEMPLATE, encoding="utf-8")
+    (home / "config.yaml").write_text('model:\n  default: "grok-4.7"\n  provider: "openrouter"\n', encoding="utf-8")
+    monkeypatch.setattr(endpoints, "configured", lambda root=None: [])
+    seen = []
+    monkeypatch.setattr(svc, "set_model", lambda pid, m, **kw: seen.append((pid, m, kw)) or {"state": "set"})
+    res = {}
+    assert one_prompt.same_server_as_owner(svc, "acme-support", prof, res) is True
+    assert seen == [("acme-support", "grok-4.7", {})] and res == {"model_adopted": "grok-4.7"}
+
+
+@pytest.mark.parametrize("twin_cfg", [
+    'model:\n  default: "grok-4.7"\n  provider: "openrouter"\n',  # a model someone chose
+    'model:\n  default: "anthropic/claude-opus-4.6"\n  provider: "anthropic"\n',  # the same id, chosen on purpose
+    'model:\n  default: "anthropic/claude-opus-4.6"\n  provider: "auto"\n  base_url: "http://10.0.0.9/v1"\n'])
+def test_a_chosen_model_is_never_replaced(svc, home, monkeypatch, twin_cfg):
+    from hermes_plugins.grok_bot_twin.twin import endpoints, hermes_side
+    prof = store.ensure_dir(store.profile_home("acme-support"))
+    (prof / "config.yaml").write_text(twin_cfg, encoding="utf-8")
+    (home / "config.yaml").write_text('model:\n  default: "local-model"\n  provider: "custom"\n', encoding="utf-8")
+    monkeypatch.setattr(endpoints, "configured", lambda root=None: [
+        {"name": "homebox", "provider": "custom", "base_url": "http://10.0.0.5:8000/v1", "model": "local-model"}])
+    monkeypatch.setattr(svc, "set_model", lambda *a, **kw: pytest.fail("a chosen model was replaced"))
+    assert not hermes_side.has_template_model(prof)
+    assert one_prompt.same_server_as_owner(svc, "acme-support", prof, {}) is False
+
+
+def test_has_template_model(home):
+    from hermes_plugins.grok_bot_twin.twin import hermes_side
+    tmp_path = store.ensure_dir(store.profile_home("acme-support"))
+    assert not hermes_side.has_template_model(tmp_path) and not hermes_side.has_template_model(None)
+    (tmp_path / "config.yaml").write_text(TEMPLATE, encoding="utf-8")
+    assert hermes_side.has_template_model(tmp_path)
+    (tmp_path / "config.yaml").write_text("model: anthropic/claude-opus-4.6\n", encoding="utf-8")
+    assert hermes_side.has_template_model(tmp_path)
+
 # ---- review H1, H2, M5 -------------------------------------------------------------------------------------------
 def test_move_without_every_grok_routine_paused_first_turns_nothing_on(svc, home, monkeypatch):
     w = World(svc, monkeypatch)
