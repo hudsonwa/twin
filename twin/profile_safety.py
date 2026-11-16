@@ -337,7 +337,8 @@ def _own_tg_bot(c: dict) -> bool:
     """twin#68: Telegram on in a strict twin is its own managed bot (token by the plugin's secrets.command, strict
     tools on Telegram, manual approvals), not the owner's."""
     cmd = str((c.get("secrets") or {}).get("command") or "") if isinstance(c.get("secrets"), dict) else ""
-    return (cmd.startswith("hermes twin telegram token ")
+    appr = c.get("approvals") if isinstance(c.get("approvals"), dict) else {}
+    return (cmd.startswith("hermes twin telegram token ") and appr.get("mode") == "manual"
             and sorted((c.get("platform_toolsets") or {}).get("telegram") or []) == sorted(STRICT_ALLOWED))
 
 
