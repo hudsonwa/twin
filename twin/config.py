@@ -34,7 +34,8 @@ DEFAULTS = {
     "chat_sync_window": "",  # "" = idle (botport launch --for --when-idle); idle | port (only an open port)
     "chat_sync_idle_minutes": 10,  # the Mac must have had no input this long before a window restarts the app
     "setup_from_messaging": False,  # let a messaging chat (Telegram...) start setup or twinning (twin_from_hermes)
-    "twin_safe_mcp": [],  # MCP server names a strict twin keeps (twin/profile_safety.py); none by default
+    "twin_safe_mcp": [],
+    "telegram_bot_per_twin": False,  # twin#68: each twin its own managed Telegram bot (twin/tg_bots.py)  # MCP server names a strict twin keeps (twin/profile_safety.py); none by default
 }
 MIN_INTERVAL = 5
 MAX_INTERVAL = 86400
@@ -143,6 +144,7 @@ def settings() -> dict:
     out["digest_titles"] = _bool(raw.get("digest_titles"), False)
     out["share_names_with_model"] = _bool(raw.get("share_names_with_model"), False)
     out["setup_from_messaging"] = _bool(raw.get("setup_from_messaging"), False)
+    out["telegram_bot_per_twin"] = _bool(raw.get("telegram_bot_per_twin"), False)
     acct = raw.get("grok_account")
     if isinstance(acct, str) and re.fullmatch(r"[0-9a-f]{8}", acct.strip().lower()):
         out["grok_account"] = acct.strip().lower()

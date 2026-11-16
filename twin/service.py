@@ -1396,10 +1396,18 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             return (f"FAIL: safe profile defaults not applied to {profile} ({type(exc).__name__}): its routines "
                     f"and Telegram route stay off until hermes twin safety {profile} --apply passes")
         caps = got.get("capabilities") if isinstance(got, dict) else None
-        if not caps or got.get("preset") == "open":
-            return None
-        return (f"{profile} ({got['preset']}) capabilities: " + profile_safety.capability_words(caps)
-                + " (desktop app and Telegram alike)")
+        note = None
+        if caps and got.get("preset") != "open":
+            note = (f"{profile} ({got['preset']}) capabilities: " + profile_safety.capability_words(caps)
+                    + " (desktop app and Telegram alike)")
+        from . import tg_bots  # twin#68: opt-in, off by default (then nothing here runs)
+        if tg_bots.enabled():
+            try:
+                asked = tg_bots.request(profile, tg_bots.default_api())
+            except Exception as exc:  # noqa: BLE001
+                asked = f"FAIL: telegram bot: {type(exc).__name__}"
+            note = f"{note}; {asked}" if note else asked
+        return note
 
     def _refingerprint(self, profile: Any) -> None:
         from . import profile_safety
@@ -2113,6 +2121,12 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                             _ml.set_direction(prof, layer, "off")
                     except Exception:
                         log.warning("grok-bot-twin: could not switch off a removed twin's memory layers", exc_info=True)
+                if prof:  # twin#68: its own Telegram bot (if any) is off before its config goes back
+                    try:
+                        from . import tg_bots as _tg_bots
+                        _tg_bots.stop(prof)
+                    except Exception:
+                        log.warning("grok-bot-twin: could not turn off a removed twin's Telegram bot", exc_info=True)
                 if prof:  # (with keep_data too: the Hermes bot stays, so it gets its own config back)
                     try:  # config.yaml back as it was when nothing changed it since; then its record goes
                         from . import profile_safety as _ps
