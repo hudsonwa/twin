@@ -1,0 +1,13 @@
+{
+ "about": [
+  "Hermes' own installer that `hermes twin remote-create --install-hermes` may run on another computer (twin#70).",
+  "version: the Hermes release the installer installs; url: a versioned https address of that exact script;",
+  "sha256: the digest of those bytes, checked on the target before the script runs.",
+  "Empty means not pinned yet: --install-hermes then FAILs instead of running an unpinned script."
+ ],
+ "installer": {
+  "version": "",
+  "url": "",
+  "sha256": ""
+ }
+}

@@ -16,7 +16,7 @@ hermes twin remote-create COMPUTER TWIN --plan              # every remote comma
 hermes twin remote-create COMPUTER TWIN --yes [--install-hermes]
 ```
 
-The tool `twin_remote_create(computer, twin)` (later, not in the prototype) calls the same code, and like
+The tool `twin_remote_create(computer, twin)` (experimental) calls the same code, and like
 `requests on` it is one explicit owner prompt that names the computer. A bot cannot pass `--install-hermes` on its
 own initiative.
 
@@ -79,8 +79,18 @@ both make a "2".
   and a re-run that skips done steps (`tests/test_remote_create.py`).
 - Hidden test-only options: `--remote-hermes-home PATH` (every remote `hermes` call runs with that HERMES_HOME;
   for live tests in a throwaway folder) and `--stop-after STEP`.
-- Not built yet: the `instance` remote command (`hermes twin instance create`) needs fleet-wide naming (idea item 7),
-  the local link-code hand-off in `execute` is a callable the CLI does not wire up yet, and the agent tool.
+- `hermes twin instance create TWIN [--name "TWIN N"] --yes` / `instance list [--json]` (hidden, twin/instances.py)
+  records an instance (name, twin, profile id) on that computer; making its own Hermes profile and Telegram bot is
+  later work. Step 7 reads the target's `instance list --json`, adds the names this computer knows, and picks the next
+  free N (fleet-state-wide naming is still v2).
+- `--install-hermes` reads `twin/hermes_installer_pin.json` (version, versioned https URL, SHA-256). The target
+  downloads to a temp file, checks the digest (`sha256sum` or `shasum -a 256`) and only then runs it; never
+  `curl | sh`. The shipped pin is an empty placeholder (no versioned installer URL whose digest could be verified
+  yet), so the step still FAILs and runs nothing until a release fills it.
+- The tool `twin_remote_create(computer, twin[, confirm])`: the first call runs `--plan` (no SSH) and returns a
+  one-use confirm word tied to that plan, computer and twin, valid 10 minutes; only a second call with it, after
+  the owner's yes in the chat, runs the `--yes` path. It never installs Hermes, and it refuses messaging chats and
+  requests from another computer (like `twin_make`).
 
 ## Found in the live test (Linux test computer, 2026-11-16)
 

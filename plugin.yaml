@@ -18,6 +18,7 @@ provides_tools:
   - twin_transcripts_search
   - twin_make
   - twin_from_hermes
+  - twin_remote_create
 provides_hooks:
   - pre_llm_call
   - on_session_start
