@@ -609,6 +609,13 @@ def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_onl
     return res
 
 
+def _grok_app_here(svc: Any) -> bool:
+    try:
+        return bool(svc.grok_app_found())
+    except Exception:  # noqa: BLE001  (a service without the check: keep the old behaviour)
+        return True
+
+
 def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeout_s: int,
          eng: Optional[ge.GrokEngine], how: Optional[str], force_file: bool, take_shared: bool, setup_first: Any,
          only: Optional[list], shown: str, held: Optional[dict] = None, force: bool = False) -> dict:
@@ -623,6 +630,9 @@ def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeo
         if not engine_pinned():  # setup --auto would download a botport with no engine: say what is needed
             return {**_fail(shown, f"{engine_needed_line()} ({why}). Instead, say \"Clone yourself to Hermes\" in "
                                    "the bot's chat in Grok (docs/ONE-PROMPT.md)", fallback=True), "bots": []}
+        if not _grok_app_here(svc):  # setup --auto would download botport to a computer that can never use it
+            return {**_unavailable(shown, f"{why}; the Grok app is not on this computer, so nothing was downloaded: "
+                                          "run this on the computer with the Grok app"), "bots": []}
         try:
             if setup_first is None:
                 from . import auto_setup
