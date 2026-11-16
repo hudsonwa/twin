@@ -82,7 +82,7 @@ both make a "2".
 - Not built yet: the `instance` remote command (`hermes twin instance create`) needs fleet-wide naming (idea item 7),
   the local link-code hand-off in `execute` is a callable the CLI does not wire up yet, and the agent tool.
 
-## Found in the live test (Omarchy, 2026-11-16)
+## Found in the live test (Linux test computer, 2026-11-16)
 
 A throwaway `HERMES_HOME` cannot run Hermes: the Hermes install lives inside the default home
 (`~/.hermes/hermes-agent`) and refuses another home with "no dependency environment is committed for this install".
