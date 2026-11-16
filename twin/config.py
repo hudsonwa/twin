@@ -19,6 +19,7 @@ DEFAULTS = {
     "grok_app_dir": "",
     "grok_account": "",
     "inject_context": True,
+    "origin_note": True,  # twin#64: the origin block in each twin's SOUL.md; "off" takes it out
     "demo_profile": "",
     "digest_to_grok": False,
     "digest_titles": False,
@@ -136,6 +137,7 @@ def settings() -> dict:
         if isinstance(val, str) and val.strip():
             out[key] = os.path.expanduser(val.strip())
     out["inject_context"] = _bool(raw.get("inject_context"), True)
+    out["origin_note"] = _bool(raw.get("origin_note"), True)
     out["watch_grok_changes"] = _bool(raw.get("watch_grok_changes"), True)
     out["digest_to_grok"] = _bool(raw.get("digest_to_grok"), False)
     out["digest_titles"] = _bool(raw.get("digest_titles"), False)

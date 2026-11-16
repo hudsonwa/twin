@@ -365,6 +365,8 @@ def run(svc: Any, open_port: bool = False, fetch: Optional[Fetch] = None, runner
         say(f"Engine ready: preset {eng['preset']}{' (set now)' if eng['set_now'] else ''}, port {eng['port']}.")
     except Stop as exc:
         return 1, f"FAIL: hermes twin setup --auto: {step}: {exc}"
+    from . import origin
+    origin.refresh(svc)  # twin#64: the origin note in every twin follows this install's versions
     return 0, (f"PASS: hermes twin setup --auto: botport {bp['tag']} verified, engine ready (preset {eng['preset']}, "
                f"port {eng['port']}), reachable from profile {prof}"
                + (" (plugin linked and enabled there)" if how == "linked" else "")

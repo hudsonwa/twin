@@ -74,6 +74,11 @@ config_schema:
     default: true
     label: Let chats know this is a twin
     description: Adds a short status note to each chat turn with a twin's Hermes bot ("your Grok twin", an internal id and whether it is up to date). Never names, never content.
+  origin_note:
+    type: bool
+    default: true
+    label: Tell twins how they were made
+    description: Keeps a short fixed note in each twin's SOUL.md saying it was made by Grok Bot Twin and botport (both open source) and which versions. Fixed wording only, never names or content. Off takes the note out.
   digest_to_grok:
     type: bool
     default: false

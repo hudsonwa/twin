@@ -525,10 +525,13 @@ def run(svc: Any, names: Optional[list] = None, all_bots: bool = False, wait_onl
     shown = (names or ["your Grok bots"])[0] if not all_bots else "your Grok bots"
     try:
         with one_prompt.engine_lock():  # a chat-sync tick never closes the port during this run (and waits for one)
-            return _run(svc, names, all_bots, wait_only, timeout_s, eng, how, force_file, take_shared, setup_first,
-                        only, shown)
+            res = _run(svc, names, all_bots, wait_only, timeout_s, eng, how, force_file, take_shared, setup_first,
+                       only, shown)
     except one_prompt.Refused as exc:
         return {**_fail(shown, str(exc)), "bots": []}
+    from . import origin
+    origin.refresh(svc)  # twin#64: a new twin gets the origin note; older ones follow this install's versions
+    return res
 
 
 def _run(svc: Any, names: Optional[list], all_bots: bool, wait_only: bool, timeout_s: int,

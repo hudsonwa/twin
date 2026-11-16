@@ -157,7 +157,7 @@ def test_one_call_makes_a_tested_twin(svc, home, monkeypatch):
     assert w.created == 1 and [c[0] for c in w.eng.calls] == ["remove", "sync", "drift"]
     assert w.imports == [("acme-support", "Acme Support", ["instructions", "connectors"])]
     prof = store.profile_home("acme-support")
-    assert (prof / "SOUL.md").read_text(encoding="utf-8") == "You answer questions about Acme widgets."
+    assert _without_origin((prof / "SOUL.md").read_text(encoding="utf-8")) == "You answer questions about Acme widgets."
     assert res["compare"] == {"passed": 3, "total": 4}
     log = log_lines(home)
     assert len(log) == 1 and log[0]["result"] == "PASS" and log[0]["bot"] == "Acme Support"
@@ -1163,3 +1163,9 @@ def test_skill_text_prints_the_grok_skill(capsys):
     assert cli.main(["skill-text", "--body"]) == 0
     body = capsys.readouterr().out
     assert body.startswith("# Twin yourself to Hermes") and "---" not in body.splitlines()[0]
+
+
+def _without_origin(text):
+    """The SOUL.md text without the plugin's origin note (twin#64), which goes first and leaves the rest as it was."""
+    from hermes_plugins.grok_bot_twin.twin import fleet_profiles, origin
+    return fleet_profiles.set_block(text, origin.BEGIN, origin.END, None)

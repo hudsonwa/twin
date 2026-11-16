@@ -101,7 +101,7 @@ def test_reply_route_twins_with_no_local_command(svc, world, stub, home):
     prompt = [a for a in stub.calls() if a[1] == "ask"][0][3]
     assert "use no local-computer tools" in prompt and "hermes twin" not in prompt and BE.FORMAT in prompt
     prof = store.profile_home("acme-support")
-    assert (prof / "SOUL.md").read_text(encoding="utf-8") == "You answer questions about Acme widgets."
+    assert _without_origin((prof / "SOUL.md").read_text(encoding="utf-8")) == "You answer questions about Acme widgets."
     assert (prof / "skills" / "grok" / "widget-faq").is_dir() and not (prof / "skills" / "grok" / "team-notes").exists()
     assert world.imports and world.imports[0][0] == "acme-support"  # the engine's routine, added switched off
     st = chat_sync.status()["twins"]["acme-support"]
@@ -562,3 +562,9 @@ def test_a_malformed_entry_is_named_by_place_and_reason(svc, world, stub):
     assert res["ok"], res["line"]
     assert "skill 2 (no plain name), blank-one (no text)" in res["line"]
     assert "zt-evil" not in res["line"]
+
+
+def _without_origin(text):
+    """The SOUL.md text without the plugin's origin note (twin#64), which goes first and leaves the rest as it was."""
+    from hermes_plugins.grok_bot_twin.twin import fleet_profiles, origin
+    return fleet_profiles.set_block(text, origin.BEGIN, origin.END, None)

@@ -67,7 +67,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}\Z")
 _WORD_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.:+-]{0,39}\Z")
 _ZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_+-]{0,31}(?:/[A-Za-z0-9_+-]{1,32}){0,2}\Z")
 _MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+-]{0,119}\Z")
-_PLUGIN_BLOCKS_RE = re.compile(r"<!-- grok-bot-twin:begin (twin|fleet|persona) -->\n?.*?\n?<!-- grok-bot-twin:end \1 -->\n?",
+_PLUGIN_BLOCKS_RE = re.compile(r"<!-- grok-bot-twin:begin (twin|fleet|persona|origin) -->\n?.*?\n?<!-- grok-bot-twin:end \1 -->\n?",
                                re.S)
 MAX_NAMES = 100
 MAX_PLATFORMS = 20

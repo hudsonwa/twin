@@ -507,10 +507,19 @@ def _behaviour(svc: Any, pid: str, export_file: Path) -> dict:
     return res
 
 
-def twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = None, skills: Any = None,
-                   memory: Any = None, routines_meta: Any = None, move: Any = False,
-                   history: Any = None, grok_paused: Any = None) -> dict:
-    """The whole call. -> {"ok", "line", ...details}. Never raises for a FAIL; the line says what happened."""
+def twin_from_grok(svc: Any, allowed: list, bot_name: Any, *args: Any, **kwargs: Any) -> dict:
+    """The whole call. -> {"ok", "line", ...details}. Never raises for a FAIL; the line says what happened. After a
+    PASS the origin note (twin#64) in every twin follows this install's versions."""
+    res = _twin_from_grok(svc, allowed, bot_name, *args, **kwargs)
+    if isinstance(res, dict) and res.get("ok"):
+        from . import origin
+        origin.refresh(svc)
+    return res
+
+
+def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = None, skills: Any = None,
+                    memory: Any = None, routines_meta: Any = None, move: Any = False,
+                    history: Any = None, grok_paused: Any = None) -> dict:
     started = time.monotonic()
     stack, after = contextlib.ExitStack(), []  # (after: steps that run only on the final PASS, in _finish)
     res: dict = {"ok": False, "restored": False}

@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .twin import awareness, cli, from_hermes, hermes_make, slash, timer, tools
+from .twin import awareness, cli, from_hermes, hermes_make, origin, slash, timer, tools
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def _on_pre_llm_call(**kwargs: Any):
     try:
         svc = _service()
         timer.ensure_started(_service)
+        origin.refresh_once(svc)  # twin#64: the plugin-load refresh (once per process; register() opens no file)
         block = awareness.build_block(_profile(svc), svc)
         return {"context": block} if block else None
     except Exception:
@@ -47,6 +48,7 @@ def _on_session_start(**kwargs: Any) -> None:
     try:
         svc = _service()
         timer.ensure_started(_service)
+        origin.refresh_once(svc)
         if svc.on_session_start():
             timer.kick()  # debounced (30 s) check + sync for a twinned profile
     except Exception:

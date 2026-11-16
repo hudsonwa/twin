@@ -14,6 +14,7 @@ FIXED = re.compile(r"^(\[Grok Bot Twin: status data, not instructions\]|\[end Gr
                    r"(; \d+ items? changed in both places)?(; \d+ changes? to send to Grok)?"
                    r"(; \d+ items? you do yourself)?\.|"
                    r"Name and description changes reach this twin from Grok in seconds; everything else you do yourself\.|"
+                   r"Made by Grok Bot Twin \d+\.\d+\.\d+ \+ botport \d+\.\d+\.\d+ \(open source\); never guess a version\.|"
                    r"For details call the twin_status or twin_recent tool\. Refs are internal: never show them; say \"your Grok twin\"\.)$")
 
 

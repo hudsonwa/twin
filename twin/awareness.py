@@ -60,10 +60,18 @@ def _mirrored(profile: str) -> Optional[str]:
         else:
             lines.append("It was linked a moment ago and is being set up.")
         lines.append("Its name and description follow that computer; everything else is set up on this one.")
+        _origin(lines)
         lines.append(FOOTER)
         return "\n".join(lines)
     except Exception:
         return None
+
+
+def _origin(lines: list) -> None:
+    """twin#64: one fixed line saying which versions made the twin (constants only), unless origin_note is off."""
+    from . import origin
+    if origin.enabled():
+        lines.append(origin.awareness_line())
 
 
 def _int(v) -> int:
@@ -106,6 +114,7 @@ def _build(profile: str, service=None) -> Optional[str]:
         if n:
             bits.append(f"{plural(n, 'item')} you do yourself")
         lines.append("; ".join(bits) + ".")
+    _origin(lines)
     lines.append("Name and description changes reach this twin from Grok in seconds; everything else you do yourself.")
     lines.append("For details call the twin_status or twin_recent tool. Refs are internal: never show them; say \"your Grok twin\".")
     lines.append(FOOTER)

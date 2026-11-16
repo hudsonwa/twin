@@ -47,7 +47,7 @@ HIDDEN_LINE = "[not shown: looks like a password or key]"
 _OWN_RE = re.compile(re.escape(BEGIN) + r"\n?(.*?)\n?" + re.escape(END) + r"\n?", re.S)
 # the plugin's other marked blocks in the same file (a mirrored twin's name and description, the fleet note): they
 # are facts the plugin keeps, not instructions the owner wrote
-_FLEET_RE = re.compile(r"<!-- grok-bot-twin:begin (twin|fleet) -->\n?.*?\n?<!-- grok-bot-twin:end \1 -->\n?", re.S)
+_FLEET_RE = re.compile(r"<!-- grok-bot-twin:begin (twin|fleet|origin) -->\n?.*?\n?<!-- grok-bot-twin:end \1 -->\n?", re.S)
 _BOTPORT_RE = re.compile(r"<!-- botport:begin ([a-z-]{1,40}) -->\n?(.*?)\n?<!-- botport:end \1 -->\n?", re.S)
 _MARKER_RE = re.compile(r"<!--\s*(?:botport|grok-bot-twin)\s*:", re.I)
 # (\ud800-\udfff: half a surrogate pair, which JSON can carry but no file or answer can be written with)
