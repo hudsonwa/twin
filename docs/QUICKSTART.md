@@ -17,6 +17,8 @@ Skip this if `hermes --version` prints 0.22.7 or newer. Otherwise:
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
+It ends with `Hermes Agent install complete`. If it prints nothing at all, the download was refused (the site
+limits how often one computer fetches it): wait a minute and run it again.
 Then **open a new terminal** (the installer added `hermes` to your PATH there) and check: `hermes --version`.
 The installer may walk you through choosing a model; you can skip that until step 4.
 
@@ -68,7 +70,8 @@ without the Grok app, `from-hermes` stops at once and downloads nothing.
 
 ## Where this was checked
 
-Steps 1 to 3 were followed literally on a fresh Linux computer with an empty home folder: Hermes install
-123 s, plugin 6 s, sample 5 s. Steps 4 and 5 were checked only up to the point where a model key or the Grok
-app is needed (there was neither): `hermes model` is there, and `from-hermes` without the Grok app gives the FAIL
-above. Something else went wrong? [Troubleshooting](GUIDE.md#troubleshooting).
+Steps 1 to 3 were followed literally, twice, on a fresh Linux computer with an empty home folder (Hermes
+0.23.1): Hermes install 123 and 144 s, plugin 6 and 11 s, sample 3 to 5 s; 2 min 38 s in all.
+Steps 4 and 5 were checked only up to the point where a model key or the Grok app is needed (there was
+neither): `hermes model` is there, and `from-hermes` without the Grok app gives the FAIL above.
+Something else went wrong? [Troubleshooting](GUIDE.md#troubleshooting).
