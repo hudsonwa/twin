@@ -203,7 +203,7 @@ def run_one(svc: Any, eng: ge.GrokEngine, name: str, bots: list, how: Optional[s
     key = bot["id"]
     pend = _pending().get(key) if wait_only else None
     if how == "routine" and not wait_only:
-        refused = routine_allowed(eng)
+        refused = chat_sync.routine_refusal() or routine_allowed(eng)
         if refused:
             return _fail(name, refused, mode=how)
     if wait_only and not pend:
@@ -269,7 +269,8 @@ def check(svc: Any, eng: ge.GrokEngine, name: str, bot: dict, how: str, msgs: li
             chat_sync.enrol(out["pair_id"], "routine", bot["id"])
         n = (sync_row.get("counts") or {}).get("new_messages", 0)
         check_word = "the engine lists the routine" if listed else "the bot confirmed the routine"
-        sync_note = (f" Chat sync: routine \"{chat_sync.ROUTINE_NAME}\" every {chat_sync.minutes()} min ({check_word});"
+        sync_note = (f" Chat sync: routine \"{chat_sync.ROUTINE_NAME}\" every {chat_sync.minutes()} min ({check_word};"
+                     f" {chat_sync.cost_line()});"
                      f" first sync landed, {n} new message(s).")
     elif how == "pull":
         if out.get("pair_id"):
@@ -659,6 +660,9 @@ def cmd(a: Any) -> int:
     if only and not a.all:
         print("✗ --only filters --all: hermes twin from-hermes --all --only \"Support\"")
         return 2
+    if (a.route or route()) == "shell" and chat_sync.mode() == "routine" and not a.wait:
+        print(f"Chat sync by routine, every {chat_sync.minutes()} min: {chat_sync.cost_line()} "
+              "(chat_sync_mode pull costs none).")
     res = run(get_service(), names or None, all_bots=a.all, wait_only=a.wait,
               timeout_s=max(60, int(a.timeout)), how=a.route, force_file=a.file, take_shared=a.shared_skills,
               only=only or None)

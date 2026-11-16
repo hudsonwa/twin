@@ -205,12 +205,12 @@ this computer's one-prompt log since the ask.
 | the bot reported PASS, but this computer's one-prompt log has no PASS | The bot did not run the command here (on its cloud computer, say). See the table under [If it says FAIL](#if-it-says-fail). |
 
 **Chat sync** keeps the twin's Hermes chats up with the bot's new messages. The setting `chat_sync_mode` in the
-plugin's settings chooses how, and `chat_sync_minutes` how often (360, every 6 h, by default; 15 to 1440):
+plugin's settings chooses how, and `chat_sync_minutes` how often (360, every 6 h, by default; 15 to 1440, and at least 60 for `routine`):
 
 | `chat_sync_mode` | How | Costs |
 |---|---|---|
 | `pull` (default) | This computer reads the bot's chat through the engine on the plugin's background check, from where it left off (it keeps that place itself), in a short port window opened only while the Mac is idle (below). The first read is part of the PASS. | No Grok usage. Needs the engine, Hermes running, and the Grok app open. |
-| `routine` (opt-in, `--route shell` only) | The prompt also asks the bot to make a Grok routine, **Sync chats to Hermes**, that sends its recent messages with one local command, `hermes twin chat-sync --bot "NAME"`, and to run it once right away. The PASS line confirms the routine (the bot's word, until botport can list routines) and that this first sync landed. | One Grok turn per run, and the Grok app must be open. **Only when Grok's Settings → Bot → Execution on Local Computer is Always allow.** Hermes reads that setting and never changes it; otherwise it says FAIL and why. |
+| `routine` (opt-in, `--route shell` only) | The prompt also asks the bot to make a Grok routine, **Sync chats to Hermes**, that sends its recent messages with one local command, `hermes twin chat-sync --bot "NAME"`, and to run it once right away. The PASS line confirms the routine (the bot's word, until botport can list routines) and that this first sync landed. | One Grok turn per run (every 60 min is about 168 turns a week; the command prints the estimate first, and 15 min is refused), and the Grok app must be open. **Only when Grok's Settings → Bot → Execution on Local Computer is Always allow.** Hermes reads that setting and never changes it; otherwise it says FAIL and why. |
 | `off` | No chat sync; the prompt copies recent conversations as before. | – |
 
 **Idle-only windows (default, twin#52).** The engine reads the chat through the Grok app's local port, and opening

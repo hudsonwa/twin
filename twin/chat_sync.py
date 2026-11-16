@@ -49,6 +49,7 @@ WINDOW_S = 10 * 60       # how long a window may stay open (botport's TTL guard 
 RETRY_MIN = 30           # after "the Mac is in use" (exit 2) or a window that could not open
 MIN_MINUTES, MAX_MINUTES = 15, 24 * 60
 ROUTINE_NAME = "Sync chats to Hermes"
+ROUTINE_MIN_MINUTES = 60  # quota: a routine run is one Grok turn; 15 min was about 670 turns a week
 OVERLAP_MIN = 15  # each routine run sends a little more than its interval; the overlap is de-duplicated
 ARGS = ("bot_name", "history")
 READ_LIMIT = 200
@@ -65,6 +66,26 @@ def minutes() -> int:
         return min(MAX_MINUTES, max(MIN_MINUTES, int(config.get("chat_sync_minutes") or DEFAULT_MINUTES)))
     except (TypeError, ValueError):
         return DEFAULT_MINUTES
+
+
+def weekly_turns(every: int) -> int:
+    """About how many Grok turns a week a routine every `every` minutes costs (one turn per run)."""
+    return round(7 * 24 * 60 / max(1, int(every)))
+
+
+def routine_refusal(every: Optional[int] = None) -> str:
+    """"" when routine mode may run every `every` (default chat_sync_minutes) minutes; else why not."""
+    every = minutes() if every is None else int(every)
+    if every >= ROUTINE_MIN_MINUTES:
+        return ""
+    return (f"chat sync by routine runs at most once an hour: chat_sync_minutes is {every}, and each routine run "
+            f"is one Grok turn (about {weekly_turns(every)} turns a week). Set chat_sync_minutes to "
+            f"{ROUTINE_MIN_MINUTES} or more, or use chat_sync_mode pull (the default: no Grok usage)")
+
+
+def cost_line(every: Optional[int] = None) -> str:
+    every = minutes() if every is None else int(every)
+    return f"each run is one Grok turn: about {weekly_turns(every)} turns a week per bot"
 
 
 def window() -> str:
@@ -360,7 +381,7 @@ def cmd(a: Any) -> int:
             print(f"Last window skipped at {safe.clean_name(sk.get('at'), 40)}: {safe.clean_summary(sk.get('why'), 200)}"
                   " (tried again later).")
         if st["mode"] == "routine":
-            print(f"  Each enrolled bot runs its Grok routine \"{ROUTINE_NAME}\".")
+            print(f"  Each enrolled bot runs its Grok routine \"{ROUTINE_NAME}\"; {cost_line()}.")
         for pid, rec in sorted(st["twins"].items()):
             last = rec.get("last") or {}
             print(f"  {pid}: {rec.get('mode')}; last run {last.get('at') or 'never'}"
