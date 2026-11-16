@@ -5,14 +5,54 @@ twin's own count is botport's turn ledger (`botport_turns_week`, botport with th
 has none and the line says so. Past the owner's budget (`grok_turn_budget_week`, else botport's
 `usage_budget_week`) a warning follows. Without the engine (no botport, the port closed) the line is left out and a
 note says why.
+
+An engine read auto-opens the Grok app's debug port when it is closed (botport's launch policy), so a read that
+found the port closed puts the app back with `botport grok restore` afterwards, as chat sync does; a port someone
+else opened is left alone. A good reading is kept for CACHE_S, so repeated `status` calls do not reopen the port.
 """
 from __future__ import annotations
 
+import contextlib
+import time
 from datetime import datetime
 from typing import Any, Optional
 
-from . import config, grok_engine as ge, safe
+from . import config, grok_engine as ge, one_prompt, safe, store
 from .model import parse_iso
+
+
+CACHE = "grok-usage.json"
+CACHE_S = 15 * 60
+
+
+def _cache_path():
+    return one_prompt._folder() / CACHE
+
+
+def _cached(now: float) -> Optional[dict]:
+    try:
+        rec = store.read_json(_cache_path(), {}) if _cache_path().is_file() else {}
+    except Exception:  # noqa: BLE001  (a broken cache is just a miss)
+        return None
+    if not isinstance(rec, dict) or not isinstance(rec.get("data"), dict):
+        return None
+    at = rec.get("at")
+    if not isinstance(at, (int, float)) or isinstance(at, bool) or not 0 <= now - at < CACHE_S:
+        return None
+    return rec["data"]
+
+
+def _keep(data: dict, now: float) -> None:
+    with contextlib.suppress(Exception):
+        store.atomic_write_json(_cache_path(), {"at": now, "data": data})
+
+
+def _port_open(eng: ge.GrokEngine) -> bool:
+    """True when the port is open (or cannot be told: then restore is not ours to run)."""
+    st = eng.status()
+    if st.exit != ge.DONE or not isinstance(st.data, dict) or "port_open" not in st.data:
+        return True
+    return bool(st.data.get("port_open"))
 
 
 def _int(v: Any) -> Optional[int]:
@@ -43,11 +83,22 @@ def describe(data: dict) -> dict:
     return out
 
 
-def read(svc: Any, eng: Optional[ge.GrokEngine] = None) -> dict:
-    """-> {"ok", "line"} or {"ok": False, "note"}. Never raises; never a bot turn."""
+def read(svc: Any, eng: Optional[ge.GrokEngine] = None, now: Optional[float] = None) -> dict:
+    """-> {"ok", "line"} or {"ok": False, "note"}. Never raises; never a bot turn; never leaves a port it opened."""
+    now = time.time() if now is None else now
+    hit = _cached(now)
+    if hit is not None:
+        return {"ok": True, **describe(hit)}
+    opened = False
     try:
         eng = eng or ge.from_service(svc)
-        res = eng.usage()
+        opened = not _port_open(eng)
+        try:
+            res = eng.usage()
+        finally:
+            if opened:  # this read opened the port: put the app back (a reused port belongs to its opener)
+                with contextlib.suppress(Exception):
+                    eng.restore()
     except ge.Unavailable as exc:
         return {"ok": False, "note": f"Grok usage not shown: {safe.clean_summary(str(exc), 200)}."}
     except Exception as exc:  # noqa: BLE001  (status never fails over this line)
@@ -56,4 +107,6 @@ def read(svc: Any, eng: Optional[ge.GrokEngine] = None) -> dict:
         why = res.proof.removeprefix("FAIL: ") if res.proof else ge.EXIT_WORDS.get(res.exit, "no answer")
         return {"ok": False, "note": f"Grok usage not shown: the engine could not read it "
                                      f"({safe.clean_summary(why, 200)})."}
+    _keep({k: res.data.get(k) for k in ("percent_used", "resets_at", "botport_turns_week", "usage_budget_week")},
+          now)
     return {"ok": True, **describe(res.data)}
