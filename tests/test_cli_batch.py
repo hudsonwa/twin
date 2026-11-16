@@ -374,7 +374,7 @@ def test_real_finish_prints_the_request_once(twin, home, monkeypatch):  # noqa: 
 
 
 def test_finish_says_when_the_model_servers_key_was_not_kept(svc, monkeypatch):
-    """Rehearsal 17 Nov (MBP over SSH, Keychain locked): `finish --endpoint` set the model, the key was not kept,
+    """Rehearsal 17 Nov (a Mac over SSH, Keychain locked): `finish --endpoint` set the model, the key was not kept,
     and the line said only "model set ✓": the twin then failed every chat. It now says so, with the fix, rc 1."""
     fb = FakeBatch(svc, monkeypatch, left={"acme-helper": ["model"], "recipe-planner": ["model"]})
     keys = {"acme-helper": {"name": "CUSTOM_API_KEY", "not_kept": "the Keychain refused to keep it (is it locked?)"},
