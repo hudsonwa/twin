@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.1 (17 November 2026)
+
+Grok Bot Twin 0.5.1 ↔ botport 0.3.3 (pins unchanged).
+
+**What this means for you:** each twin now knows where it came from and can check itself. Its `SOUL.md` gets a short
+note saying which Grok Bot Twin and botport versions made it, kept up to date when the plugin updates (`origin_note: off`
+removes it). Every twin also gets four read-only plugin skills, and `hermes twin check-model` confirms the twin answers
+with the model you configured. A second twin of the same name is now "Acme Support 2" everywhere.
+
+### Added
+
+Fixes #64, fixes #65, fixes #66, fixes #69.
+
+- Origin note: a version-stamped, fixed-wording `origin` block in each owned twin's `SOUL.md`, rewritten once when the
+  plugin or botport version changes, plus one fixed line in the per-turn awareness note (#64). Owner text outside the
+  markers stays byte for byte; the block is never sent to Grok.
+- Skill pack `skills/twin-pack/` (`twin-about-me`, `twin-health`, `twin-update`, `twin-new-computer`), installed into
+  every owned twin and refreshed with the origin note. It is never synced, sent to Grok, copied to linked computers or
+  counted as the bot's own skills; `hermes twin doctor --repair-pack` puts back a deleted pack skill (#65).
+- `hermes twin check-model [TWIN] [--json]`: asks the twin which model and endpoint it uses, through a Hermes turn and
+  the Telegram route, and compares the answer with the profile's `config.yaml` (#66).
+- Telegram-bound text never shows a private IP, a `.local`/`.lan`/`.internal`/tailnet name, a bare hostname or a port;
+  an endpoint shows as its public hostname or "custom endpoint on your network" (#66).
+- A second instance of a twin gets the same number in its profile id, display name and suggested Telegram username
+  ("Acme Support 2", `acme-support-2`, `acme_support_2_twin_bot`); the sharing computer picks the lowest free number
+  across the fleet (#69).
+
 ## 0.5.0 (16 November 2026)
 
 Grok Bot Twin 0.5.0 ↔ botport 0.3.3.
