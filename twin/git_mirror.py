@@ -24,7 +24,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
-from . import safe, store
+from . import safe, skill_pack, store
 from . import secrets as _secrets
 
 ALL = "*"
@@ -113,6 +113,8 @@ def _tree(home: Path, part: str, dest: str) -> dict:
         rel = p.relative_to(root)
         if any(x.startswith(".") for x in rel.parts):
             continue
+        if part == "skills" and skill_pack.is_pack_dir(rel.parts[0]):
+            continue  # twin#65: the plugin's own skill pack is not the bot's history
         text = _read(p)
         if text is not None:
             out[f"{dest}/{rel.as_posix()}"] = text

@@ -318,7 +318,8 @@ def skill_text(profile_home: Optional[Path], name: Any) -> Optional[tuple]:
     candidates = [base / name / "SKILL.md"]
     try:
         with os.scandir(base) as it:
-            cats = sorted(e.name for e in it if e.is_dir(follow_symlinks=False) and valid_id(e.name))[:200]
+            cats = sorted(e.name for e in it if e.is_dir(follow_symlinks=False) and valid_id(e.name)
+                          and e.name != "twin-pack")[:200]  # twin#65: the plugin's pack is never sent to Grok
     except OSError:
         cats = []
     candidates += [base / c / name / "SKILL.md" for c in cats]
