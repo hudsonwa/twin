@@ -195,3 +195,14 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason="checks owner and permission bits or FIFOs (macOS/Linux only)"))
         elif key in _GROK_SIDE:
             item.add_marker(pytest.mark.skip(reason="the Grok-reading side (botport); Windows only follows"))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_gateway_status(monkeypatch):
+    """`hermes twin doctor` asks each twin's gateway for its status (twin gateways check). No test may ask a real
+    Hermes: the default runner refuses, so the check reads it as not running."""
+    from hermes_plugins.grok_bot_twin.twin import gateways
+
+    def refuse(argv, timeout):
+        raise OSError("tests never call a real Hermes gateway")
+    monkeypatch.setattr(gateways, "_run", refuse)

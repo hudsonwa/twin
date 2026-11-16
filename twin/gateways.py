@@ -109,3 +109,70 @@ def note(res: dict) -> str:
         out += ("; OFFLINE twin gateway(s), Telegram silent: " + ", ".join(res["offline"])
                 + " (start with: " + "; ".join(f"hermes -p {p} gateway start" for p in res["offline"]) + ")")
     return out
+
+
+# ---- doctor (read-only): is every twin gateway running, with its Telegram connection up? -------------------------
+_TG_DOWN = ("disconnected", "not connected", "error", "failed", "offline", "down", "stopped", "unauthorized",
+            "invalid token", "conflict", "retrying")
+
+
+def telegram_state(text: str) -> str:
+    """From `gateway status` words: "up", "down", or "unknown" (status says nothing about Telegram)."""
+    lines = [ln.casefold() for ln in text.splitlines() if "telegram" in ln.casefold()]
+    if not lines:
+        return "unknown"
+    return "down" if any(b in ln for ln in lines for b in _TG_DOWN) else "up"
+
+
+def check_one(hermes: str, profile: str, run: Optional[Run] = None) -> dict:
+    """Read-only: one `gateway status` call; never starts, stops or restarts anything.
+    -> {"profile", "running": bool, "telegram": up|down|unknown}"""
+    run = run or _run
+    try:
+        rc, out, err = run([hermes, "-p", profile, "gateway", "status"], STATUS_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError):
+        return {"profile": profile, "running": False, "telegram": "unknown"}
+    text = _text(out) + "\n" + _text(err)
+    words = text.casefold()
+    # (the Telegram lines are judged on their own: "telegram: disconnected" must not make the gateway "stopped")
+    head = "\n".join(ln for ln in words.splitlines() if "telegram" not in ln)
+    running = rc == 0 and "running" in head and not any(n in head for n in _NOT_RUNNING)
+    return {"profile": profile, "running": running, "telegram": telegram_state(text) if running else "down"}
+
+
+def check_all(profiles: Iterable[str], hermes: Optional[str] = None, run: Optional[Run] = None) -> dict:
+    """-> {"ok": [profiles], "offline": [{"profile", "why"}], "unknown_tg": [profiles], "skipped": why-or-""}"""
+    profs = list(dict.fromkeys(p for p in profiles if isinstance(p, str) and p and p != "default"))
+    if hermes is None and profs:
+        from .behaviour import hermes_path
+        hermes = hermes_path()
+    if profs and not hermes:
+        return {"ok": [], "offline": [], "unknown_tg": [], "skipped": "Hermes' own command was not found"}
+    ok, offline, unknown = [], [], []
+    for prof in profs:
+        got = check_one(hermes, prof, run)
+        if not got["running"]:
+            offline.append({"profile": prof, "why": "gateway not running"})
+        elif got["telegram"] == "down":
+            offline.append({"profile": prof, "why": "Telegram not connected"})
+        else:
+            ok.append(prof)
+            if got["telegram"] == "unknown":
+                unknown.append(prof)
+    return {"ok": ok, "offline": offline, "unknown_tg": unknown, "skipped": ""}
+
+
+def doctor_line(res: dict) -> str:
+    """The ONE PASS/FAIL line doctor ends with; every offline twin is named with the command that fixes it."""
+    if res.get("skipped"):
+        return f"FAIL twin gateways: not checked ({res['skipped']}); check with hermes -p TWIN gateway status"
+    if res.get("offline"):
+        names = ", ".join(f"{o['profile']} ({o['why']})" for o in res["offline"])
+        fix = "; ".join(f"hermes -p {o['profile']} gateway restart" for o in res["offline"])
+        return f"FAIL twin gateways: offline, Telegram silent: {names}. Fix: {fix}"
+    if not res.get("ok"):
+        return "PASS twin gateways: no twin profiles to check"
+    line = f"PASS twin gateways: running with Telegram up: {', '.join(res['ok'])}"
+    if res.get("unknown_tg"):
+        line += f" (status did not report Telegram for: {', '.join(res['unknown_tg'])})"
+    return line
