@@ -333,6 +333,14 @@ def want(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str
     return c
 
 
+def _own_tg_bot(c: dict) -> bool:
+    """twin#68: Telegram on in a strict twin is its own managed bot (token by the plugin's secrets.command, strict
+    tools on Telegram, manual approvals), not the owner's."""
+    cmd = str((c.get("secrets") or {}).get("command") or "") if isinstance(c.get("secrets"), dict) else ""
+    return (cmd.startswith("hermes twin telegram token ")
+            and sorted((c.get("platform_toolsets") or {}).get("telegram") or []) == sorted(STRICT_ALLOWED))
+
+
 def problems(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str] = ()) -> list:
     """Why this config does not hold the preset ([] when it does). "open" always holds."""
     if preset == "open":
@@ -368,7 +376,7 @@ def problems(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable
             bad.append("disabled_toolsets")
         if set(c.get("mcp_servers") or {}) - set(keep_mcp):
             bad.append("mcp_servers")
-        if ((c.get("platforms") or {}).get("telegram") or {}).get("enabled"):
+        if ((c.get("platforms") or {}).get("telegram") or {}).get("enabled") and not _own_tg_bot(c):
             bad.append("platforms.telegram.enabled")
     else:
         deny = _standard_denied(allow)

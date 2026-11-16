@@ -115,3 +115,8 @@ config_schema:
     default: ""
     label: Show the sample in this Hermes profile (advanced)
     description: Leave empty and the sample twin stays out of all your chats. Name a Hermes profile to let its chats see the sample; the note then says it is a sample with invented data.
+  telegram_bot_per_twin:
+    type: bool
+    default: false
+    label: Give each twin its own Telegram bot (one tap)
+    description: Off by default. On, a new twin (or hermes twin telegram bot TWIN) makes your Hermes Telegram bot send you one "create bot" button with the twin's name; you tap and confirm in Telegram. Needs Bot Management Mode on that bot (BotFather's Mini App), one host gateway and an OS secret store. The token stays in the OS secret store; the twin answers only you, only in a direct chat.

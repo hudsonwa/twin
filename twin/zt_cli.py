@@ -58,6 +58,17 @@ def cmd_telegram(a: Any) -> int:
         print(tg_route.describe())
         return 0
     names = list(a.twins or [])
+    if action in ("bot", "token"):  # twin#68
+        from . import tg_bots
+        if len(names) != 1:
+            print("FAIL: telegram bot: name one twin")
+            return 1
+        prof = resolve_profile(svc, names[0])
+        if action == "token":
+            return tg_bots.print_token(prof)
+        line = tg_bots.request(prof, tg_bots.default_api(), twin_profiles=twin_profiles(svc))
+        print(line)
+        return 0 if line.startswith("PASS") else 1
     if action == "off":
         line = tg_route.turn_off([resolve_profile(svc, n) for n in names] if names else None)
     else:
@@ -132,7 +143,9 @@ def _only(svc: Any) -> str:
 
 def setup(subs: Any) -> None:
     p = subs.add_parser("telegram", help="Reach twins through your existing Hermes Telegram bot (no BotFather)")
-    p.add_argument("action", nargs="?", choices=("on", "off", "status"))
+    p.add_argument("action", nargs="?", choices=("on", "off", "status", "bot", "token"),
+                   help="bot TWIN: give the twin its own same-named bot (needs telegram_bot_per_twin on; one tap "
+                        "in Telegram); token is for Hermes' secrets.command only")
     p.add_argument("twins", nargs="*", metavar="TWIN")
     p.add_argument("--all", action="store_true", help="on: every twin")
     p.add_argument("--via", metavar="PROFILE", help="The Hermes profile whose Telegram bot to use")
