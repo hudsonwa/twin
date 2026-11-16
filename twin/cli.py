@@ -1799,6 +1799,9 @@ HANDLERS.update(_sync_cli.HANDLERS)
 from . import bulk as _bulk  # noqa: E402  (link-computer; stop needs a name)
 
 HANDLERS.update(_bulk.HANDLERS)
+from . import remote_create as _remote_create  # noqa: E402  (EXPERIMENTAL twin#70, hidden)
+
+HANDLERS.update(_remote_create.HANDLERS)
 from . import git_mirror as _git_cli  # noqa: E402  (git on|off|status)
 
 HANDLERS.update(_git_cli.HANDLERS)
@@ -1964,6 +1967,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     _quick_cli.setup(subs, _twin, _pid)
     _sync_cli.setup(subs, _twin)
     _bulk.setup(subs)
+    _remote_create.setup(subs)
     _git_cli.setup(subs, _twin)
     _secret_cli.setup(subs)
     _zt_cli.setup(subs)
