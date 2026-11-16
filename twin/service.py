@@ -1433,6 +1433,14 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             hs.copy_default_model(home, root)
         except OSError:
             pass
+        # The owner's default model on their own server (provider custom + base_url): the copy above carries the
+        # model id and provider only, so the twin had no server and could not chat (rehearsal 17 Nov, `twin add`).
+        # Point it at that server, its key by reference, the way the one-prompt route does.
+        try:
+            from .one_prompt import same_server_as_owner
+            same_server_as_owner(self, p["pair_id"], home)
+        except Exception:  # (a twin without it still syncs; check-model and its behaviour test say so)
+            pass
         model = hs.profile_model(home)
         if model and model == hs.profile_model(root):
             self._note_entry(p["pair_id"], model={"from": "default", "value": model})

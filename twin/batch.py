@@ -373,13 +373,17 @@ class BatchMixin:
         providers = self._batch_models()[2]
         out = []
         for r in rows:
+            key = None
             try:
-                state = self.set_model(r["pair_id"], model, _from="batch", _providers=providers,
-                                       _endpoint=ep)["state"]
+                got = self.set_model(r["pair_id"], model, _from="batch", _providers=providers, _endpoint=ep)
+                state, key = got["state"], got.get("key")
                 why = ""
             except EngineError as exc:
                 state, why = "failed", exc.message
-            out.append({"pair_id": r["pair_id"], "name": r["name"], "state": state, "why": why})
+            # the server key's name and whether it was kept (twin#76), never its value: a key that was not kept
+            # (a locked Keychain) left the twin unable to chat while `finish` said only "model set" (rehearsal 17 Nov)
+            out.append({"pair_id": r["pair_id"], "name": r["name"], "state": state, "why": why,
+                        **({"key": key} if isinstance(key, dict) else {})})
         return {"results": out}
 
     # ---- matching and importing files ---------------------------------------------------------------------------

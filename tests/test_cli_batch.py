@@ -371,3 +371,19 @@ def test_real_finish_prints_the_request_once(twin, home, monkeypatch):  # noqa: 
     assert out.count(sx.REQUEST.strip()) <= 1
     cfg = home / "profiles" / "acme-support" / "config.yaml"
     assert cfg.is_file() and "grok-4.7" in cfg.read_text(encoding="utf-8")
+
+
+def test_finish_says_when_the_model_servers_key_was_not_kept(svc, monkeypatch):
+    """Rehearsal 17 Nov (MBP over SSH, Keychain locked): `finish --endpoint` set the model, the key was not kept,
+    and the line said only "model set ✓": the twin then failed every chat. It now says so, with the fix, rc 1."""
+    fb = FakeBatch(svc, monkeypatch, left={"acme-helper": ["model"], "recipe-planner": ["model"]})
+    keys = {"acme-helper": {"name": "CUSTOM_API_KEY", "not_kept": "the Keychain refused to keep it (is it locked?)"},
+            "recipe-planner": {"name": "CUSTOM_API_KEY", "from": "model setup"}}
+    monkeypatch.setattr(svc, "batch_models", lambda pids, model, *ep: {"results": [
+        {"pair_id": p, "name": fb.names[p], "state": "set", "why": "", "key": keys[p]} for p in pids]},
+        raising=False)
+    rc, out, _ = run(["finish", "--all", "--model", "grok-4.7-mini", "--yes"])
+    assert rc == 1
+    assert ("× Acme Helper: model set to grok-4.7-mini, but its server's key was not kept (the Keychain refused to "
+            "keep it (is it locked?)), so this twin cannot chat yet.") in out
+    assert " Recipe Planner: model set to grok-4.7-mini ✓" in out

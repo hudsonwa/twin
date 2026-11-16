@@ -218,3 +218,12 @@ def test_literal_key_never_overwrites_a_different_key_of_the_same_name(world, ho
     res = world.set_model(pid, "local-model", endpoint="Homebox")
     assert res["key"]["name"] == "HOMEBOX_API_KEY" and "different key" in res["key"]["not_kept"]
     assert mem.data == {"HOMEBOX_API_KEY": "another-key-entirely"} and VALUE not in str(res)
+
+
+def test_batch_models_names_a_key_that_was_not_kept(world, home, server):  # conftest: no OS store
+    """Rehearsal 17 Nov: `finish` reads batch_models, which dropped set_model's key result, so a key that was not
+    kept was never said. Each result now carries the key's name and why (never its value)."""
+    server("  key_env: HOMEBOX_KEY\n", env=f"HOMEBOX_KEY={VALUE}\n")
+    got = world.batch_models([TWINS[0][0]], "local-model", "Homebox")["results"][0]
+    assert got["state"] == "set" and got["key"]["name"] == "HOMEBOX_KEY" and got["key"]["not_kept"]
+    assert VALUE not in str(got)

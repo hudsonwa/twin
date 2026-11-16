@@ -19,6 +19,7 @@ import pytest
 
 from twin_testlib import central, cli, config, fake_key, home, service  # noqa: F401
 from test_ux_flows import FAKE, P, PROGRAM, _archive, _client, _job, _pair, _svc, _write_exe, fake  # noqa: F401
+from hermes_plugins.grok_bot_twin.twin import yamlio
 from hermes_plugins.grok_bot_twin.twin import connect, hermes_side as hs, importer, pins
 from hermes_plugins.grok_bot_twin.twin import engine as E
 from hermes_plugins.grok_bot_twin.twin.engine import EngineError
@@ -557,6 +558,22 @@ def test_a_new_twin_gets_the_owners_default_model(fake, home):
     os.unlink(prof / "config.yaml")
     p = _pair(svc)
     assert p["setup_left"] == ["instructions", "model"] and p["hermes"]["model_from"] is None and p["model_hint"]
+
+
+def test_a_new_twin_on_the_owners_own_server_gets_that_server(fake, home):
+    """Rehearsal 17 Nov: `hermes twin add` gave a twin the owner's default model on their own server (provider custom,
+    base_url) as model id and provider only, so check-model said "at the provider's default endpoint" and it could
+    not chat. A new twin now gets the server too (the key, when there is one, by reference: test_issue76)."""
+    (home / "config.yaml").write_text("model:\n  default: example-model\n  provider: custom\n"
+                                      "  base_url: http://127.0.0.1:8010/v1\n", encoding="utf-8")
+    svc = fake.svc
+    svc.trust_botport(True)
+    prof = profile(home)
+    made = svc.create(["b-acme-0001"])["pairs"][0]
+    assert made["setup_left"] == ["instructions"]
+    doc = yamlio.module().safe_load((prof / "config.yaml").read_text(encoding="utf-8"))
+    assert doc["model"]["default"] == "example-model" and doc["model"]["provider"] == "custom"
+    assert doc["model"]["base_url"] == "http://127.0.0.1:8010/v1"
 
 
 def test_a_twin_that_botport_already_gave_the_default_model_counts_as_default(fake, home):
