@@ -397,7 +397,9 @@ def _end_process(proc: "subprocess.Popen") -> None:
         if os.name != "nt":
             import signal
             os.killpg(proc.pid, signal.SIGTERM)
-        else:
+        else:  # the tree first, while the program started first is still there to name its children
+            from . import osflags as _osflags
+            _osflags.kill_tree(proc.pid)
             proc.terminate()
     try:
         proc.communicate(timeout=5)
@@ -409,11 +411,9 @@ def _end_process(proc: "subprocess.Popen") -> None:
         if os.name != "nt":  # whatever of its group outlived the polite ending
             import signal
             os.killpg(proc.pid, signal.SIGKILL)
-        else:  # Windows' own taskkill.exe from the system folder, never looked up on PATH
+        else:
             from . import osflags as _osflags
-            subprocess.run([os.path.join(_osflags.windows_system_folder(), "taskkill.exe"), "/PID", str(proc.pid), "/T", "/F"],
-                           capture_output=True, timeout=10, stdin=subprocess.DEVNULL,
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            _osflags.kill_tree(proc.pid)
 
 
 # ---- doing what another computer asked --------------------------------------------------------------------------------------

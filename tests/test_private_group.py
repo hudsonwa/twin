@@ -12,6 +12,8 @@ import types
 
 import pytest
 
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="Unix groups and permission bits; Windows folders have neither")
+
 from twin_testlib import central, home, plugin  # noqa: F401
 from hermes_plugins.grok_bot_twin.twin import hermes_side as hs, store
 

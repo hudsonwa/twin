@@ -33,7 +33,7 @@ def real(tmp_path, monkeypatch):
     home.mkdir()
     stub = tmp_path / "stubbin"
     stub.mkdir()
-    (stub / "hermes").write_text(f"#!{sys.executable} -I\nimport sys; sys.stderr.write('stub hermes\\n'); sys.exit(1)\n")
+    (stub / "hermes").write_text(f"#!{sys.executable} -I\nimport sys; sys.stderr.write('stub hermes\\n'); sys.exit(1)\n", encoding="utf-8")
     (stub / "hermes").chmod(0o755)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("PATH", f"{stub}:/usr/bin:/bin")
@@ -170,7 +170,7 @@ def test_real_locked(real, tmp_path):
     real.demo()
     lock = real.state_dir / ".botport.lock"
     import fcntl
-    fh = open(lock, "a+")
+    fh = open(lock, "a+", encoding="utf-8")
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:

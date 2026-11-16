@@ -297,7 +297,7 @@ def test_fixture_activity_relative_to_demo_start(svc, home):
         age = (now_dt() - parse_iso(e["at"])).total_seconds()
         assert 0 < age < 3600 and ago(e["at"]).endswith("min ago")
     assert entries[0]["summary"] == "Sample started"  # newest first; fixtures sit before the start
-    stored = _json.loads((central(home) / "demo" / "hermes" / "acme-support.json").read_text())
+    stored = _json.loads((central(home) / "demo" / "hermes" / "acme-support.json").read_text(encoding="utf-8"))
     assert all(e["at"].startswith("2000-") for e in stored["activity"] if "offset_s" in e)
 
 

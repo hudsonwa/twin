@@ -66,7 +66,7 @@ def fake(home, tmp_path):
     r.exe = exe
     r.svc = _svc(botport_path=str(exe))
     r.calls = lambda: [json.loads(line)["argv"] for line in
-                       (central(home) / "botport-state" / "fake_calls.jsonl").read_text().splitlines()] \
+                       (central(home) / "botport-state" / "fake_calls.jsonl").read_text(encoding="utf-8").splitlines()] \
         if (central(home) / "botport-state" / "fake_calls.jsonl").exists() else []
     return r
 
@@ -163,7 +163,7 @@ def test_helper_changed_after_the_check_is_noticed_cheaply(fake):
     fake.svc.trust_botport(True)
     assert fake.svc.setup_state()["check"]["done"] is True
     calls = len(fake.calls())
-    fake.exe.write_text(fake.exe.read_text() + "\n# changed\n")
+    fake.exe.write_text(fake.exe.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
     s = fake.svc.setup_state()
     assert s["check"]["done"] is False and s["ready"] is False
     assert s["check"]["problem"] == "botport changed since it was verified. Press Verify botport."
@@ -206,10 +206,10 @@ def test_choose_the_downloaded_program(home, tmp_path, monkeypatch):
     assert out["helper"] == {"found": True, "version": None, "source": "chosen"}
     assert out["check"]["done"] is False and out["ready"] is False  # found; the genuineness check comes next
     if quarantined:  # a byte copy carries no quarantine flag, so macOS will not block Hermes' own copy
-        attrs = subprocess.run(["/usr/bin/xattr", str(dest)], capture_output=True, text=True).stdout
+        attrs = subprocess.run(["/usr/bin/xattr", str(dest)], capture_output=True, text=True, encoding="utf-8").stdout
         assert "com.apple.quarantine" not in attrs
         assert "com.apple.quarantine" in subprocess.run(["/usr/bin/xattr", str(src)], capture_output=True,
-                                                        text=True).stdout
+                                                        text=True, encoding="utf-8").stdout
     assert svc.status(fresh=True)["setup"]["helper_found"] is True
     # through REST too, and the answer is the /setup payload
     r = _client(monkeypatch).post(P + "/engine/path", json={"path": str(src)})
@@ -232,7 +232,7 @@ def test_choose_refuses_what_is_not_the_helper(home, tmp_path):
     svc = _svc()
     dest = central(home) / "helper" / "botport"
     notes = tmp_path / "notes.txt"
-    notes.write_text("just some text")
+    notes.write_text("just some text", encoding="utf-8")
     link = tmp_path / "botport-link"
     real = tmp_path / "botport"
     real.write_bytes(PROGRAM)
@@ -502,7 +502,7 @@ def test_keep_in_hermes_only_and_undo(home, monkeypatch):
     svc.skip("acme-support", "skill:fun-fact")
     svc.remove("acme-support", False)  # the note goes with the twin
     assert not (central(home) / "skipped.json").exists() or json.loads(
-        (central(home) / "skipped.json").read_text()) == {}
+        (central(home) / "skipped.json").read_text(encoding="utf-8")) == {}
 
 
 # ---- "Move to Hermes" leaves a trace and can be undone ----------------------------------------------------------
@@ -541,18 +541,18 @@ def test_move_to_hermes_and_undo_for_a_real_twin(fake, home, monkeypatch):
     jobs_file.parent.mkdir(parents=True)
     mine = _job("a1b2c3d4e5f6", reason="Imported by botport from the Grok bot; resume once the Grok routine is off")
     other = _job("deadbeef0002", paused=False)  # the owner's own running job: never touched
-    jobs_file.write_text(json.dumps({"jobs": [mine, other]}))
+    jobs_file.write_text(json.dumps({"jobs": [mine, other]}), encoding="utf-8")
     svc.create(["b-acme-0001"])
     done = []
 
     def fake_cron(action):
         def run(job_id, profile, ctx=None):
             done.append((action, job_id, profile))
-            data = json.loads(jobs_file.read_text())
+            data = json.loads(jobs_file.read_text(encoding="utf-8"))
             for j in data["jobs"]:
                 if j["id"] == job_id:
                     j["enabled"], j["state"] = action == "resume", "scheduled" if action == "resume" else "paused"
-            jobs_file.write_text(json.dumps(data))
+            jobs_file.write_text(json.dumps(data), encoding="utf-8")
             return True, ""
         return run
 
@@ -569,7 +569,7 @@ def test_move_to_hermes_and_undo_for_a_real_twin(fake, home, monkeypatch):
     assert done == [("resume", "a1b2c3d4e5f6", "acme-support"), ("pause", "a1b2c3d4e5f6", "acme-support")]
     assert _pair(svc)["switched"] is None
     assert [j["job_id"] for j in svc.checklist("acme-support")["switch"]["hermes_jobs_paused"]] == ["a1b2c3d4e5f6"]
-    assert json.loads(jobs_file.read_text())["jobs"][1] == other
+    assert json.loads(jobs_file.read_text(encoding="utf-8"))["jobs"][1] == other
 
 
 def test_pause_cron_has_the_same_rules_as_resume(home):
@@ -630,8 +630,8 @@ def test_skill_sync_reveals_only_real_files_of_this_twin(fake, home, tmp_path):
     assert out["connected"] is True and out["reveal"] == {"key_file": None, "guide_file": None}  # not there yet
     pairs = central(home) / "botport-state" / "pairs"
     (pairs / "acme-support.brief").mkdir(parents=True)
-    (pairs / "acme-support.key").write_text("0" * 64)
-    (pairs / "acme-support.brief" / "AGENT-MIRROR.md").write_text("# guide")
+    (pairs / "acme-support.key").write_text("0" * 64, encoding="utf-8")
+    (pairs / "acme-support.brief" / "AGENT-MIRROR.md").write_text("# guide", encoding="utf-8")
     out = svc.mirror("acme-support", str(folder))
     assert out["reveal"] == {"key_file": str(pairs / "acme-support.key"),
                              "guide_file": str(pairs / "acme-support.brief" / "AGENT-MIRROR.md")}
@@ -686,13 +686,13 @@ def test_remove_everything(fake, home, monkeypatch):
     svc.demo_action("start")
     pairs = central(home) / "botport-state" / "pairs"
     pairs.mkdir(parents=True, exist_ok=True)
-    (pairs / "acme-support.key").write_text("0" * 64)  # the twin's key file
+    (pairs / "acme-support.key").write_text("0" * 64, encoding="utf-8")  # the twin's key file
     (central(home) / "helper").mkdir()
     (central(home) / "helper" / "botport").write_bytes(PROGRAM)
     profile = home / "profiles" / "acme-support"
     profile.mkdir(parents=True, exist_ok=True)
-    (profile / "SOUL.md").write_text("the Hermes copy")
-    (home / "sessions.db").write_text("chats")
+    (profile / "SOUL.md").write_text("the Hermes copy", encoding="utf-8")
+    (home / "sessions.db").write_text("chats", encoding="utf-8")
     before = sorted(p.name for p in central(home).iterdir())
     plan = svc.uninstall(True)
     assert plan["dry_run"] is True and plan["twins"] == 1 and plan["sample"] is True and plan["skill_sync"] == []
@@ -715,7 +715,7 @@ def test_remove_everything(fake, home, monkeypatch):
     # the plugin's data folder is empty: links, key files, earlier versions, sample, helper copy, check record
     assert sorted(p.name for p in central(home).iterdir()) == []
     # the owner's own things are untouched
-    assert (profile / "SOUL.md").read_text() == "the Hermes copy" and (home / "sessions.db").read_text() == "chats"
+    assert (profile / "SOUL.md").read_text(encoding="utf-8") == "the Hermes copy" and (home / "sessions.db").read_text(encoding="utf-8") == "chats"
     st = svc.status(fresh=True)
     assert st["pairs"] == [] and st["sample"]["on"] is False and st["setup"]["helper_checked"] is False
     assert sorted(p.name for p in central(home).iterdir()) == []  # looking at the page afterwards leaves nothing
@@ -728,7 +728,7 @@ def test_remove_everything_without_a_usable_helper(home, tmp_path):
                     "hermes": {"profile": "acme-support"}}])
     pairs = central(home) / "botport-state" / "pairs"
     pairs.mkdir(parents=True)
-    (pairs / "acme-support.key").write_text("0" * 64)
+    (pairs / "acme-support.key").write_text("0" * 64, encoding="utf-8")
     out = svc.uninstall(False)
     assert out["twins"] == 1 and "note" in out and "state:pairs/acme-support.key" in out["removed"]
     assert sorted(p.name for p in central(home).iterdir()) == []  # the key file is gone all the same

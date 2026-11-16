@@ -78,7 +78,7 @@ def test_F3_stop_twinning_forgets_the_hermes_to_grok_allow(allowed):
     svc, w = allowed
     svc.remove(PID, False)
     assert BOT not in h2g_mirror.owner_allowed(svc.central)
-    d = json.loads((svc.central / h2g.STATE_FILE).read_text())
+    d = json.loads((svc.central / h2g.STATE_FILE).read_text(encoding="utf-8"))
     assert all(PID not in d.get(k, {}) for k in ("allow", "base", "runner", "keep_grok"))
     assert not any(c.get("pid") == PID for c in d.get("changes") or [])
     assert w._load()["requests"] == {}  # the change still waiting left the sync bot's box: it is never made

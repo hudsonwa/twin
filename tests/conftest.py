@@ -99,6 +99,8 @@ def _no_extra_program_folders(monkeypatch, tmp_path):
     fake_home = tmp_path / "home-of-the-test"
     fake_home.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(fake_home))
+    if os.name == "nt":  # (Windows finds "~" from USERPROFILE, never HOME: the real Downloads would be read)
+        monkeypatch.setenv("USERPROFILE", str(fake_home))
     # the stand-in botport of these tests is in no table of digests, so every test starts without one; a test
     # about the table sets its own, or reads the one that ships with pins.set_table(None)
     pins.set_table({"releases": {}})
@@ -148,6 +150,11 @@ _POSIX_ONLY = {
     "test_watch.py::test_no_content_is_read",
 }
 _GROK_SIDE = {
+    "test_allowlist_attestation_names.py::test_rest_trust_route_flag",
+    "test_api_contract.py::test_real_twin_answers_fit_the_contract",
+    "test_api_contract.py::test_sample_and_real_twin_answer_in_the_same_shapes",
+    "test_api_contract.py::test_status_keeps_the_helper_facts_right_after_a_sample_action",
+    "test_grok_side_plain_answers.py::test_the_plain_verify_never_waits_long_for_githubs_tool",
     "test_allowlist_attestation_names.py::test_cli_setup_flag",
     "test_allowlist_attestation_names.py::test_tools_resolved_and_checked",
     "test_allowlist_attestation_names.py::test_trust_needs_attestation_or_explicit_opt_out",

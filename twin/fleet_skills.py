@@ -535,7 +535,7 @@ def _write_tree(tmp: Path, files: list) -> None:
             d = d / part
             if not os.path.lexists(d):
                 _osflags.mkdir_private(d)
-        fd = os.open(d / parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o600)
+        fd = os.open(d / parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow | getattr(os, "O_BINARY", 0), 0o600)
         with os.fdopen(fd, "wb") as fh:
             fh.write(f["text"].replace("\r\n", "\n").encode("utf-8"))
             fh.flush()

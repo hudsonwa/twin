@@ -15,11 +15,19 @@ import_history() then, for one twin:
 
 Idempotent: entry_id is a digest of (conversation, role, time, text), so a message already stored is skipped. A
 conversation seen before that gained messages is imported as a continuation holding only the new ones; nothing
-already in Hermes is imported twice. Limits: MAX_CONVS conversations, MAX_MSGS messages each, MAX_CHARS in all.
+already in Hermes is imported twice. Continuous chat sync (twin/chat_sync.py) sends only the newest messages of a
+conversation, so two more rules keep those runs free of duplicates:
+- a conversation's own `id` (the Grok chat's id, when the bot or the engine has one) is its key; without it the
+  key is (`started`, title) as before, so the sync sends the conversation's real `started`, not its first new
+  message's time;
+- a message is also skipped when the same (role, whole second, text) is already stored for this twin under any
+  conversation (`seen`: an HMAC with the archive's key, never the text in the clear). That covers a title or a
+  time format that changed between runs, and an older import made before the conversation had an id. Limits: MAX_CONVS conversations, MAX_MSGS messages each, MAX_CHARS in all.
 """
 from __future__ import annotations
 
 import hashlib
+import hmac
 import sqlite3
 from typing import Any, Optional
 
@@ -34,7 +42,11 @@ SCHEMA = ("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, agent_id
           "seq INTEGER NOT NULL, entry_id TEXT NOT NULL, role TEXT NOT NULL, timestamp_ms INTEGER, body BLOB, "
           "UNIQUE(agent_id, entry_id));"
           "CREATE TABLE IF NOT EXISTS conversations (agent_id TEXT NOT NULL, conv TEXT NOT NULL, title TEXT, "
-          "parts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(agent_id, conv));")
+          "parts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(agent_id, conv));"
+          "CREATE TABLE IF NOT EXISTS seen (agent_id TEXT NOT NULL, digest TEXT NOT NULL, "
+          "PRIMARY KEY(agent_id, digest));"
+          "CREATE TABLE IF NOT EXISTS seen_filled (agent_id TEXT PRIMARY KEY);")
+CONV_ID_MAX = 200
 
 
 class HistoryError(ValueError):
@@ -73,8 +85,12 @@ def _clean(conversations: Any) -> list:
         if not msgs:
             continue
         title = tr._title_of(c.get("title"), msgs)
-        started = tr._clean_text(c.get("started"), 64) or str(msgs[0]["at"])
-        key = hashlib.sha256(f"{started}\n{title}".encode("utf-8", "replace")).hexdigest()[:24]
+        cid = c.get("id")
+        if isinstance(cid, str) and cid.strip() and len(cid) <= CONV_ID_MAX and not secrets.has_secret(cid):
+            key = hashlib.sha256(f"id\n{cid.strip()}".encode("utf-8", "replace")).hexdigest()[:24]
+        else:
+            started = tr._clean_text(c.get("started"), 64) or str(msgs[0]["at"])
+            key = hashlib.sha256(f"{started}\n{title}".encode("utf-8", "replace")).hexdigest()[:24]
         out.append({"key": key, "title": title, "messages": msgs})
     return out
 
@@ -83,8 +99,32 @@ def _entry_id(conv: str, m: dict) -> str:
     return hashlib.sha256(f"{conv}\n{m['role']}\n{m['at']}\n{m['text']}".encode("utf-8", "replace")).hexdigest()[:32]
 
 
+def _seen_digest(key: bytes, pid: str, role: str, at: Any, text: str) -> Optional[str]:
+    """(role, whole second, text) of one twin's message, keyed with the archive's key; None without a time (two
+    messages without a time are told apart only within their conversation)."""
+    if at is None:
+        return None
+    msg = f"{pid}\n{role}\n{int(at)}\n{text}".encode("utf-8", "replace")
+    return hmac.new(key, b"grok-bot-twin seen 1\n" + msg, hashlib.sha256).hexdigest()[:32]
+
+
+def _fill_seen(conn: sqlite3.Connection, key: bytes, pid: str) -> None:
+    """Once per twin: the `seen` digests of messages stored before that table existed (opened with the key)."""
+    if conn.execute("SELECT 1 FROM seen_filled WHERE agent_id = ?", (pid,)).fetchone():
+        return
+    for conv, seq, role, ts, body in conn.execute("SELECT conv, seq, role, timestamp_ms, body FROM messages "
+                                                  "WHERE agent_id = ?", (pid,)).fetchall():
+        text = tr.open_row(key, tr._bind(pid, "history:" + conv, seq, role), body)
+        d = _seen_digest(key, pid, role, ts / 1000 if ts is not None else None, text) if text is not None else None
+        if d:
+            conn.execute("INSERT OR IGNORE INTO seen (agent_id, digest) VALUES (?, ?)", (pid, d))
+    conn.execute("INSERT OR IGNORE INTO seen_filled (agent_id) VALUES (?)", (pid,))
+
+
 def _store_new(conn: sqlite3.Connection, key: bytes, pid: str, conv: dict) -> tuple:
-    """Insert the messages not stored yet. -> (new messages, part number: 0 for a first import)."""
+    """Insert the messages not stored yet (in this conversation, or for this twin at all: `seen`).
+    -> (new messages, part number: 0 for a first import)."""
+    _fill_seen(conn, key, pid)
     have = {r[0] for r in conn.execute("SELECT entry_id FROM messages WHERE agent_id = ? AND conv = ?",
                                        (pid, conv["key"]))}
     seq0 = len(have)
@@ -94,6 +134,11 @@ def _store_new(conn: sqlite3.Connection, key: bytes, pid: str, conv: dict) -> tu
         if eid in have:
             continue
         have.add(eid)
+        digest = _seen_digest(key, pid, m["role"], m["at"], m["text"])
+        if digest is not None:
+            if conn.execute("SELECT 1 FROM seen WHERE agent_id = ? AND digest = ?", (pid, digest)).fetchone():
+                continue
+            conn.execute("INSERT INTO seen (agent_id, digest) VALUES (?, ?)", (pid, digest))
         at = int(m["at"] * 1000) if m["at"] is not None else None
         conn.execute("INSERT INTO messages (agent_id, conv, seq, entry_id, role, timestamp_ms, body) "
                      "VALUES (?, ?, ?, ?, ?, ?, ?)",

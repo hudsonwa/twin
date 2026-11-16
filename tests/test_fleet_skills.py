@@ -223,7 +223,7 @@ def test_skills_are_not_sent_until_the_owner_switches_them_on_and_then_reach_eve
         assert sorted(p.name for p in folder(m).iterdir()) == ["SKILL.md", "notes"]  # no .env, no key file
         arrives(m, "# Packing list\n\nWater, map.\n", "packing-list")
         for p in m.home.rglob("*"):  # the made-up key is nowhere on the linked computer
-            if p.is_file():
+            if p.is_file() and p.suffix != ".lock":  # (Windows locks are mandatory: a held lock file cannot be read)
                 assert key.encode() not in p.read_bytes(), p
         r = state(m, "in_sync")
         assert r["label"] == "same as on mini" and r["version"] == 1 and r["on"] is True and r["versions"] == []

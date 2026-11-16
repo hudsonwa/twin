@@ -51,7 +51,7 @@ def _env() -> dict:
 
 def _run(argv: list, stdin: Optional[str] = None) -> subprocess.CompletedProcess:
     """argv only, no shell; output is captured and never logged (it could echo the input)."""
-    return subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=TIMEOUT_S, env=_env(),
+    return subprocess.run(argv, input=stdin, capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT_S, env=_env(),
                           check=False)
 
 

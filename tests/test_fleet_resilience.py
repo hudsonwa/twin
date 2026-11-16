@@ -63,7 +63,7 @@ def surface(home, source, tmp_path, monkeypatch):  # noqa: F811
 def _killed_link(follower: Machine, code: str, where: str, nth: int) -> int:
     argv = [sys.executable, "-c", KILLED, str(TOOLS), where, str(nth), "--home", str(follower.home),
             "--port", str(follower.port), "--name", follower.name, "link", code]
-    return subprocess.run(argv, capture_output=True, text=True, timeout=60).returncode
+    return subprocess.run(argv, capture_output=True, text=True, timeout=60, encoding="utf-8").returncode
 
 
 def _profiles(m: Machine) -> list:
@@ -97,7 +97,7 @@ def test_a_follower_killed_while_making_its_twins_finishes_them_and_makes_no_sec
     held = st["link"]["twins"]
     assert sorted(e["profile"] for e in held.values()) == SLUGS
     assert not any("making" in e for e in held.values()) and all(e["state"] == "in_sync" for e in held.values())
-    stamp = (orchard.profile("test-scout") / "plugins" / "grok-bot-twin" / fp.COPY_MARKER).read_text().strip()
+    stamp = (orchard.profile("test-scout") / "plugins" / "grok-bot-twin" / fp.COPY_MARKER).read_text(encoding="utf-8").strip()
     assert stamp and stamp != "unfinished"
     for slug, name in zip(SLUGS, sorted(NAMES)):
         prof = orchard.profile(slug)
@@ -107,7 +107,7 @@ def test_a_follower_killed_while_making_its_twins_finishes_them_and_makes_no_sec
         assert "You are the Orchard copy of " + name in soul
         assert "grok-bot-twin" in (prof / "config.yaml").read_text(encoding="utf-8")
         copy = prof / "plugins" / "grok-bot-twin"
-        assert (copy / fp.COPY_MARKER).read_text().strip() == stamp  # whole, and the same in every bot
+        assert (copy / fp.COPY_MARKER).read_text(encoding="utf-8").strip() == stamp  # whole, and the same in every bot
         assert (copy / "plugin.yaml").is_file() and (copy / "twin" / "fleet.py").is_file()
         assert (copy / "desktop" / "plugin.js").is_file() and (copy / "dashboard").is_dir()
         assert not [p.name for p in prof.iterdir() if p.name.endswith(".tmp")]  # no leftover of a cut-short write
@@ -228,14 +228,14 @@ def test_a_copy_of_the_plugin_that_was_cut_short_is_made_whole_next_time(tmp_pat
     (dst / fp.COPY_MARKER).write_text("unfinished\n", encoding="utf-8")
     (dst / "twin" / "fleet.py").write_text("# half a file", encoding="utf-8")
     assert fp.place_plugin(bot) is True
-    assert (dst / fp.COPY_MARKER).read_text().strip() == fp._source_stamp(src)
+    assert (dst / fp.COPY_MARKER).read_text(encoding="utf-8").strip() == fp._source_stamp(src)
     assert (dst / "plugin.yaml").is_file() and (dst / "twin" / "fleet.py").read_text(encoding="utf-8") != "# half a file"
     # while a copy is being made it already carries the mark, so a death at any point leaves it recognisable
     seen = []
     real = shutil.copytree
 
     def look(s, d, *a, **kw):  # (a folder inside a part, like skills/NAME, reaches this again from the real one)
-        seen.append((bot2 / "plugins" / "grok-bot-twin" / fp.COPY_MARKER).read_text().strip())
+        seen.append((bot2 / "plugins" / "grok-bot-twin" / fp.COPY_MARKER).read_text(encoding="utf-8").strip())
         return real(s, d, *a, **kw)
 
     bot2 = tmp_path / "bot2"
@@ -351,35 +351,35 @@ def test_a_plugin_update_under_a_running_process_does_not_set_two_processes_repl
     bot = tmp_path / "bot"
     copy = bot / "plugins" / "grok-bot-twin"
     assert fp.place_plugin(bot, src) is True
-    old = (copy / fp.COPY_MARKER).read_text().strip()
+    old = (copy / fp.COPY_MARKER).read_text(encoding="utf-8").strip()
     assert old == fp._source_stamp(src)
     # the update, while this process still remembers the old stamp
     (src / "twin" / "code.py").write_text("VERSION = 2\n", encoding="utf-8")
     remembered = dict(fp._stamps)
-    new = fp._source_stamp(src, max_age=0)
+    new = fp._source_stamp(src, max_age=-1)  # (-1, not 0: Windows monotonic() can read the same tick twice)
     assert new != old
     # a newer process brings the copy up to date ...
     fp._stamps.clear()
     assert fp.place_plugin(bot, src) is True
-    assert (copy / fp.COPY_MARKER).read_text().strip() == new and "VERSION = 2" in (copy / "twin" / "code.py").read_text()
+    assert (copy / fp.COPY_MARKER).read_text(encoding="utf-8").strip() == new and "VERSION = 2" in (copy / "twin" / "code.py").read_text(encoding="utf-8")
     before = (copy / "twin" / "code.py").stat().st_ino, (copy / fp.COPY_MARKER).stat().st_mtime_ns
     # ... and the process that was already running (it remembers the old stamp) leaves that copy alone
     fp._stamps.clear()
     fp._stamps.update(remembered)
     assert fp.place_plugin(bot, src) is True
     assert ((copy / "twin" / "code.py").stat().st_ino, (copy / fp.COPY_MARKER).stat().st_mtime_ns) == before
-    assert (copy / fp.COPY_MARKER).read_text().strip() == new
+    assert (copy / fp.COPY_MARKER).read_text(encoding="utf-8").strip() == new
     # a copy the old process makes itself is stamped with what it really copied, not with what it remembers
     fp._stamps.clear()
     fp._stamps.update({k: (v[0], time.monotonic() - 10 * fp.STAMP_AGE_S) for k, v in remembered.items()})
     bot2 = tmp_path / "bot2"
     assert fp.place_plugin(bot2, src) is True
-    assert (bot2 / "plugins" / "grok-bot-twin" / fp.COPY_MARKER).read_text().strip() == new
-    assert "VERSION = 2" in (bot2 / "plugins" / "grok-bot-twin" / "twin" / "code.py").read_text()
+    assert (bot2 / "plugins" / "grok-bot-twin" / fp.COPY_MARKER).read_text(encoding="utf-8").strip() == new
+    assert "VERSION = 2" in (bot2 / "plugins" / "grok-bot-twin" / "twin" / "code.py").read_text(encoding="utf-8")
     # and a copy of a really older version is still replaced, once
     (src / "twin" / "code.py").write_text("VERSION = 3\n", encoding="utf-8")
     fp._stamps.clear()
-    assert fp.place_plugin(bot, src) is True and "VERSION = 3" in (copy / "twin" / "code.py").read_text()
+    assert fp.place_plugin(bot, src) is True and "VERSION = 3" in (copy / "twin" / "code.py").read_text(encoding="utf-8")
 
 
 RACER = r"""
@@ -417,7 +417,7 @@ def test_two_processes_bringing_the_same_copies_up_to_date_at_once_leave_every_o
         want = sorted(str(f.relative_to(src)) for f in fp._source_files(src))
         for bot in bots:
             copy = bot / "plugins" / "grok-bot-twin"
-            assert (copy / fp.COPY_MARKER).read_text().strip() == fp._source_stamp(src)
+            assert (copy / fp.COPY_MARKER).read_text(encoding="utf-8").strip() == fp._source_stamp(src)
             have = sorted(str(f.relative_to(copy)) for f in copy.rglob("*") if f.is_file() and f.name != fp.COPY_MARKER)
             assert have == want  # whole, and nothing of the old version left
 

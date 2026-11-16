@@ -188,7 +188,7 @@ def test_botports_doctor_lines_are_masked_whatever_they_carry(home, tmp_path):
     state.mkdir(parents=True, exist_ok=True)
     key = fake_key()
     (state / "fake_mode.json").write_text(json.dumps({"doctor_checks": [
-        {"id": "x", "ok": False, "_own": True, "message": f"look: {key}", "fix": f"paste {key} somewhere"}]}))
+        {"id": "x", "ok": False, "_own": True, "message": f"look: {key}", "fix": f"paste {key} somewhere"}]}), encoding="utf-8")
     # the engine layer takes the mark off what botport sent, and keeps it on its own two lines
     raw = svc.botport().doctor()["checks"]
     assert [c["id"] for c in raw if c.get("_own")] == ["botport_trust", "botport_attestation"]
@@ -242,7 +242,7 @@ def test_a_missing_program_is_named_as_itself(tmp_path):
         assert "botport" not in ei.value.message and ei.value.hint == ""
     # a file that is there but cannot be started
     blocked = tmp_path / "blocked"
-    blocked.write_text("not a program")
+    blocked.write_text("not a program", encoding="utf-8")
     blocked.chmod(0o600)
     with pytest.raises(EngineError) as ei:
         E.run_capped([str(blocked)], 5.0, what=E.WHAT_GH)
@@ -300,3 +300,34 @@ def test_the_disclosure_says_what_the_copy_and_the_page_really_do():
     # the terminal route never tells anyone to unpack an archive
     for text in (readme, disclosure):
         assert "tar -x" not in text
+
+
+@pytest.mark.skipif(os.name == "nt", reason="a #! script stands in for gh")
+def test_gh_finds_the_owners_own_sign_in_not_the_plugins_xdg(home, tmp_path, monkeypatch):
+    """Audit 16 Nov (twin#63): gh ran with the plugin's private XDG folders and said "not signed in"."""
+    exe = tmp_path / "bin" / "botport"
+    exe.parent.mkdir(mode=0o755)
+    exe.write_text(f"#!{sys.executable} -I\n{FAKE.read_text(encoding='utf-8')}", encoding="utf-8")
+    exe.chmod(0o755)
+    os.chmod(tmp_path, 0o700)
+    signed_in = tmp_path / "owner-gh"
+    signed_in.mkdir()
+    (signed_in / "hosts.yml").write_text("github.com: {}\n", encoding="utf-8")
+    gh = tmp_path / "gh"  # verifies only when its config folder holds the sign-in
+    gh.write_text(f"#!{sys.executable} -I\nimport os, sys\n"
+                  "d = os.environ.get('GH_CONFIG_DIR') or os.path.join(os.environ.get('XDG_CONFIG_HOME', ''), 'gh')\n"
+                  "sys.exit(0 if os.path.isfile(os.path.join(d, 'hosts.yml')) else 4)\n", encoding="utf-8")
+    gh.chmod(0o755)
+    monkeypatch.setattr(E, "find_gh", lambda path=None: (str(gh), None))
+    monkeypatch.setenv("GH_CONFIG_DIR", str(signed_in))
+    bp = _svc(botport_path=str(exe)).botport()
+    assert bp._gh_env()["GH_CONFIG_DIR"] == str(signed_in)
+    assert bp._gh_env()["XDG_CONFIG_HOME"] == bp._env()["XDG_CONFIG_HOME"]  # botport's own stay private
+    assert bp._attest(str(exe), "0" * 64, None, E.EXPECTED_BOTPORT_TAG)["verified"] is True
+    monkeypatch.delenv("GH_CONFIG_DIR")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    (tmp_path / "gh").rename(tmp_path / "gh-prog")
+    monkeypatch.setattr(E, "find_gh", lambda path=None: (str(tmp_path / "gh-prog"), None))
+    signed_in.rename(tmp_path / "gh")
+    assert E.gh_config_dir() == str(tmp_path / "gh")
+    assert bp._attest(str(exe), "0" * 64, None, E.EXPECTED_BOTPORT_TAG)["verified"] is True

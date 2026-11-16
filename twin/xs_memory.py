@@ -293,7 +293,7 @@ def _file_lock(lock: Path, wait: float = 5.0) -> Iterator[bool]:
     fd, got = None, False
     try:
         store.ensure_dir(lock.parent)
-        fd = os.open(lock, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        fd = os.open(lock, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0), 0o600)
         end = time.monotonic() + wait
         while True:
             try:

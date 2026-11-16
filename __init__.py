@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .twin import awareness, cli, hermes_make, slash, timer, tools
+from .twin import awareness, cli, from_hermes, hermes_make, slash, timer, tools
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +78,10 @@ def register(ctx) -> None:
                       emoji="🪞")
     ctx.register_tool("twin_make", tools.TOOLSET, hermes_make.TWIN_MAKE_SCHEMA, hermes_make.twin_make,
                       description="Make or sync the twin of one named Grok bot; one PASS/FAIL line", emoji="🪞")
+    ctx.register_tool(from_hermes.TOOL, tools.TOOLSET, from_hermes.TWIN_FROM_HERMES_SCHEMA,
+                      from_hermes.twin_from_hermes,
+                      description="Ask a Grok bot (or all) to twin itself and keep its chats in sync; one PASS/FAIL line",
+                      emoji="🪞")
     ctx.register_hook("pre_llm_call", _on_pre_llm_call)
     ctx.register_hook("on_session_start", _on_session_start)
     ctx.register_hook("on_session_end", _on_session_end)

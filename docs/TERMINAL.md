@@ -42,6 +42,41 @@ hermes twin setup --link 7KQ4-M2XD-P9RA --yes    # on a computer without the Gro
 - `--check` and `--plan` read the plugin's own records and look whether files are there. They do not run
   botport and do not ask Grok for anything.
 
+## Zero-touch setup, Telegram and twin safety
+
+`hermes twin setup --auto` sets this computer up with no question and no manual step, and ends with one PASS or
+FAIL line naming the step. It needs botport 0.3.0 or newer (the Grok engine), which this
+plugin version pins; with an older release chosen in `botport_release_tag` it FAILs at once with "needs botport
+0.3.0 or newer (the Grok engine); the botport_release_tag setting chooses 0.2.1". The steps: botport fetched (pinned release, SHA-256 checked) and verified; `hermes twin`
+made to work from the profile your terminal is on (no `-p default`; the plugin is linked into that profile and
+enabled there, and the PASS line says so; a twin's own profile is refused); the Grok app's PATH checked; botport's Grok engine
+checked, its `fast` preset set only if no Grok policy was saved; Grok's Execution setting read before and after,
+never written. `--open-port` also opens the Grok port now (restarts the Grok app); without it the port opens on
+demand. `hermes twin setup --install-line` prints the pinned one-line install for this plugin version.
+
+`hermes twin telegram on TWIN...` (or `--all`) lets you reach twins through the Telegram bot one of your Hermes
+profiles already has: no BotFather, no new token. In that bot's chat: `/twin to TWIN TEXT`, or `/twin use TWIN`
+and then `/twin say TEXT` (`/twin use off` to stop). Only direct messages from your own numeric Telegram id (the
+one the profile already allows; `--owner ID` when it allows several) are answered; groups and other people are
+refused. Approvals in the twin's turn are answered "deny". The token is never read, copied or written: the plugin
+only checks that the profile has one. `telegram on` links this plugin into that profile and enables it there
+(`hermes -p PROFILE plugins enable grok-bot-twin`) when it does not have it yet, and the PASS line says so; only
+that profile's bot answers `/twin to|use|say`. `--via PROFILE` picks the profile; `telegram off`, `telegram status`.
+Stopping a twin takes it off the route.
+With no Telegram bot in any profile it FAILs and names the one human step (@BotFather).
+
+`hermes twin safety [TWIN] [strict|standard|open]` shows or sets a twin's tool preset. By default a rule picks it:
+a bot whose instructions, skills or routines mention shell, ssh, servers, trading, brokers, wallets or credentials
+gets `strict` (knowledge, memory, session search and todo only; approvals manual; no MCP server except those named
+in the `twin_safe_mcp` setting; the twin's own Telegram off); any other gets `standard` (no terminal, code,
+delegation, cron, browser or computer use, and by default no web, x_search, file or image_gen and no MCP server
+except those in `twin_safe_mcp`; approvals manual). `--apply` applies the rule's choice; naming a preset is your
+choice and is kept. Widen `standard` one toolset at a time: `hermes twin safety TWIN standard --allow web` (also
+`x_search`, `file`, `image_gen`, `mcp` for all its MCP servers; repeatable). A twin whose model is not local FAILs
+the check until you record `--model-policy any`. Every write keeps a dated copy of the config (the newest five).
+Stopping a twin puts its config.yaml back as it was before the safe defaults when nothing changed it since;
+otherwise the stop names the kept copy (`.twin-pre-safety.yaml`).
+
 ## The sample tour
 
 The sample has invented bots: Acme Support (skills greet-visitors and fun-fact, routines "Morning summary" and
@@ -72,7 +107,7 @@ In a chat, `/twin` shows the same status.
 ## Get botport in the terminal (for your real bots)
 
 The Twins page does this with two buttons. In the terminal, download botport for your computer from its
-[release page](https://github.com/hudsonwa/botport/releases/tag/v0.2.1) (plain `hermes twin setup` prints the
+[release page](https://github.com/hudsonwa/botport/releases/tag/v0.3.3) (plain `hermes twin setup` prints the
 name of the file for your computer), then hand the download to the plugin:
 
 ```sh
@@ -90,8 +125,10 @@ Hermes keeps its own copy of botport and verifies it before it is ever run. A bo
 others, keeps a private copy and verifies that copy: its SHA-256 must be on the list of release files that
 ships with this plugin version, so no other program and no network is needed. Only then does it run botport
 once to check its features, and it records the SHA-256. Before every run the plugin checks the digest again
-and refuses to run a changed program. The plugin never downloads or updates botport; it only copies the file
-you chose. `hermes twin setup --with-github` verifies botport against the publisher's signed build record on
+and refuses to run a changed program. Only `hermes twin setup --auto` downloads botport: the pinned release
+file for this computer, from the fixed GitHub release address, checked against the SHA-256 table before anything
+else touches it (see "Zero-touch setup" below). Otherwise the plugin never downloads or updates botport; it only
+copies the file you chose. `hermes twin setup --with-github` verifies botport against the publisher's signed build record on
 GitHub instead (this needs GitHub's command-line tool, [`gh`](https://cli.github.com/), signed in once with
 `gh auth login`) and prints the exact check it runs (and, while botport is not on this computer yet, the `gh`
 command that downloads the release); `hermes twin verify` runs that check again later. If a file is not on the list and `gh` is already installed,
@@ -101,7 +138,7 @@ the plugin tries that check by itself. For a botport you built yourself there is
 until you verify a released build. The `gh` and `hermes` commands the plugin runs are resolved to their real
 paths and get the same owner/permission check; doctor shows both paths.
 
-`hermes twin setup` verifies against one release (v0.2.1); to accept another release
+`hermes twin setup` verifies against one release (v0.3.3); to accept another release
 set "botport release to accept" (`botport_release_tag`) or run `hermes twin setup --tag vX.Y.Z` (a release this
 plugin version has no list for is verified with `--with-github`). The plugin also
 refuses to run if any folder from the Hermes root down to its data folder is a symlink, owned by someone else
@@ -172,6 +209,8 @@ nothing more.
 |---|---|
 | `skill-text` | Print the skill to give a Grok bot once. |
 | `from-grok --bot NAME` / `back-to-grok --bot NAME` | Run by the Grok bot itself, with its state as JSON on stdin. You do not run these by hand. |
+| `from-hermes BOT` / `--all` | From Hermes, through botport's Grok engine: the bot exports its instructions, memory and skills with its own tools (no local command, no approval), Hermes checks the export as untrusted data and imports it; history and routines are read by the engine. `--file` asks for the file route, `--shared-skills` also imports skills other bots made, `--route shell` the old route (the bot runs from-grok here; `--wait` for a run left waiting); `--timeout S`; `--json`. Needs botport 0.3.0 or newer (`botport grok`; this version pins 0.3.3) ([ONE-PROMPT.md](ONE-PROMPT.md#from-hermes-and-chat-sync)). |
+| `chat-sync` | Chat sync: `--status` (mode, interval, each twin's last run), `--pull [TWIN\|--all]` (read new messages through the engine now). `--bot NAME` is what the bot's routine runs, with its new messages as JSON on stdin. |
 | `git on\|off\|status [TWIN\|--all]` | Optional git history of a twin (`--remote URL` to push, `--with-history`). |
 | `bot-driven [TWIN]` | Your own step, once, for a twin made on the Twins page before its first one prompt ([below](#bot-driven)); `--dry-run` shows what changes. |
 | `mcp --bot NAME` | The same two calls as a local MCP server, for a later Grok app; not used today. |

@@ -41,7 +41,7 @@ def real_never_allowed(svc, home):  # noqa: F811
     store.atomic_write_json(svc.central / "pairs.json", {"pairs": [
         {"pair_id": PID, "grok": {"id": BOT, "name": "Acme Helper"}, "hermes": {"profile": PID}, "job_ids": []}]})
     (home / "profiles" / PID).mkdir(parents=True)
-    (home / "profiles" / PID / "SOUL.md").write_text(_soul("Acme Helper", "Helps with Acme widgets.", "Be brief."))
+    (home / "profiles" / PID / "SOUL.md").write_text(_soul("Acme Helper", "Helps with Acme widgets.", "Be brief."), encoding="utf-8")
     w = h2g.FakeGrokWriter()
     w.put_bot(BOT, name="Acme Helper", description="Helps with Acme widgets.", instructions="Be brief.")
     svc.h2g_test_writer = w
@@ -56,8 +56,8 @@ def real(svc, home):  # noqa: F811
          "job_ids": ["job-1"]}]})
     prof = home / "profiles" / PID
     (prof / "cron").mkdir(parents=True)
-    (prof / "SOUL.md").write_text(_soul("Acme Helper", "Helps with Acme widgets.", "Be friendly.\nBe brief."))
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [_job(False)]}))
+    (prof / "SOUL.md").write_text(_soul("Acme Helper", "Helps with Acme widgets.", "Be friendly.\nBe brief."), encoding="utf-8")
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [_job(False)]}), encoding="utf-8")
     w = h2g.FakeGrokWriter()
     w.put_bot(BOT, name="Acme Helper", description="Helps with Acme widgets.", instructions="Be friendly.\nBe brief.",
               routines=[{"key": "morning-digest", "name": "Morning digest", "schedule": "0 9 * * *",
@@ -70,7 +70,7 @@ def test_real_twin_without_the_mirror_says_so_and_changes_nothing(real):
     info = svc.to_grok_info(PID)
     assert info["allowed"] == [] and info["writer"] == "none" and info["permission"] == "not_set_up"
     svc.to_grok_allow(PID, ["name"])
-    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."))
+    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."), encoding="utf-8")
     p = svc.to_grok_preview(PID)
     assert p["blocked"] == "The sync bot is not set up for this bot yet."
     with pytest.raises(EngineError) as e:
@@ -86,10 +86,10 @@ def test_hermes_side_is_read_from_the_twins_own_files(real):
                                  "prompt": "Say good morning to the team.", "enabled": False}]
     # the owner's pasted block wins over botport's persona section
     (prof / "SOUL.md").write_text(_soul("Acme Helper", "x", "Old.") +
-                                  "<!-- grok-bot-twin:begin instructions -->\nPasted.\n<!-- grok-bot-twin:end instructions -->\n")
+                                  "<!-- grok-bot-twin:begin instructions -->\nPasted.\n<!-- grok-bot-twin:end instructions -->\n", encoding="utf-8")
     assert svc._h2g_hermes(PID)["instructions"] == "Pasted."
     # a job that is not the twin's (not recorded, not an importer's) is never read
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [dict(_job(True), id="other")]}))
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [dict(_job(True), id="other")]}), encoding="utf-8")
     assert svc._h2g_hermes(PID)["routines"] == []
 
 
@@ -98,7 +98,7 @@ def test_preview_apply_undo_with_a_writer(real):
     svc.h2g_test_writer = w
     svc.to_grok_allow(PID, "all")
     assert svc.to_grok_preview(PID)["nothing"] is True
-    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe short."))
+    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe short."), encoding="utf-8")
     p = svc.to_grok_preview(PID)
     assert [c["item"] for c in p["changes"]] == ["name", "instructions"]
     assert "+Be short." in p["changes"][1]["diff"]
@@ -120,11 +120,11 @@ def test_routine_handover_pauses_hermes_first(real, monkeypatch):
 
     def act(action, job_id, profile, ctx=None):
         calls.append((action, job_id, profile))
-        jobs.write_text(json.dumps({"jobs": [_job(action == "resume")]}))
+        jobs.write_text(json.dumps({"jobs": [_job(action == "resume")]}), encoding="utf-8")
         return True, ""
 
     monkeypatch.setattr(importer, "_cron_action", act)
-    jobs.write_text(json.dumps({"jobs": [_job(True)]}))  # it runs in Hermes now
+    jobs.write_text(json.dumps({"jobs": [_job(True)]}), encoding="utf-8")  # it runs in Hermes now
     svc.to_grok_allow(PID, ["routines"])
     r = svc.to_grok_runner(PID, "Morning digest", "grok")
     assert r["runner"] == "grok" and calls == [("pause", "job-1", PID)]
@@ -137,7 +137,7 @@ def test_routine_handover_pauses_hermes_first(real, monkeypatch):
 def test_routine_handover_refused_when_hermes_does_not_pause(real, monkeypatch):
     svc, prof, w = real
     svc.h2g_test_writer = w
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [_job(True)]}))
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [_job(True)]}), encoding="utf-8")
     monkeypatch.setattr(importer, "_cron_action", lambda *a, **k: (True, ""))  # says yes, but the job stays on
     svc.to_grok_allow(PID, ["routines"])
     with pytest.raises(EngineError) as e:
@@ -283,7 +283,7 @@ def test_allow_records_the_exact_rule_and_disallow_names_it_to_delete(real, tmp_
     assert g["items"] == ["name", "routines"] and g["at"] and "Auto-Review" in g["where"]
     assert f"the bot with id {BOT}" in g["rule"] and "named" not in g["rule"] and "every bot" not in g["rule"]
     assert "Mirror\"" not in g["rule"] and "not saving new routines" in g["rule"]
-    d = json.loads((svc.central / h2g.STATE_FILE).read_text())
+    d = json.loads((svc.central / h2g.STATE_FILE).read_text(encoding="utf-8"))
     assert d["allow"][PID]["rule"] == g["rule"]
     part = svc.to_grok_disallow(PID, ["name"])
     assert part["allowed"] == ["routines"] and "revoke" not in part
@@ -300,7 +300,7 @@ def test_disallow_forgets_pending_requests_of_that_twin(real, tmp_path):
     w.forget = forgotten.append
     svc.h2g_test_writer = w
     svc.to_grok_allow(PID, ["name"])
-    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."))
+    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."), encoding="utf-8")
     r = svc.to_grok_apply(PID, svc.to_grok_preview(PID)["change_id"])
     assert r["state"] == "sent"
     out = svc.to_grok_disallow(PID, "all")
@@ -315,7 +315,7 @@ def test_undo_and_runner_move_recheck_allow_and_permission(real, monkeypatch):
     svc.h2g_test_writer = w
     jobs = prof / "cron" / "jobs.json"
     svc.to_grok_allow(PID, "all")
-    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."))
+    (prof / "SOUL.md").write_text(_soul("Acme Helper Pro", "Helps with Acme widgets.", "Be friendly.\nBe brief."), encoding="utf-8")
     r = svc.to_grok_apply(PID, svc.to_grok_preview(PID)["change_id"])
     assert r["state"] == "done"
     info = svc.to_grok_info(PID)
@@ -335,18 +335,18 @@ def test_undo_and_runner_move_recheck_allow_and_permission(real, monkeypatch):
     with pytest.raises(EngineError) as e:
         svc.to_grok_runner(PID, "morning-digest", "grok")
     assert e.value.code in ("no_permission", "not_in_grok")
-    assert json.loads(jobs.read_text())["jobs"][0]["enabled"] is False
+    assert json.loads(jobs.read_text(encoding="utf-8"))["jobs"][0]["enabled"] is False
 
 
 def test_routine_set_to_grok_but_on_in_hermes_is_held_both_on(real):
     svc, prof, w = real
     svc.h2g_test_writer = w
     svc.to_grok_allow(PID, ["routines"])
-    d = json.loads((svc.central / h2g.STATE_FILE).read_text())
+    d = json.loads((svc.central / h2g.STATE_FILE).read_text(encoding="utf-8"))
     d["runner"][PID] = {"morning-digest": "grok"}
     store.atomic_write_json(svc.central / h2g.STATE_FILE, d)
     j = dict(_job(True), prompt="Say good morning to the whole team.")
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [j]}))
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [j]}), encoding="utf-8")
     p = svc.to_grok_preview(PID)
     assert [h["code"] for h in p["held"]] == ["both_on"] and not p["changes"]
 
@@ -356,7 +356,7 @@ def test_terminal_prints_routine_schedule_and_prompt_diff(real, capsys):
     svc.h2g_test_writer = w
     svc.to_grok_allow(PID, ["routines"])
     j = dict(_job(False), prompt="Say good morning to the whole team.", schedule={"kind": "cron", "expr": "30 8 * * *"})
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [j]}))
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [j]}), encoding="utf-8")
     capsys.readouterr()
     assert cli.main(["to-grok", "Acme Helper"]) == 0
     out = capsys.readouterr().out

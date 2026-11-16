@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 from twin_testlib import ROOT, config, home, service, timer  # noqa: F401
+from hermes_plugins.grok_bot_twin.twin import pins
 import test_service_real_botport as real_rig
 from test_service_real_botport import rig  # noqa: F401  (the real-helper sandbox, skipped without BOTPORT_TEST_BIN)
 
@@ -583,7 +584,9 @@ def test_first_run_answers_fit_the_contract(home, monkeypatch):
     assert _validate_all(first) == []
     assert first["status"]["mode"] == "setup" and first["status"]["pairs"] == []
     assert first["status"]["sample"] == {"on": False, "hide_real": False, "instructions_example": None}
-    assert first["status"]["has_data"] is False and first["status"]["setup"]["cause"] is None
+    no_build = pins.platform_target() not in pins.TARGETS  # (Windows: botport has no build there, and says so)
+    assert first["status"]["has_data"] is False
+    assert first["status"]["setup"]["cause"] == ("no_build" if no_build else None)
     assert first["setup"]["ready"] is False and first["setup"]["helper"] == {"found": False, "version": None,
                                                                              "source": None}
     assert first["grok_bots"]["ready"] is False and first["grok_bots"]["bots"] == []
@@ -625,7 +628,7 @@ def test_page_harness_mock_fits_the_contract():
     if not node:
         pytest.skip("node is not installed")
     cp = subprocess.run([node, str(ROOT / "tests" / "desktop" / "contract.mjs")], capture_output=True, text=True,
-                        timeout=60, stdin=subprocess.DEVNULL)
+                        timeout=60, stdin=subprocess.DEVNULL, encoding="utf-8")
     assert cp.returncode == 0, cp.stdout[-3000:] + cp.stderr[-3000:]
     assert "contract checks passed" in cp.stdout
 

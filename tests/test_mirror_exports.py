@@ -61,7 +61,7 @@ def test_exports_in_the_shared_folder_are_imported_once_and_left_there(world, ho
     put(ex, "grok-bot-export-big.json", '{"format": "grok-bot-export"}' + " " * (M.SIZE_MAX + 1))
     put(ex, "grok-bot-export-old.json", export(bot("Recipe Planner")), mtime=START - M.GRACE_S - 60)
     outside = tmp_path / "outside.json"
-    outside.write_text(export(bot("Recipe Planner")))
+    outside.write_text(export(bot("Recipe Planner")), encoding="utf-8")
     (ex / "grok-bot-export-link.json").symlink_to(outside)
     got = world.downloads_scan(START, ticked)
     assert got["files"] == 1 and got["waiting"] == ["recipe-planner"]
@@ -111,17 +111,17 @@ def test_a_rehearsal_run_prints_the_exports_copy_up_lines(tmp_path):
     (root / "bin").mkdir(parents=True)
     data.mkdir(parents=True)
     script = root / "bin" / SS.SCRIPT_NAME
-    script.write_text(SS.BOX_SCRIPT)
+    script.write_text(SS.BOX_SCRIPT, encoding="utf-8")
     bp = root / "bin" / "botport"
-    bp.write_text('#!/bin/sh\ncase "$*" in --version) echo "botport 0.2.1" ;; esac\nexit 0\n')
+    bp.write_text('#!/bin/sh\ncase "$*" in --version) echo "botport 0.2.1" ;; esac\nexit 0\n', encoding="utf-8")
     bp.chmod(0o755)
     ex = root / "exports"
     ex.mkdir(mode=0o700)
-    (ex / f"grok-bot-export-{ACME_ID}.json").write_text(export(bot("Acme Support")))
-    (ex / "grok-bot-export-recipe-planner.json").write_text(export(bot("Recipe Planner")))
-    (ex / "grok-bot-export-empty.json").write_text("")
-    (ex / "grok-bot-export-bad_name.json").write_text("{}")
-    (ex / "notes.json").write_text("{}")
+    (ex / f"grok-bot-export-{ACME_ID}.json").write_text(export(bot("Acme Support")), encoding="utf-8")
+    (ex / "grok-bot-export-recipe-planner.json").write_text(export(bot("Recipe Planner")), encoding="utf-8")
+    (ex / "grok-bot-export-empty.json").write_text("", encoding="utf-8")
+    (ex / "grok-bot-export-bad_name.json").write_text("{}", encoding="utf-8")
+    (ex / "notes.json").write_text("{}", encoding="utf-8")
     (ex / "grok-bot-export-big.json").write_bytes(b" " * (2 * 1024 * 1024 + 1))
     (ex / "grok-bot-export-link.json").symlink_to(ex / "notes.json")
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path / "box" / "home"), "SKILL_SYNC_ROOT": str(root),

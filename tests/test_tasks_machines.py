@@ -31,9 +31,21 @@ _TYPED_YES = ("import io, os, sys; sys.path.insert(0, sys.argv[1]); os.environ['
               "tasks._open_terminal = lambda: (io.StringIO('yes\\n'), io.StringIO()); sys.exit(fleet.main(sys.argv[3:]))")
 
 
+
+def _gone(pid: int) -> bool:
+    """The process has ended (os.kill(pid, 0) is a POSIX check; Windows asks the process itself)."""
+    if os.name == "nt":
+        from hermes_plugins.grok_bot_twin.twin import bgagent_windows
+        return bgagent_windows._proc_started(pid) is None
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return True
+    return False
+
 def typed_yes(m: Machine, *words: str) -> subprocess.CompletedProcess:
     cp = subprocess.run([sys.executable, "-c", _TYPED_YES, str(TOOLS), str(m.home.resolve()), *m._argv(*words)[2:]],
-                        capture_output=True, text=True, timeout=60)
+                        capture_output=True, text=True, timeout=60, encoding="utf-8")
     assert cp.returncode == 0, f"{m.name}: {' '.join(words)} failed ({cp.returncode}):\n{cp.stdout}\n{cp.stderr}"
     return cp
 
@@ -84,7 +96,7 @@ def _tok(st: dict) -> str:
 
 
 def _pass(svc_home) -> str:
-    return _tok(json.loads((svc_home / "plugin-data" / "grok-bot-twin" / "fleet.json").read_text()))
+    return _tok(json.loads((svc_home / "plugin-data" / "grok-bot-twin" / "fleet.json").read_text(encoding="utf-8")))
 
 
 def task(port: int, path: str, body: dict, token, timeout: float = 10, at=None, answer=None) -> tuple:
@@ -111,7 +123,7 @@ def _listening(source, home_) -> None:
 
 
 def _twin_id(home_, name="Test Scout") -> str:
-    st = json.loads((home_ / "plugin-data" / "grok-bot-twin" / "fleet.json").read_text())
+    st = json.loads((home_ / "plugin-data" / "grok-bot-twin" / "fleet.json").read_text(encoding="utf-8"))
     return next(tid for tid, t in st["link"]["twins"].items() if t["name"] == name)
 
 
@@ -431,11 +443,7 @@ def test_switching_off_stops_a_running_request_and_refuses_the_next(source, surf
     assert got["out"]["error"]["code"] == "switched_off" and got["out"]["reply"] == ""
 
     def gone():
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            return True
-        return False
+        return _gone(pid)
     wait_until(gone, timeout=10, what="the chat turn to end")
     # (the worker writes its log line a moment after the turn's process is gone)
     wait_until(lambda: surface.tasks()["log"][0]["state"] != "running", timeout=10, what="the log line to close")
@@ -470,11 +478,7 @@ def test_a_request_the_mailbox_no_longer_knows_is_stopped(source, surface, home,
     pid = calls(fake)[0]["pid"]
 
     def gone():
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            return True
-        return False
+        return _gone(pid)
     wait_until(gone, timeout=10, what="the chat turn to end")
     # without that look nothing changes: a turn that finishes is reported as before, and no thread is left
     seen.clear()

@@ -39,6 +39,8 @@ def _everything_under(root) -> str:
         for name in files:
             if "plugins" in folder.split(os.sep):
                 continue  # (the plugin's own code copied into a twin's bot)
+            if name.endswith(".lock"):
+                continue  # (an empty lock file; Windows locks are mandatory, so one held now cannot be read)
             with open(os.path.join(folder, name), "rb") as fh:
                 out.append(fh.read().decode("utf-8", "replace"))
     return "\n".join(out)

@@ -76,7 +76,7 @@ def test_batch_info_and_set_model_with_endpoint(world, home, probed):
     pid = TWINS[0][0]
     res = world.set_model(pid, "local-model-mini", endpoint="Homebox")
     assert res["state"] == "set"
-    doc = yamlio.module().safe_load((home / "profiles" / pid / "config.yaml").read_text())
+    doc = yamlio.module().safe_load((home / "profiles" / pid / "config.yaml").read_text(encoding="utf-8"))
     assert doc["model"] == {"default": "local-model-mini", "provider": "custom", "base_url": "http://127.0.0.1:8000/v1"}
     assert world.set_model(pid, "local-model-mini", endpoint="Homebox")["state"] == "same"
     with pytest.raises(BadInput):
@@ -91,7 +91,7 @@ def test_batch_route_takes_endpoint(world, home, probed, monkeypatch):
     r = c.post(f"{P}/batch/model", json={"pair_ids": pids, "model": "local-model", "endpoint": "Homebox"})
     assert r.status_code == 200, r.text
     assert {x["state"] for x in r.json()["results"]} == {"set"}
-    doc = yamlio.module().safe_load((home / "profiles" / pids[1] / "config.yaml").read_text())
+    doc = yamlio.module().safe_load((home / "profiles" / pids[1] / "config.yaml").read_text(encoding="utf-8"))
     assert doc["model"]["provider"] == "custom"
     r = c.post(f"{P}/batch/model", json={"pair_ids": pids, "model": "local-model", "endpoint": "Nope"})
     assert r.json()["error"]["code"] == "bad_input"

@@ -26,7 +26,7 @@ def twin(bp_svc, home):  # noqa: F811
     bp_svc.trust_botport(True)
     prof = home / "profiles" / PID
     prof.mkdir(parents=True, exist_ok=True)
-    (prof / "SOUL.md").write_text(_soul("Acme Support"))
+    (prof / "SOUL.md").write_text(_soul("Acme Support"), encoding="utf-8")
     pair = _pair(bp_svc)
     assert pair["state"] == "in_step" and "open_conflicts" not in pair  # (the starting point: nothing open)
     return bp_svc, prof
@@ -42,7 +42,7 @@ def test_F6_open_instructions_sync_conflict_is_not_up_to_date(twin, capsys):
     p = _pair(svc)
     assert p["state"] == "needs_you" and p["state_reason"] == "Choose which instructions to keep"
     assert p["open_conflicts"] == [{"where": "instructions", "item": "instructions"}]
-    shape = json.loads((Path(__file__).parent / "contract" / "api_shapes.json").read_text())["shapes"]
+    shape = json.loads((Path(__file__).parent / "contract" / "api_shapes.json").read_text(encoding="utf-8"))["shapes"]
     assert set(p) <= {k for part in ("required", "backend", "optional") for k in shape["Pair"].get(part, {})}
     assert shape["Pair"]["optional"]["open_conflicts"] == "list[OpenConflict]"  # (the page's contract: optional)
     assert cli.main(["status"]) == 1  # (a twin needs you)
@@ -66,7 +66,7 @@ def test_F6_open_hermes_to_grok_conflict_is_not_up_to_date(twin, monkeypatch):
     svc.to_grok_allow(PID, ["name"])
     assert _pair(svc)["state"] == "in_step"
     # the name changed in Hermes and, differently, in Grok: Hermes -> Grok holds it as a conflict
-    (prof / "SOUL.md").write_text(_soul("Acme Support Pro"))
+    (prof / "SOUL.md").write_text(_soul("Acme Support Pro"), encoding="utf-8")
     w.put_bot(BOT, name="Acme Support Plus", description="Helps with invented widgets.", instructions="Be brief.",
               allowed=True)
     assert [h["code"] for h in svc.to_grok_preview(PID)["held"]] == ["conflict"]

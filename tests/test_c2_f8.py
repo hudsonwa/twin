@@ -50,7 +50,7 @@ def test_F8_a_computer_use_call_is_not_intercepted(home):
     flow = home / "plugin-data" / "grok-bot-twin" / "grok-part.json"
     flow.parent.mkdir(parents=True, exist_ok=True)
     flow.write_text(json.dumps({"pair_ids": ["test-scout"], "names": ["Test Scout"], "request_sha256": "0" * 64,
-                                "until": 0, "flow": "f8"}))
+                                "until": 0, "flow": "f8"}), encoding="utf-8")
     ctx = Recorder()
     plugin.register(ctx)
     for name, cb in ctx.hooks:

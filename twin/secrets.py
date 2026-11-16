@@ -94,6 +94,23 @@ def _random_word(word: str) -> bool:
     return has_digit and has_alpha and _entropy(core) >= 4.0
 
 
+_SLUG = re.compile(r"[a-z0-9]+(?:[-_.][a-z0-9]+)*")
+
+
+def _plain_link_path(m: "re.Match[str]") -> bool:
+    """Is this "random word" only a path (a link's or a file's: audit 2026-11-16, a course link and a workspace
+    folder, lowercase words and numbers joined by "/" and "-", read as one long random word, refused a whole
+    export)? Each part, and each "-", "_" or "." piece of it, is judged on its own: a long random part (a key in a
+    capability link) still counts, a path with capitals (base64, a webhook token) is still judged whole, and a query
+    value is sign_in_value's."""
+    word = m.group(0)
+    if "/" not in word or any(c.isupper() for c in word):
+        return False
+    parts = [p for p in word.split("/") if p]
+    return bool(parts) and all(_SLUG.fullmatch(p) and not any(_random_word(q) for q in re.split(r"[-_.]", p))
+                               for p in parts)
+
+
 def _luhn(digits: str) -> bool:
     total = 0
     for i, ch in enumerate(reversed(digits)):
@@ -127,7 +144,7 @@ def _matches(text: str):
     for m in _PRIVATE_BLOCK.finditer(text):
         yield "private_key", m
     for m in _WORD.finditer(text):
-        if _random_word(m.group(0)):
+        if _random_word(m.group(0)) and not _plain_link_path(m):
             yield "random_word", m
     for m in _DIGIT_RUN.finditer(text):
         if _luhn(re.sub(r"[^0-9]", "", m.group(0))):

@@ -42,7 +42,7 @@ def rig(home, tmp_path):
         def mode(self, **kw):
             d = central(home) / "botport-state"
             d.mkdir(parents=True, exist_ok=True)
-            (d / "fake_mode.json").write_text(json.dumps(kw))
+            (d / "fake_mode.json").write_text(json.dumps(kw), encoding="utf-8")
 
     r = R()
     r.exe = exe
@@ -104,9 +104,9 @@ def test_unknown_botport_fields_never_leave_the_service(rig, home, tmp_path, mon
         assert r.status_code == 200, (path, r.text)
         texts.append(r.text)
     service.get_service().save_status()  # (the timer's tick writes it)
-    texts.append((central(home) / "status-cache.json").read_text())
-    texts.append((central(home) / "events.jsonl").read_text())
-    texts.append((central(home) / "pairs.json").read_text())
+    texts.append((central(home) / "status-cache.json").read_text(encoding="utf-8"))
+    texts.append((central(home) / "events.jsonl").read_text(encoding="utf-8"))
+    texts.append((central(home) / "pairs.json").read_text(encoding="utf-8"))
     for t in texts:
         assert MARKER not in t and "zz_extra" not in t and "fake_key" not in t, t[:400]
     # the known fields still arrive
@@ -171,7 +171,7 @@ def test_trust_needs_attestation_or_explicit_opt_out(rig, home, tmp_path, monkey
     assert not (central(home) / "botport-trust.json").exists()
     res = svc.trust_botport(True)
     assert res["trusted"] and res["allow_unattested"] and res["warning"] == E.UNATTESTED_TEXT
-    rec = json.loads((central(home) / "botport-trust.json").read_text())
+    rec = json.loads((central(home) / "botport-trust.json").read_text(encoding="utf-8"))
     assert rec["allow_unattested"] is True
     svc.invalidate()
     assert svc.status(fresh=True)["engine"]["trust_warning"] == E.UNATTESTED_TEXT
@@ -180,7 +180,7 @@ def test_trust_needs_attestation_or_explicit_opt_out(rig, home, tmp_path, monkey
     assert att["ok"] is False and "WITHOUT being verified (local build)" in att["message"]
     # a record that is neither attested nor an explicit opt-out never runs
     rec["allow_unattested"] = False
-    (central(home) / "botport-trust.json").write_text(json.dumps(rec))
+    (central(home) / "botport-trust.json").write_text(json.dumps(rec), encoding="utf-8")
     with pytest.raises(EngineError) as ei:
         svc.botport().run(["version"])
     assert ei.value.code == "untrusted_binary"
@@ -268,7 +268,7 @@ def _jobs(home: Path, jobs: list[dict]) -> Path:
     d = home / "profiles" / "acme-support" / "cron"
     d.mkdir(parents=True, exist_ok=True)
     p = d / "jobs.json"
-    p.write_text(json.dumps({"jobs": jobs}))
+    p.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
     return p
 
 
@@ -289,13 +289,13 @@ def test_ready_to_switch_uses_stable_job_ids(rig, home):
             _job("deadbeef0002", "Acme Support: running", paused=False)]
     path = _jobs(home, jobs)
     svc.create(["b-acme-0001"])
-    reg = json.loads((central(home) / "pairs.json").read_text())["pairs"]
+    reg = json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))["pairs"]
     assert reg[0]["job_ids"] == ["a1b2c3d4e5f6", "0a0b0c0d0e0f"]
     ids = [j["job_id"] for j in svc.checklist("acme-support")["switch"]["hermes_jobs_paused"]]
     assert ids == ["a1b2c3d4e5f6", "0a0b0c0d0e0f"]  # the name-prefix lookalike is not the twin's
     # the owner edits the pause reason: the recorded id still finds it; the bot's rename changes nothing
     jobs[0]["paused_reason"] = "paused by me"
-    path.write_text(json.dumps({"jobs": jobs}))
+    path.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
     rig.mode(name="Acme Support Renamed")
     ids = [j["job_id"] for j in svc.checklist("acme-support")["switch"]["hermes_jobs_paused"]]
     assert ids == ["a1b2c3d4e5f6", "0a0b0c0d0e0f"]
@@ -325,7 +325,7 @@ def test_rotate_key(rig, home):
     svc.status(fresh=True)
     res = svc.mirror("acme-support", None, False, True)
     assert res["key_rotated"] is True and "new pass" in res["note"] and "key file" not in res["note"]
-    calls = (central(home) / "botport-state" / "fake_calls.jsonl").read_text().splitlines()
+    calls = (central(home) / "botport-state" / "fake_calls.jsonl").read_text(encoding="utf-8").splitlines()
     assert "--rotate-key" in json.loads(calls[-1])["argv"]
     with pytest.raises(service.BadInput):
         svc.mirror("acme-support", None, True, True)

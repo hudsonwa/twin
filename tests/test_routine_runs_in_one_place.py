@@ -77,9 +77,9 @@ def acme(svc, home, monkeypatch):  # noqa: F811
          "job_ids": ["job-1"]}]})
     prof = home / "profiles" / PID
     (prof / "cron").mkdir(parents=True)
-    (prof / "SOUL.md").write_text("<!-- botport:begin persona-name -->\nAcme Support\n<!-- botport:end persona-name -->\n")
+    (prof / "SOUL.md").write_text("<!-- botport:begin persona-name -->\nAcme Support\n<!-- botport:end persona-name -->\n", encoding="utf-8")
     jobs = prof / "cron" / "jobs.json"
-    jobs.write_text(json.dumps({"jobs": [_job(True)]}))
+    jobs.write_text(json.dumps({"jobs": [_job(True)]}), encoding="utf-8")
     w = h2g.FakeGrokWriter()
     w.put_bot(BOT, name="Acme Support", routines=[{"key": "morning-digest", "name": "Morning digest",
                                                    "schedule": "0 9 * * *", "prompt": "Say good morning to the team.",
@@ -89,7 +89,7 @@ def acme(svc, home, monkeypatch):  # noqa: F811
 
     def act(action, job_id, profile, ctx=None):
         calls.append(action)
-        jobs.write_text(json.dumps({"jobs": [_job(action == "resume")]}))
+        jobs.write_text(json.dumps({"jobs": [_job(action == "resume")]}), encoding="utf-8")
         return True, ""
 
     monkeypatch.setattr(importer, "_cron_action", act)
@@ -138,7 +138,7 @@ def _coming_home(svc, home, runner):  # noqa: F811
     (prof / "cron").mkdir(parents=True)
     job = rj.new_record({"name": "Morning digest", "prompt": "Say good morning.", "schedule": SCHED},
                         f"{rj.MARK}runs on Laptop")
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [job]}))
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [job]}), encoding="utf-8")
     _machine()
     tid = pair_ref(pid)
     st = fleet.load()

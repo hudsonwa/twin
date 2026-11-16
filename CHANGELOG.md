@@ -1,5 +1,121 @@
 # Changelog
 
+## 0.5.0 (16 November 2026)
+
+Grok Bot Twin 0.5.0 ↔ botport 0.3.3.
+
+**What this means for you:** with botport's Grok engine (`botport grok`, in botport 0.3.3), you
+can twin a Grok bot from Hermes without opening Grok: `hermes twin from-hermes "Acme Support"`, or "twin all my
+Grok bots" in a Hermes chat on this computer. The bot exports itself with its own tools (no local command, no
+approval) and Hermes imports and checks it; its Hermes chats then keep up by themselves. **This version pins
+botport 0.3.3** (`twin/botport_pins.json`). Only an older release chosen with `botport_release_tag` makes `hermes
+twin setup --auto` and `from-hermes` FAIL with "needs botport 0.3.0 or newer (the Grok engine); the
+botport_release_tag setting chooses 0.2.1". Saying the prompt in Grok works as before.
+
+### Fixed (audit 16 November, before release)
+
+Fixes #55, fixes #56, fixes #57, fixes #58, fixes #59, fixes #60, fixes #61, fixes #62, fixes #63.
+
+- Secret check: a link or folder path of plain lowercase parts is judged part by part, so a path is no longer taken
+  for a key (#55); a refusal names the kind and the line.
+- `setup --auto` leaves a non-default sticky profile alone unless `--link-profile` is given (#56).
+- Grok's Execution setting is never reported as "unknown": it says "not read, port closed" (#57).
+- `doctor` and `setup --check` read a build stamp in the plugin and name a mismatch with Hermes' install record (#58).
+- `from-hermes`: a bot that made none of the account's skills says so; skipped entries are named with a reason (#59).
+- `create` names an old botport mirror profile, with park or adopt, and never picks it silently (#60).
+- Behaviour test: one at a time per model endpoint and profile, a per-case budget from the model's first answer,
+  memory cases retried once, wall time on a FAIL (#61).
+- `stop`: the safe-defaults fingerprint follows create's model step, never a change to a key the owner set (#62).
+- `setup --with-github`: gh reads the owner's own sign-in (GH_CONFIG_DIR from the real home) (#63).
+- Pins botport 0.3.3: [`grok restore` PASSes only with no debug-flagged Grok process, no DevToolsActivePort and no
+  listener](https://github.com/hudsonwa/botport/issues/63), and [a credential-looking model answer no longer blocks
+  the behaviour test's results file](https://github.com/hudsonwa/botport/issues/66)
+  ([release](https://github.com/hudsonwa/botport/releases/tag/v0.3.3)).
+
+### Added
+
+- **`hermes twin from-hermes BOT` (and `--all`, `--bot`, `--only`), and the Hermes tool `twin_from_hermes`
+  (zero-touch 04).** The default route (`from_hermes_route: export`) asks the bot, through the engine, for a
+  `grok-bot-export/1` built only with its own cloud tools (instructions, memory, skills); a large one comes back
+  as a file the bot sends, saved with `botport grok files fetch` (the bot is asked to delete it afterwards, also
+  when the file was refused). History and routines are read by the engine (`botport grok read`, `botport grok
+  routines`), never taken from the bot's words. The export goes through the one prompt's importer and proof, and
+  the PASS line is checked again (one-prompt log, Grok's Execution setting unchanged, no approval card in the
+  export turn). `--route shell` keeps the old route, where the bot runs `hermes twin from-grok` here (with
+  `--wait` for a run left waiting on an approval in Grok). In a chat, `all: true` gives counts, not bot names,
+  unless `share_names_with_model` is on, and skills other bots made are counted, not named. The tool and
+  `twin_make` refuse a messaging chat (Telegram and the like) unless `setup_from_messaging` is on.
+- **Bot exports are untrusted (zero-touch 05).** A strict schema (unknown fields, wrong types, size caps: FAIL), the
+  bot's name must be the engine's, plain skill names only (no paths, newlines, escape codes), one JSON block and no
+  PASS/FAIL-looking line in the reply, no text that looks like a password or key and none that drives this
+  plugin's or botport's commands. Any of these is a FAIL with nothing written; the raw export is never kept.
+- **Each twin gets the skills its bot made (zero-touch 06).** Grok's skills look account-wide, so a bot lists
+  them all and marks its own. Only its own are imported. With `--all`, a skill that several bots mark as their own
+  goes into each of those twins and is named. Skills it did not mark are named and not imported (`--shared-skills`
+  imports them). Another bot's skill that fails the checks, or shares a name with one of the bot's own, is skipped
+  and named; it never fails the export.
+- **`hermes twin setup --auto` (zero-touch).** No question, no manual step, one PASS/FAIL line: downloads the
+  pinned botport release itself (SHA-256 checked against the plugin's table first), makes `hermes twin` work from
+  the terminal's sticky profile (links and enables the plugin there and says so; a twin's own profile and another
+  copy of the plugin are refused), checks the Grok app's PATH, the engine and the port under the `fast` preset (set
+  only when no Grok policy was saved in `~/.botport`), and FAILs if Grok's Execution setting changed.
+  `--open-port`, `--install-line` (the pinned one-line install). `from-hermes` runs it once by itself when the
+  engine is missing. Needs botport 0.3.0 or newer (pinned): with an older release chosen it FAILs at once and names that.
+  `tools/pin_botport.py --tag vX.Y.Z` now pins a release in one step (download, attestation check, pin table and
+  pinned tag).
+- **Continuous chat sync (`chat_sync_mode`: `pull`, `routine` or `off`; `chat_sync_minutes`, default 360).**
+  - `pull` (the default): this computer reads the bot's chat through the engine (`botport grok read`) on the
+    plugin's background check, every 6 h by default, from where it left off. No Grok usage. Each due pull opens an
+    idle-only port window (twin#52), `botport grok launch --for 10m --when-idle 10`: an open port is reused with no
+    restart, the app restarts only when the Mac has been idle (`chat_sync_idle_minutes`), and "the Mac is in use"
+    (exit 2) skips the pull and retries in 30 min. A window it opened is closed with `botport grok restore`.
+    `chat_sync_window: port` pulls only when the port is already open. A failed pull also waits a full interval;
+    a stopped twin leaves chat sync at once; and a pull never runs while a from-hermes run uses the port (one
+    shared lock).
+  - `routine` (opt-in, `--route shell` only): the bot makes a Grok routine, "Sync chats to Hermes", that sends its
+    recent messages through `hermes twin chat-sync --bot NAME`. Offered only when Grok's Execution on Local
+    Computer setting reads Always allow (read, never changed): a live test showed that under Ask every time an
+    unattended routine never runs the command.
+  - `hermes twin chat-sync --status` shows the mode and each twin's last run; `--pull [TWIN|--all]` pulls now.
+- **`hermes twin telegram on|off|status`: twins through your existing Hermes Telegram bot.** No BotFather step, no
+  new token (the token is referenced, never read or copied). `/twin to TWIN TEXT`, `/twin use TWIN` + `/twin say
+  TEXT`; owner's numeric id only, DM only, and only on the gateway profile the route was turned on for; approvals
+  in the twin's turn answered "deny". `telegram on` links and enables the plugin in the gateway profile when needed
+  and says so. A stopped twin leaves the route.
+- **`hermes twin safety`: safe twin-profile defaults by rule.** `strict` for bots that mention shell, ssh,
+  servers, trading and similar; `standard` otherwise, which by default also turns off web, x_search, file and
+  image_gen and every MCP server not in `twin_safe_mcp` (widen with `hermes twin safety TWIN standard --allow web`,
+  and `x_search`, `file`, `image_gen`, `mcp`); `open` only by the owner. A non-local model FAILs the check until a
+  model policy is recorded. Applied automatically (twin#54) whenever a twin's profile is made (`add`, the one
+  prompt, `from-hermes`) and again on what an import wrote, before the behaviour test or anything else runs there;
+  the owner's own choice is kept. If `add` cannot apply them, its line is a FAIL and the twin's routines and
+  Telegram route stay off until `hermes twin safety TWIN --apply` passes. Stopping a twin (also keeping its
+  Hermes bot) puts config.yaml back as it was when nothing changed it since, otherwise names the kept
+  `.twin-pre-safety.yaml`; only the newest five dated copies are kept.
+- **A fallback when the engine cannot be used.** botport missing, without the Grok engine, not verified, or the
+  Grok app's local port closed: a FAIL that names the ways that work, saying the prompt in Grok or running
+  `botport grok launch` (the fast preset).
+- The behaviour test's PASS line says when a live case passed only on its one retry.
+
+### Changed
+
+- **No duplicate messages when the same chat is sent more than once.** A conversation's own `id`, when the bot or
+  the engine has one, is now its key. A message is also skipped when the same role, second and text are already
+  stored for that twin under any conversation, so a changed title or time format cannot add it twice. The check
+  uses an HMAC with the archive's key; the text is never stored in the clear. An archive made before this change
+  is checked the same way the first time.
+- twin talks to the engine through one adapter (`twin/grok_engine.py`), aligned with botport's frozen engine
+  interface (end of P1). The engine is found by asking `botport grok status`; the routine is confirmed by the bot's
+  own word until the engine can list routines. Grok's local-command setting is read from the engine's `status`
+  (`local_tool_permission`). An app version botport has not tested is a FAIL that names `botport grok canary`.
+- The Grok skill (`hermes twin skill-text`) has a "Chat sync" part: the routine and the one chat-sync command it
+  may run, and only when the request asks for it. Give the bot the new skill text to use `from-hermes` with sync.
+
+### Fixed
+
+- `hermes twin setup --auto` on a computer that still has the botport of an earlier plugin version (0.2.1) takes
+  the pinned release once and verifies it, instead of FAILing with "not the release Hermes expects".
+
 ## 0.4.1 (16 November 2026)
 
 **What this means for you:** `hermes twin skill-text` prints the Grok skill (no more copying from GitHub),

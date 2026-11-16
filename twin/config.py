@@ -27,6 +27,13 @@ DEFAULTS = {
     "share_address": "",
     "machine_name": "",
     "mirror_name": "",  # the sync bot's name in Grok, for the Auto-Review rule text (Hermes to Grok beta)
+    "chat_sync_mode": "",  # "" = chat_sync.DEFAULT_MODE; routine | pull | off (twin/chat_sync.py)
+    "from_hermes_route": "",  # "" = export (twin/from_hermes.py); export | shell
+    "chat_sync_minutes": 360,  # twin#52: one pull every 6 h by default
+    "chat_sync_window": "",  # "" = idle (botport launch --for --when-idle); idle | port (only an open port)
+    "chat_sync_idle_minutes": 10,  # the Mac must have had no input this long before a window restarts the app
+    "setup_from_messaging": False,  # let a messaging chat (Telegram...) start setup or twinning (twin_from_hermes)
+    "twin_safe_mcp": [],  # MCP server names a strict twin keeps (twin/profile_safety.py); none by default
 }
 MIN_INTERVAL = 5
 MAX_INTERVAL = 86400
@@ -133,6 +140,7 @@ def settings() -> dict:
     out["digest_to_grok"] = _bool(raw.get("digest_to_grok"), False)
     out["digest_titles"] = _bool(raw.get("digest_titles"), False)
     out["share_names_with_model"] = _bool(raw.get("share_names_with_model"), False)
+    out["setup_from_messaging"] = _bool(raw.get("setup_from_messaging"), False)
     acct = raw.get("grok_account")
     if isinstance(acct, str) and re.fullmatch(r"[0-9a-f]{8}", acct.strip().lower()):
         out["grok_account"] = acct.strip().lower()
@@ -150,6 +158,26 @@ def settings() -> dict:
         val = raw.get(key)
         if isinstance(val, str) and val.strip() and len(val.strip()) <= cap:
             out[key] = val.strip()
+    csm = raw.get("chat_sync_mode")
+    if isinstance(csm, str) and csm.strip().lower() in ("routine", "pull", "off"):
+        out["chat_sync_mode"] = csm.strip().lower()
+    fhr = raw.get("from_hermes_route")
+    if isinstance(fhr, str) and fhr.strip().lower() in ("export", "shell"):
+        out["from_hermes_route"] = fhr.strip().lower()
+    try:
+        out["chat_sync_minutes"] = min(1440, max(15, int(raw.get("chat_sync_minutes", 360))))
+    except (TypeError, ValueError):
+        pass
+    csw = raw.get("chat_sync_window")
+    if isinstance(csw, str) and csw.strip().lower() in ("idle", "port"):
+        out["chat_sync_window"] = csw.strip().lower()
+    try:
+        out["chat_sync_idle_minutes"] = min(240, max(1, int(raw.get("chat_sync_idle_minutes", 10))))
+    except (TypeError, ValueError):
+        pass
+    mcp = raw.get("twin_safe_mcp")
+    if isinstance(mcp, list):
+        out["twin_safe_mcp"] = [m for m in mcp if isinstance(m, str) and valid_id(m)][:20]
     dp = raw.get("demo_profile")
     if valid_id(dp):
         out["demo_profile"] = dp
@@ -268,6 +296,23 @@ def skill_scan(path: Any) -> Optional[str]:
     except Exception:
         return None
     return verdict if isinstance(verdict, str) and verdict in ("safe", "caution", "dangerous") else None
+
+
+def chat_is_messaging() -> bool:
+    """Is the chat this runs in a messaging one (Telegram and the like)? Hermes' own per-chat answer
+    (gateway.session_context.session_is_messaging_surface, Hermes 0.22.7); without that module (a terminal run of
+    the plugin, older Hermes), the named origin (HERMES_PLATFORM, HERMES_SESSION_PLATFORM). An error while asking
+    counts as messaging. Unlike chat_not_local, a chat with no named origin is not refused: it is the terminal."""
+    from .slash import LOCAL_PLATFORMS
+    try:
+        from gateway.session_context import session_is_messaging_surface as says
+    except ImportError:
+        named = [os.environ.get(n, "").strip().lower() for n in ("HERMES_PLATFORM", SURFACE_VARS[0])]
+        return any(v and v not in LOCAL_PLATFORMS for v in named)
+    try:
+        return says() is not False
+    except Exception:
+        return True
 
 
 def chat_not_local() -> bool:

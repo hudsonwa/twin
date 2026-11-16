@@ -55,6 +55,19 @@ REACH_HINT = "On the Twins page, press Get botport again. Then try this once mor
 STOP_NEEDS_BOTPORT = "botport is missing, so this cannot be done yet. On the Twins page, press Get botport again first."
 STOP_STAYS = ["Your bot in Grok, unchanged.", "Its Hermes bot and all its chats."]
 # ("link" is the word for two computers; what ends here is the twin following its Grok bot)
+def _safety_stop_line(res: dict) -> str:
+    """What stopping did to the twin profile's config.yaml (the safe defaults, twin/profile_safety.py)."""
+    if res.get("restored"):
+        return "Its Hermes bot's config.yaml, put back as it was before twinning (the safe defaults are gone)."
+    if res.get("failed"):
+        return ("Its Hermes bot's config.yaml still has the twin's safe defaults: it could not be put back; run "
+                "hermes twin stop again or restore it by hand.")
+    if res.get("backup"):
+        return ("Its Hermes bot's config.yaml, as it is now (changed since the twin's safe defaults, so not put "
+                f"back); the copy from before twinning is {res['backup']}.")
+    return "Its Hermes bot's config.yaml, as it is now (it had none before twinning, or it changed since)."
+
+
 STOP_GOES_LINK = "Following Grok."
 STOP_GOES_VERSIONS = "The earlier versions kept for undo."
 STOP_AGAIN_SAME = "You can twin it again later; it picks up this Hermes bot again."
@@ -941,6 +954,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         if real:  # parts that only act on real twins (each at its own few-minute pace)
             step(self.note_grok_app)
             step(self.instructions_sync_tick)
+            step(self.chat_pull_tick)
         if os.path.lexists(self.central / h2g.STATE_FILE):  # Hermes -> Grok was used here
             step(self.to_grok_tick)
         changed = step(self.check_changed) or []
@@ -955,6 +969,12 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         if errors:
             raise errors[0]
         return len(changed)
+
+    def chat_pull_tick(self) -> int:
+        """Chat sync, mode "pull": each enrolled twin's new Grok messages through botport's Grok engine, at its own
+        pace (chat_sync.pull_tick; nothing at all in the other modes)."""
+        from . import chat_sync
+        return chat_sync.pull_tick(self)
 
     # ---- grok roster / create --------------------------------------------------------------------
     def grok_list(self) -> dict:
@@ -1091,6 +1111,11 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                     elif not prof and self._paired_only(dry.get(gid)):
                         prof = unique_profile(self._grok_name(eng, gid) or gid, taken | self._botport_profiles(eng))
                         dry.pop(gid, None)
+            if not named and prof and self._mirror_profile(prof):
+                # an earlier `botport mirror` pair of a bot left this profile kept by botport: create would fail
+                # with only "Hermes could not make the twin". Never adopted silently: the owner parks or adopts it.
+                skipped.append({"grok_id": gid, "reason": "mirror_profile", "profile": prof})
+                continue
             owner = used.get(prof) if prof else None
             if named and (owner is not None or prof in chosen.values()):
                 skipped.append({"grok_id": gid, "reason": "profile_already_paired",
@@ -1098,6 +1123,15 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 continue
             chosen[gid] = prof
         return chosen, skipped, engines, dry
+
+    def _mirror_profile(self, prof: str) -> bool:
+        """Is this existing Hermes profile kept by botport's mirror (its botport.mirror.json is there)?"""
+        home = self._profile_home(prof)
+        try:
+            return home is not None and stat.S_ISDIR(os.lstat(home).st_mode) and \
+                os.path.lexists(home / "botport.mirror.json")
+        except OSError:
+            return False
 
     _PERSONA_NAME_RE = re.compile(r"<!-- botport:begin persona-name -->\r?\n(.*?)\r?\n<!-- botport:end persona-name -->",
                                   re.S)
@@ -1291,6 +1325,13 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                 raise EngineError("already_twinned", "That bot already has a twin." if len(skipped) == 1
                                   else "Those bots already have twins.",
                                   "One bot has one twin. Stop twinning it first to start fresh.")
+            clash = [k for k in skipped if k.get("reason") == "mirror_profile"]
+            if clash:
+                prof = clash[0]["profile"]
+                raise EngineError("mirror_profile", f"Hermes profile {prof} already mirrors this bot (an earlier "
+                                  "botport mirror pair), so no twin was made.",
+                                  f"Park it (botport mirror init --undo, or move that profile aside), or adopt it: "
+                                  f"hermes twin add --bot \"NAME\" --hermes-profile {prof}")
             raise EngineError("profile_already_paired", "That Hermes name already belongs to another twin.",
                               "Choose another name under Options.")
         created: list[str] = []
@@ -1310,12 +1351,19 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                     if eng is not self.demo:
                         np_ = normalize_pair(p)
                         if np_:
+                            # safe profile defaults (twin#54) before anything can run in the new twin's profile
+                            got = self._safe_defaults(np_["hermes"]["profile"])
+                            if got:
+                                notes.append(got)
                             # the cron jobs made from the bot's routines, by their stable job ids (never by name)
                             self._remember([np_], {np_["pair_id"]: importer.imported_job_ids(
                                 self._profile_home(np_["hermes"]["profile"]))})
                             # routines and connectors stay waiting for their own approval after create
                             self._note_waiting([self._clean_sync(p)])
                             self._start_real(np_)
+                            # the safe-defaults fingerprint after the last create step (its model choice), so a
+                            # fresh twin's stop does not report a change (twin#62)
+                            self._refingerprint(np_["hermes"]["profile"])
                             fresh_real = True
         if fresh_real:
             with contextlib.suppress(EngineError):  # what each new twin's bot says in Grok, as read just now
@@ -1333,6 +1381,27 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         for pid in created:
             self.emit("created", pid, {})
         return out
+
+    def _safe_defaults(self, profile: Any) -> Optional[str]:
+        """twin/profile_safety.py `apply_default` for a twin's profile (strict for a risky bot, standard otherwise,
+        never over the owner's own choice). -> a note only when it could not be applied."""
+        from . import profile_safety
+        if not isinstance(profile, str) or not valid_id(profile) or profile == "default":
+            return None
+        try:
+            profile_safety.apply_default(profile, self._profile_home(profile))
+        except Exception as exc:  # noqa: BLE001  (fail closed: marked unsafe until `hermes twin safety` passes)
+            with contextlib.suppress(Exception):
+                profile_safety.mark_unsafe(profile, type(exc).__name__)
+            return (f"FAIL: safe profile defaults not applied to {profile} ({type(exc).__name__}): its routines "
+                    f"and Telegram route stay off until hermes twin safety {profile} --apply passes")
+        return None
+
+    def _refingerprint(self, profile: Any) -> None:
+        from . import profile_safety
+        if isinstance(profile, str) and valid_id(profile) and profile != "default":
+            with contextlib.suppress(Exception):
+                profile_safety.refingerprint(profile, self._profile_home(profile))
 
     def _start_real(self, p: dict) -> None:
         """A new real twin gets the owner's default Hermes model (the one their other Hermes chats use), when
@@ -1844,6 +1913,11 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         pid = self.require_pair(pid)
         if not valid_item_id(item):
             raise BadInput("That item is not one of this twin's.")
+        from . import profile_safety
+        prof = ((self._registry().get(pid) or {}).get("hermes") or {}).get("profile")
+        if isinstance(prof, str) and profile_safety.is_unsafe(prof):  # (fail closed: M1)
+            raise BadInput("This twin's safe profile defaults were not applied, so nothing of it is switched on: "
+                           f"run hermes twin safety {prof} --apply first.")
         data = self.engine_for(pid).approve(pid, item)
         sync = data.get("sync") if isinstance(data.get("sync"), dict) else None
         sync = self._clean_sync(sync) if sync and valid_id(sync.get("pair_id")) else None
@@ -1991,6 +2065,7 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                                                       else [])[:100] if isinstance(x, str)]
         to_grok = None if sample else self._h2g(pid)
         h2g_on = to_grok is not None and bool(to_grok.allowed(pid))
+        safety: Optional[dict] = None
         if not dry_run:
             reg = self._registry()
             entry = reg.pop(pid, None)
@@ -2029,6 +2104,21 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                             _ml.set_direction(prof, layer, "off")
                     except Exception:
                         log.warning("grok-bot-twin: could not switch off a removed twin's memory layers", exc_info=True)
+                if prof:  # (with keep_data too: the Hermes bot stays, so it gets its own config back)
+                    try:  # config.yaml back as it was when nothing changed it since; then its record goes
+                        from . import profile_safety as _ps
+                        safety = _ps.forget(prof, self._profile_home(prof))
+                    except Exception:
+                        safety = {"had": True, "restored": False, "backup": None, "failed": True}
+                        log.warning("grok-bot-twin: could not put back a removed twin's config", exc_info=True)
+                try:  # chat sync and the Telegram route forget it: a removed twin never opens a port window
+                    from . import chat_sync as _chat_sync, tg_route as _tg_route
+                    _chat_sync.drop(pid)
+                    if prof:
+                        _tg_route.forget(prof)
+                except Exception:
+                    log.warning("grok-bot-twin: could not drop a removed twin's chat sync or Telegram route",
+                                exc_info=True)
                 try:  # files left by the removed session briefs / memory facts of 0.3.5 and older
                     forget_old_layer_files(pid, prof)
                 except Exception:
@@ -2044,6 +2134,8 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
             out.update(stays=list(SAMPLE_STAYS), goes=list(SAMPLE_GOES), again="", skill_sync=False)
             return out
         stays = list(STOP_STAYS)
+        if safety and safety.get("had"):
+            stays.append(_safety_stop_line(safety))
         on = _n((st.get("switched") or {}).get("routines_on")) if isinstance(st.get("switched"), dict) else 0
         if on:  # routines already moved keep running in the Hermes bot: say so before the owner agrees
             stays.append(f"Its {plural(on, 'routine')} {'keeps' if on == 1 else 'keep'} running in Hermes.")
@@ -2298,6 +2390,9 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
                                        "fix": clean(c.get("fix"), 400)})
             except EngineError as exc:
                 checks.append({"id": "botport_doctor", "ok": False, "message": exc.message, "fix": exc.hint})
+        from . import auto_setup
+        inst = auto_setup.install_check()  # the folder's build stamp vs Hermes' install record (twin#58)
+        checks.append({"id": "plugin_build", "ok": inst["ok"], "message": inst["message"], "fix": inst["fix"]})
         try:
             probe = self.central / ".write-test"
             store.atomic_write_text(probe, "ok")

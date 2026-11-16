@@ -61,9 +61,9 @@ def fake(home, tmp_path, monkeypatch):
     svc.save_status()  # (the timer's tick takes in a twin made outside the plugin)
     pairs = central(home) / "botport-state" / "pairs"
     (pairs / "acme-support.brief").mkdir(parents=True)
-    (pairs / "acme-support.key").write_text(PASS)
+    (pairs / "acme-support.key").write_text(PASS, encoding="utf-8")
     (pairs / "acme-support.key").chmod(0o600)
-    (pairs / "acme-support.brief" / "AGENT-MIRROR.md").write_text("# guide for the sync bot\n")
+    (pairs / "acme-support.brief" / "AGENT-MIRROR.md").write_text("# guide for the sync bot\n", encoding="utf-8")
     shared = tmp_path / "Shared Skills"
     shared.mkdir()
     # the Grok box knows its bots by 36-character ids; the fake botport's sample id is short, so a box-shaped
@@ -115,36 +115,36 @@ def test_first_twin_gets_one_folder_and_three_texts(fake):
                                          "inbox.key", "pairs.txt", "pairs.txt.mac", "acme-support.key"])
     assert sorted(p.name for p in kit.iterdir()) == out["kit"]["files"]
     # the pass is delivered as a file, byte for byte, owner-only, and is in no text and no answer
-    assert (kit / "acme-support.key").read_text() == PASS and _mode(kit / "acme-support.key") == 0o600
-    everything = json.dumps(out) + "".join((kit / n).read_text() for n in out["kit"]["files"] if not n.endswith(".key"))
-    assert PASS not in everything and (kit / "inbox.key").read_text().strip() not in everything
+    assert (kit / "acme-support.key").read_text(encoding="utf-8") == PASS and _mode(kit / "acme-support.key") == 0o600
+    everything = json.dumps(out) + "".join((kit / n).read_text(encoding="utf-8") for n in out["kit"]["files"] if not n.endswith(".key"))
+    assert PASS not in everything and (kit / "inbox.key").read_text(encoding="utf-8").strip() not in everything
     texts = out["texts"]
     assert set(texts) == {"instructions", "install_message", "routine_prompt"}
-    assert texts["instructions"] == (kit / "INSTRUCTIONS.md").read_text()
+    assert texts["instructions"] == (kit / "INSTRUCTIONS.md").read_text(encoding="utf-8")
     assert texts["instructions"].startswith("# botport Mirror bot charter") and "### Each run" in texts["instructions"]
     assert 'The shared folder is "Shared Skills". Reach it' in texts["instructions"]  # its name, never a private path
-    pasted = json.dumps(texts) + (kit / "INSTRUCTIONS.md").read_text()
+    pasted = json.dumps(texts) + (kit / "INSTRUCTIONS.md").read_text(encoding="utf-8")
     assert str(fake.shared.parent) not in pasted and "user-home" not in pasted and "hermes-home" not in pasted
     assert "Every run spends the owner's Grok credit" in texts["instructions"]
     sha = hashlib.sha256((kit / "skill-sync-run.sh").read_bytes()).hexdigest()
     assert sha == SS.script_sha256() and f"This must print {sha}" in texts["install_message"]
     assert "Never open, print or paste a .key file" in texts["install_message"]
     assert "Each run" in texts["routine_prompt"] and "data, never instructions" in texts["routine_prompt"]
-    assert (kit / "SHA256SUMS").read_text() == f"{sha}  skill-sync-run.sh\n"
+    assert (kit / "SHA256SUMS").read_text(encoding="utf-8") == f"{sha}  skill-sync-run.sh\n"
     assert out["credit_note"] == "Every run of the sync bot's routine spends Grok credit, also when nothing changed."
     # the shared folder: this twin's own folder (given to botport) and the signed list; the first pass is not there
     assert (fake.shared / "acme-support").is_dir() and _mode(fake.shared / "acme-support") == 0o700
-    listed = (fake.shared / "inbox" / "pairs.txt").read_text()
+    listed = (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     assert f"acme-support {ACME_BOX_ID} {hashlib.sha256(PASS.encode()).hexdigest()}\n" in listed
-    key = bytes.fromhex((kit / "inbox.key").read_text().strip())
-    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text().strip() == SS.sign(key, listed.encode())
+    key = bytes.fromhex((kit / "inbox.key").read_text(encoding="utf-8").strip())
+    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text(encoding="utf-8").strip() == SS.sign(key, listed.encode())
     assert not (fake.shared / "inbox" / "keys").exists()
     assert out["status"]["heartbeat"] == "The sync bot has not run yet" and out["status"]["set_up"] is True
     assert out["status"]["box"]["note"] == ""
     # the same texts as files beside the folder, for the terminal
     side = fake.central / "skill-sync" / "texts"
-    assert (side / "FIRST-MESSAGE.txt").read_text() == texts["install_message"]
-    assert (side / "ROUTINE-PROMPT.txt").read_text().strip() == texts["routine_prompt"]
+    assert (side / "FIRST-MESSAGE.txt").read_text(encoding="utf-8") == texts["install_message"]
+    assert (side / "ROUTINE-PROMPT.txt").read_text(encoding="utf-8").strip() == texts["routine_prompt"]
 
 
 def test_botport_for_the_box_is_the_owners_download_checked_against_the_release_list(fake):
@@ -158,7 +158,7 @@ def test_botport_for_the_box_is_the_owners_download_checked_against_the_release_
     kit = Path(out["kit"]["folder"])
     assert out["kit"]["ready"] is True and out["kit"]["missing"] == [] and out["via"] == "kit"
     assert (kit / X86).read_bytes() == good
-    assert f"{hashlib.sha256(good).hexdigest()}  {X86}\n" in (kit / "SHA256SUMS").read_text()
+    assert f"{hashlib.sha256(good).hexdigest()}  {X86}\n" in (kit / "SHA256SUMS").read_text(encoding="utf-8")
     assert not (fake.shared / "inbox" / "keys").exists()  # making the folder again leaves no pass in the shared folder
     # the download may go: the copy in the set-up folder is checked again each time and kept
     (fake.user / "Downloads" / X86).unlink()
@@ -199,7 +199,7 @@ def test_a_later_twin_goes_through_the_signed_inbox_and_a_twin_that_leaves_is_st
     first = SS.load_state(c)
     assert first["via"] == {"acme-support": "kit"} and first["kit_at"]
     recipe_pass = "6b" * 32
-    (fake.pairs / "recipe-planner.key").write_text(recipe_pass)
+    (fake.pairs / "recipe-planner.key").write_text(recipe_pass, encoding="utf-8")
     # while no sync bot has ever run for this folder, a second twin still goes by the set-up folder: there is nobody
     # yet to take it from the inbox
     assert SS.remember(c, fake.shared, "recipe-planner", RECIPE_BOX_ID)[1] == "kit"
@@ -214,29 +214,29 @@ def test_a_later_twin_goes_through_the_signed_inbox_and_a_twin_that_leaves_is_st
     # the sync bot has run (its heartbeat is in the shared folder): from now on a twin joins through the inbox
     (fake.shared / "status").mkdir()
     hb = fake.shared / "status" / "heartbeat.json"
-    hb.write_text(json.dumps({"form": 1, "at": "2000-01-01T07:00:00Z", "botport": TAG[1:], "twins": ["acme-support"]}))
+    hb.write_text(json.dumps({"form": 1, "at": "2000-01-01T07:00:00Z", "botport": TAG[1:], "twins": ["acme-support"]}), encoding="utf-8")
     state, via = SS.remember(c, fake.shared, "recipe-planner", RECIPE_BOX_ID)
     assert via == "inbox" and state["serial"] > first["serial"]
     SS.save_state(c, state)
     SS.write_inbox(c, state, drops=("recipe-planner",))
     drop = fake.shared / "inbox" / "keys" / "recipe-planner.key"
-    assert drop.read_text() == recipe_pass and _mode(drop) == 0o600
-    listed = (fake.shared / "inbox" / "pairs.txt").read_text()
+    assert drop.read_text(encoding="utf-8") == recipe_pass and _mode(drop) == 0o600
+    listed = (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     assert f"# serial {state['serial']}\n" in listed
     assert f"recipe-planner {RECIPE_BOX_ID} {hashlib.sha256(recipe_pass.encode()).hexdigest()}\n" in listed
-    key = bytes.fromhex((c / "skill-sync" / "inbox.key").read_text().strip())
-    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text().strip() == SS.sign(key, listed.encode())
+    key = bytes.fromhex((c / "skill-sync" / "inbox.key").read_text(encoding="utf-8").strip())
+    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text(encoding="utf-8").strip() == SS.sign(key, listed.encode())
     assert SS.remember(c, fake.shared, "recipe-planner", RECIPE_BOX_ID)[1] == "inbox"
     # a heartbeat that names the twin but not the pass this computer has for it (an older run, or an older pass in
     # the box): the pass waiting in the inbox stays where it is
     beat = {"form": 1, "at": "2000-01-01T08:00:00Z", "botport": TAG[1:], "script": SS.script_sha256(), "check": 0,
             "list": "ok", "serial": state["serial"], "twins": ["acme-support", "recipe-planner"],
             "passes": {"acme-support": _h16(PASS), "recipe-planner": _h16("9e" * 32)}}
-    hb.write_text(json.dumps(beat))
+    hb.write_text(json.dumps(beat), encoding="utf-8")
     assert SS.status(c, "recipe-planner", True, TAG)["served"] is False and drop.exists()
     # once the sync bot's heartbeat says it holds that very pass, the copy in the inbox is taken away (that one file)
     beat["passes"]["recipe-planner"] = _h16(recipe_pass)
-    hb.write_text(json.dumps(beat))
+    hb.write_text(json.dumps(beat), encoding="utf-8")
     assert SS.status(c, "recipe-planner", True, TAG)["served"] is True and not drop.exists()
     # ...and never through a folder that is really a link to somewhere else
     SS.write_inbox(c, state, drops=("recipe-planner",))
@@ -251,9 +251,9 @@ def test_a_later_twin_goes_through_the_signed_inbox_and_a_twin_that_leaves_is_st
     fake.svc.mirror("acme-support", None, True)
     after = SS.load_state(c)
     assert "acme-support" not in after["twins"] and after["serial"] > state["serial"]
-    listed = (fake.shared / "inbox" / "pairs.txt").read_text()
+    listed = (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     assert "acme-support" not in listed and "recipe-planner" in listed
-    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text().strip() == SS.sign(key, listed.encode())
+    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text(encoding="utf-8").strip() == SS.sign(key, listed.encode())
     assert not (c / "skill-sync" / "skill-sync-kit" / "acme-support.key").exists()
     # a twin whose pass is gone from this computer is said, with the way out
     (fake.pairs / "recipe-planner.key").unlink()
@@ -261,27 +261,27 @@ def test_a_later_twin_goes_through_the_signed_inbox_and_a_twin_that_leaves_is_st
     assert st["served"] is False and st["box"] == {"version": TAG[1:], "need": TAG[1:], "ok": False,
                                                     "note": SS.NO_PASS_NOTE}
     # removing Grok Bot Twin's data closes the sync bot's list first: signed, naming no twin, no pass left waiting
-    (fake.pairs / "recipe-planner.key").write_text(recipe_pass)
+    (fake.pairs / "recipe-planner.key").write_text(recipe_pass, encoding="utf-8")
     SS.write_inbox(c, after, drops=("recipe-planner",))
     plan = fake.svc.uninstall(True)
-    assert plan["dry_run"] is True and "recipe-planner" in (fake.shared / "inbox" / "pairs.txt").read_text()
+    assert plan["dry_run"] is True and "recipe-planner" in (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     fake.svc.uninstall(False)
-    listed = (fake.shared / "inbox" / "pairs.txt").read_text()
+    listed = (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     assert "recipe-planner" not in listed and not (fake.shared / "inbox" / "keys" / "recipe-planner.key").exists()
-    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text().strip() == SS.sign(key, listed.encode())
+    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text(encoding="utf-8").strip() == SS.sign(key, listed.encode())
     assert int(listed.splitlines()[1].split()[-1]) > after["serial"]
 
 
 def test_a_new_pass_reaches_the_sync_bot_as_a_file_through_the_inbox(fake):
     fake.svc.skill_sync_setup("acme-support", str(fake.shared))
     new_pass = "7c" * 32
-    (fake.pairs / "acme-support.key").write_text(new_pass)  # (the fake botport does not write one itself)
+    (fake.pairs / "acme-support.key").write_text(new_pass, encoding="utf-8")  # (the fake botport does not write one itself)
     out = fake.svc.mirror("acme-support", None, False, True)
     assert out["key_rotated"] is True and new_pass not in json.dumps(out)
-    assert (fake.shared / "inbox" / "keys" / "acme-support.key").read_text() == new_pass
-    assert hashlib.sha256(new_pass.encode()).hexdigest() in (fake.shared / "inbox" / "pairs.txt").read_text()
+    assert (fake.shared / "inbox" / "keys" / "acme-support.key").read_text(encoding="utf-8") == new_pass
+    assert hashlib.sha256(new_pass.encode()).hexdigest() in (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     kit = fake.central / "skill-sync" / "skill-sync-kit"
-    assert (kit / "acme-support.key").read_text() == new_pass
+    assert (kit / "acme-support.key").read_text(encoding="utf-8") == new_pass
     # the set-up folder, if it is sent after this, agrees with itself: its list names the new pass, signed
     assert (kit / "pairs.txt").read_bytes() == (fake.shared / "inbox" / "pairs.txt").read_bytes()
     assert (kit / "pairs.txt.mac").read_bytes() == (fake.shared / "inbox" / "pairs.txt.mac").read_bytes()
@@ -304,7 +304,7 @@ def test_heartbeat_says_when_skill_sync_last_ran_and_which_botport_the_sync_bot_
                 "list": "ok", "serial": SS.load_state(c)["serial"], "twins": ["acme-support"],
                 "passes": {"acme-support": _h16(PASS)}}
         data.update(over)
-        hb.write_text(json.dumps(data))
+        hb.write_text(json.dumps(data), encoding="utf-8")
         return SS.status(c, "acme-support", True, TAG, now)
 
     st = beat()
@@ -345,11 +345,11 @@ def test_heartbeat_says_when_skill_sync_last_ran_and_which_botport_the_sync_bot_
     assert st["box"]["version"] is None and st["box"]["ok"] is False and "run this" not in json.dumps(st)
     assert st["served"] is False
     for junk in ("not json", json.dumps([1, 2]), json.dumps({"at": "yesterday"}), "x" * (SS.HEARTBEAT_CAP + 1)):
-        hb.write_text(junk)
+        hb.write_text(junk, encoding="utf-8")
         assert SS.status(c, "acme-support", True, TAG, now)["heartbeat"] == "The sync bot has not run yet"
     hb.unlink()
     elsewhere = fake.shared.parent / "elsewhere.json"
-    elsewhere.write_text(json.dumps({"at": "2000-01-01T08:00:00Z"}))
+    elsewhere.write_text(json.dumps({"at": "2000-01-01T08:00:00Z"}), encoding="utf-8")
     hb.symlink_to(elsewhere)  # a link is not followed
     assert SS.status(c, "acme-support", True, TAG, now)["last_run_at"] is None
     # the service's own answer (today's clock): the same shape, for the page
@@ -366,7 +366,7 @@ def test_a_bot_id_the_box_would_not_accept_is_said_at_once(fake):
     fake.box_ids.clear()  # the fake botport's own short id
     out = fake.svc.skill_sync_setup("acme-support", str(fake.shared))
     assert out["status"]["box"] == {"version": None, "need": TAG[1:], "ok": False, "note": SS.BAD_ID_NOTE}
-    assert "b-acme-0001" in (fake.shared / "inbox" / "pairs.txt").read_text()
+    assert "b-acme-0001" in (fake.shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
 
 
 def test_the_sync_bots_instructions_never_carry_a_login_name_or_an_account(fake, monkeypatch):
@@ -495,7 +495,7 @@ class Box:
             d.mkdir(parents=True)
         for aid, name in ((ACME_BOX_ID, "Acme Helper"), (RECIPE_BOX_ID, "Recipe Planner")):
             (self.data / "agents" / aid).mkdir(parents=True)
-            (self.data / "agents" / aid / "profile.json").write_text(json.dumps({"name": name}))
+            (self.data / "agents" / aid / "profile.json").write_text(json.dumps({"name": name}), encoding="utf-8")
         self.archive_name = f"botport-{_box_target()}.tar.gz"
         self.archive = _archive(program)
         self.env = {"PATH": SYSTEM_PATH, "HOME": str(self.base / "home"), "SKILL_SYNC_ROOT": str(self.root),
@@ -565,21 +565,21 @@ def test_box_script_installs_only_a_checked_botport_and_keeps_the_passes_unread(
     _kit_for_box(box, central(home), {"acme-helper": ACME_BOX_ID}, {"acme-helper": PASS})
     script = box.kit / "skill-sync-run.sh"
     # an archive that is not the one SHA256SUMS names: nothing is installed
-    good = (box.kit / "SHA256SUMS").read_text()
-    (box.kit / "SHA256SUMS").write_text(f"{'0' * 64}  {box.archive_name}\n")
+    good = (box.kit / "SHA256SUMS").read_text(encoding="utf-8")
+    (box.kit / "SHA256SUMS").write_text(f"{'0' * 64}  {box.archive_name}\n", encoding="utf-8")
     rc, out = box.sh(script, "install", str(box.kit))
     assert rc == 2 and "does not match SHA256SUMS: nothing installed" in out and not (box.root / "bin").exists()
-    (box.kit / "SHA256SUMS").write_text(good)
+    (box.kit / "SHA256SUMS").write_text(good, encoding="utf-8")
     rc, out = box.sh(script, "install", str(box.kit))
     assert rc == 0 and out.strip().splitlines()[-1] == "installed: botport 0.2.1", out
-    assert (box.root / "bin" / "botport").read_text() == STANDIN and _mode(box.root / "bin" / "botport") == 0o700
-    assert (box.root / "bin" / "skill-sync-run.sh").read_text() == SS.BOX_SCRIPT
+    assert (box.root / "bin" / "botport").read_text(encoding="utf-8") == STANDIN and _mode(box.root / "bin" / "botport") == 0o700
+    assert (box.root / "bin" / "skill-sync-run.sh").read_text(encoding="utf-8") == SS.BOX_SCRIPT
     # the passes were moved, not copied, and nothing printed them
     assert not (box.kit / "inbox.key").exists() and not (box.kit / "acme-helper.key").exists()
     assert "took the pass for acme-helper" in out and PASS not in out
     work = box.root / ".work" / "acme-helper"
-    assert (work / "pair.key").read_text() == PASS and _mode(work / "pair.key") == 0o600
-    assert (work / "agent-id").read_text() == ACME_BOX_ID + "\n"
+    assert (work / "pair.key").read_text(encoding="utf-8") == PASS and _mode(work / "pair.key") == 0o600
+    assert (work / "agent-id").read_text(encoding="utf-8") == ACME_BOX_ID + "\n"
     assert _mode(box.root / ".work" / "inbox.key") == 0o600
     rc, out = box.sh(script, "bogus")
     assert rc == 2 and out.startswith("error: usage")
@@ -588,14 +588,14 @@ def test_box_script_installs_only_a_checked_botport_and_keeps_the_passes_unread(
     evil.mkdir()
     for name in ("skill-sync-run.sh", box.archive_name, "SHA256SUMS"):
         shutil.copyfile(box.kit / name, evil / name)
-    (evil / "inbox.key").write_text("11" * 32 + "\n")
+    (evil / "inbox.key").write_text("11" * 32 + "\n", encoding="utf-8")
     body = SS.pairs_text({"recipe-planner": RECIPE_BOX_ID}, {"recipe-planner": hashlib.sha256(b"x").hexdigest()}, 99).encode()
     (evil / "pairs.txt").write_bytes(body)
-    (evil / "pairs.txt.mac").write_text(SS.sign(b"\x11" * 32, body) + "\n")
-    before = (box.root / ".work" / "inbox.key").read_text()
+    (evil / "pairs.txt.mac").write_text(SS.sign(b"\x11" * 32, body) + "\n", encoding="utf-8")
+    before = (box.root / ".work" / "inbox.key").read_text(encoding="utf-8")
     rc, out = box.sh(box.root / "bin" / "skill-sync-run.sh", "install", str(evil))
     assert rc == 2 and "this box has an inbox pass already" in out
-    assert (box.root / ".work" / "inbox.key").read_text() == before and (evil / "inbox.key").exists()
+    assert (box.root / ".work" / "inbox.key").read_text(encoding="utf-8") == before and (evil / "inbox.key").exists()
     # the same folder without a pass of its own: its list is not signed with this box's inbox pass, so it adds nothing
     (evil / "inbox.key").unlink()
     rc, out = box.sh(box.root / "bin" / "skill-sync-run.sh", "install", str(evil))
@@ -615,11 +615,11 @@ def test_box_script_runs_the_signed_list_installs_through_botport_and_writes_the
     lines = out.strip().splitlines()
     assert PASS not in out and not (box.root / "inbox" / "keys" / "acme-helper.key").exists()
     work = box.root / ".work" / "acme-helper"
-    assert (work / "pair.key").read_text() == PASS and _mode(work / "pair.key") == 0o600
-    assert (work / "agent-id").read_text() == ACME_BOX_ID + "\n" and (work / "pair-skills").exists()
+    assert (work / "pair.key").read_text(encoding="utf-8") == PASS and _mode(work / "pair.key") == 0o600
+    assert (work / "agent-id").read_text(encoding="utf-8") == ACME_BOX_ID + "\n" and (work / "pair-skills").exists()
     assert not (work / "with-skills").exists()  # only skills this twin installed are read back, never another bot's
     # the staged skill is installed by botport itself, into the box's skills folder, for the pack botport named
-    calls = (box.base / "calls.log").read_text().splitlines()
+    calls = (box.base / "calls.log").read_text(encoding="utf-8").splitlines()
     data = os.path.realpath(box.data)
     install = [c for c in calls if "--precheck" in c]
     assert install == [f"mirror apply-pack --root {box.root} --agent-data {data} --pair acme-helper "
@@ -638,17 +638,17 @@ def test_box_script_runs_the_signed_list_installs_through_botport_and_writes_the
     beat = SS.read_heartbeat(box.root)
     assert beat["botport"] == "0.2.1" and beat["script"] == SS.script_sha256() and beat["twins"] == ["acme-helper"]
     assert beat["serial"] == 5 and beat["passes"] == {"acme-helper": _h16(PASS)}
-    raw = json.loads((box.root / "status" / "heartbeat.json").read_text())
+    raw = json.loads((box.root / "status" / "heartbeat.json").read_text(encoding="utf-8"))
     assert raw["form"] == 1 and raw["list"] == "ok" and beat["list"] == "ok"
 
     def put_list(twins, passes, serial, signed=True):
         hashes = {p: hashlib.sha256(v.encode()).hexdigest() for p, v in passes.items()}
         body = SS.pairs_text(twins, hashes, serial).encode()
         (box.root / "inbox" / "pairs.txt").write_bytes(body)
-        (box.root / "inbox" / "pairs.txt.mac").write_text(SS.sign(key if signed else b"\x01" * 32, body) + "\n")
+        (box.root / "inbox" / "pairs.txt.mac").write_text(SS.sign(key if signed else b"\x01" * 32, body) + "\n", encoding="utf-8")
 
     def drop(pid, value):
-        (box.root / "inbox" / "keys" / f"{pid}.key").write_text(value)
+        (box.root / "inbox" / "keys" / f"{pid}.key").write_text(value, encoding="utf-8")
 
     # a list that someone else wrote into the shared folder (not signed with the inbox pass) adds nothing
     put_list({"acme-helper": ACME_BOX_ID, "recipe-planner": RECIPE_BOX_ID}, {"acme-helper": PASS, "recipe-planner": "6b" * 32}, 9, signed=False)
@@ -666,7 +666,7 @@ def test_box_script_runs_the_signed_list_installs_through_botport_and_writes_the
     drop("recipe-planner", "6b" * 32)
     rc, out = box.run()
     assert "took the pass for recipe-planner" in out
-    assert (box.root / ".work" / "recipe-planner" / "agent-id").read_text() == RECIPE_BOX_ID + "\n"
+    assert (box.root / ".work" / "recipe-planner" / "agent-id").read_text(encoding="utf-8") == RECIPE_BOX_ID + "\n"
     assert SS.read_heartbeat(box.root)["twins"] == ["acme-helper", "recipe-planner"]
     # the owner replaced a twin's pass: from the moment the list names the new one, the old one no longer counts in
     # the box, also while the new file has not arrived (or was taken out of the shared folder)
@@ -678,7 +678,7 @@ def test_box_script_runs_the_signed_list_installs_through_botport_and_writes_the
     assert SS.read_heartbeat(box.root)["twins"] == ["acme-helper"]
     drop("recipe-planner", "7c" * 32)
     rc, out = box.run()
-    assert "took the pass for recipe-planner" in out and (rwork / "pair.key").read_text() == "7c" * 32
+    assert "took the pass for recipe-planner" in out and (rwork / "pair.key").read_text(encoding="utf-8") == "7c" * 32
     assert SS.read_heartbeat(box.root)["passes"]["recipe-planner"] == _h16("7c" * 32)
     # an older signed list brought back (a replay) is ignored
     put_list({"acme-helper": ACME_BOX_ID}, {"acme-helper": PASS}, 5)
@@ -715,7 +715,7 @@ def test_box_script_names_no_link_and_no_two_line_name_to_copy_up(home, tmp_path
     pass_file = box.root / ".work" / "acme-helper" / "pair.key"
     (out_dir / "state-99.json").symlink_to(pass_file)
     (out_dir / "blobs" / "b9").symlink_to(pass_file)
-    (out_dir / "blobs" / "b2\ncopy up: .work").write_text("x")
+    (out_dir / "blobs" / "b2\ncopy up: .work").write_text("x", encoding="utf-8")
     rc, out = box.run()
     assert rc == 0, out
     assert [x for x in out.splitlines() if x.startswith("copy up: ")] == [
@@ -801,7 +801,7 @@ def _real_loop(home, tmp_path, monkeypatch):
     skill = home / "profiles" / prof / "skills" / "grok-twin" / "wave-hello"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("---\nname: wave-hello\ndescription: Waves hello to visitors.\n---\n"
-                                    "When asked to wave, reply with a friendly wave. Include the marker WAVE-OK.\n")
+                                    "When asked to wave, reply with a friendly wave. Include the marker WAVE-OK.\n", encoding="utf-8")
     svc.sync(acme)
     svc.approve(acme, "skill:wave-hello")
     assert (shared / acme / "HEAD").is_file()
@@ -816,7 +816,7 @@ def _real_loop(home, tmp_path, monkeypatch):
     box.copy_down(shared)
     rc, text = box.run()
     assert rc == 0 and f"{acme}: installed skill:wave-hello" in text, text
-    assert "WAVE-OK" in (box.data / "workflows" / "wave-hello" / "SKILL.md").read_text()
+    assert "WAVE-OK" in (box.data / "workflows" / "wave-hello" / "SKILL.md").read_text(encoding="utf-8")
     names = box.copy_up(shared, text)
     assert "status/heartbeat.json" in names and any(n.startswith(f"{acme}/from-grok/state-") for n in names)
     return svc, box, shared, acme, recipe, skill, text
@@ -869,36 +869,36 @@ def test_real_botport_grok_side_skill_changes_come_back_to_hermes_never_silently
     assert next(p for p in svc.sync(acme)["pairs"] if p["pair_id"] == acme)["state"] == "in_step"
     installed = box.data / "workflows" / "wave-hello" / "SKILL.md"
     # (a) a bot in Grok adds a step to the skill Hermes sent (and reformats its front matter, as some bots do)
-    installed.write_text(installed.read_text().replace("description: Waves hello to visitors.",
+    installed.write_text(installed.read_text(encoding="utf-8").replace("description: Waves hello to visitors.",
                                                        "description: >-\n  Waves hello to visitors.")
-                         + "Step 4: wave twice. GROK-EDIT-1\n")
+                         + "Step 4: wave twice. GROK-EDIT-1\n", encoding="utf-8")
     text, entry = _box_round(svc, box, shared, acme)
     # only the skill this twin installed went into the copy botport read, never the rest of the box
     view = box.root / ".work" / acme / "view"
     assert sorted(p.name for p in (view / "workflows").iterdir()) == ["wave-hello"]
     assert entry["applied"] and "skill:wave-hello" in json.dumps(entry["applied"]), entry
-    assert "GROK-EDIT-1" in (skill / "SKILL.md").read_text() and entry["conflicts"] == []
+    assert "GROK-EDIT-1" in (skill / "SKILL.md").read_text(encoding="utf-8") and entry["conflicts"] == []
     assert entry["state"] == "in_step", entry
     # a run with nothing new changes nothing in Hermes
     _, entry = _box_round(svc, box, shared, acme)
     assert entry["applied"] == [] and entry["conflicts"] == [] and entry["state"] == "in_step", entry
     # (b) changed in both places: a conflict for the owner to settle, neither copy is overwritten
-    installed.write_text(installed.read_text() + "Step 5: bow. GROK-EDIT-2\n")
-    (skill / "SKILL.md").write_text((skill / "SKILL.md").read_text() + "Step 5: smile. HERMES-EDIT-2\n")
+    installed.write_text(installed.read_text(encoding="utf-8") + "Step 5: bow. GROK-EDIT-2\n", encoding="utf-8")
+    (skill / "SKILL.md").write_text((skill / "SKILL.md").read_text(encoding="utf-8") + "Step 5: smile. HERMES-EDIT-2\n", encoding="utf-8")
     _, entry = _box_round(svc, box, shared, acme)
     assert "skill:wave-hello" in json.dumps(entry["conflicts"]), entry
-    assert "HERMES-EDIT-2" in (skill / "SKILL.md").read_text() and "GROK-EDIT-2" not in (skill / "SKILL.md").read_text()
-    assert "GROK-EDIT-2" in installed.read_text() and "HERMES-EDIT-2" not in installed.read_text()
+    assert "HERMES-EDIT-2" in (skill / "SKILL.md").read_text(encoding="utf-8") and "GROK-EDIT-2" not in (skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "GROK-EDIT-2" in installed.read_text(encoding="utf-8") and "HERMES-EDIT-2" not in installed.read_text(encoding="utf-8")
     svc.resolve(acme, "skill:wave-hello", "grok")
-    assert "GROK-EDIT-2" in (skill / "SKILL.md").read_text()
+    assert "GROK-EDIT-2" in (skill / "SKILL.md").read_text(encoding="utf-8")
     # (a) a skill a bot made in Grok's shared library: named to the owner, never brought over unasked
     made = box.data / "workflows" / "example-skill"
     made.mkdir()
     (made / "SKILL.md").write_text("---\nname: example-skill\ndescription: Says hello.\n---\n"
-                                   "Say hello. EXAMPLE-OK\n")
+                                   "Say hello. EXAMPLE-OK\n", encoding="utf-8")
     other = box.data / "workflows" / "recipe-ideas"  # another bot's: never read for this twin unless chosen
     other.mkdir()
-    (other / "SKILL.md").write_text("---\nname: recipe-ideas\ndescription: Ideas.\n---\nSuggest a dish.\n")
+    (other / "SKILL.md").write_text("---\nname: recipe-ideas\ndescription: Ideas.\n---\nSuggest a dish.\n", encoding="utf-8")
     _, entry = _box_round(svc, box, shared, acme)
     prof = skill.parent
     assert not (prof / "example-skill").exists() and not (prof / "recipe-ideas").exists()
@@ -910,7 +910,7 @@ def test_real_botport_grok_side_skill_changes_come_back_to_hermes_never_silently
                           f"Hermes: hermes twin skill-sync {acme} --take NAME (or --take-all).")
     st = svc.skill_sync_take(acme, ["example-skill"])
     assert st["grok_skills"]["taken"] == ["example-skill"]
-    assert f"# skills {acme} example-skill" in (shared / "inbox" / "pairs.txt").read_text()
+    assert f"# skills {acme} example-skill" in (shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     _, entry = _box_round(svc, box, shared, acme)
     assert sorted(p.name for p in (view / "workflows").iterdir()) == ["example-skill", "wave-hello"]
     # a new skill from Grok waits for the owner's approval in Hermes before it is used
@@ -919,12 +919,12 @@ def test_real_botport_grok_side_skill_changes_come_back_to_hermes_never_silently
     assert not list(skill.parent.parent.rglob("example-skill"))
     svc.approve(acme, "skill:example-skill")
     got = list(skill.parent.parent.rglob("example-skill/SKILL.md"))
-    assert got and "EXAMPLE-OK" in got[0].read_text()
+    assert got and "EXAMPLE-OK" in got[0].read_text(encoding="utf-8")
     assert not list(skill.parent.parent.rglob("recipe-ideas"))
     assert svc.skill_sync_status(acme)["grok_skills"]["offered"] == ["recipe-ideas"]
     # taken back: no longer read; what Hermes already has stays (a partial read is never a removal)
     svc.skill_sync_take(acme, remove=["example-skill"])
-    assert "# skills" not in (shared / "inbox" / "pairs.txt").read_text()
+    assert "# skills" not in (shared / "inbox" / "pairs.txt").read_text(encoding="utf-8")
     _, entry = _box_round(svc, box, shared, acme)
     assert sorted(p.name for p in (view / "workflows").iterdir()) == ["wave-hello"]
     assert entry["conflicts"] == [], entry
@@ -938,30 +938,30 @@ def test_box_script_reads_back_only_this_twins_skills_and_the_ones_the_owner_cho
     assert box.sh(box.kit / "skill-sync-run.sh", "install", str(box.kit))[0] == 0
     for n in ("wave-hello", "old-trick", "example-skill", "recipe-ideas"):
         (box.data / "workflows" / n).mkdir()
-        (box.data / "workflows" / n / "SKILL.md").write_text(f"---\nname: {n}\n---\n{n}\n")
+        (box.data / "workflows" / n / "SKILL.md").write_text(f"---\nname: {n}\n---\n{n}\n", encoding="utf-8")
     (box.data / "workflows" / "no-skill-file").mkdir()
     (box.data / "workflows" / "managed-skills" / "x").mkdir(parents=True)
-    (box.data / "workflows" / "managed-skills" / "x" / "SKILL.md").write_text("x")
+    (box.data / "workflows" / "managed-skills" / "x" / "SKILL.md").write_text("x", encoding="utf-8")
     work = box.root / ".work" / "acme-helper"
     # botport's applied log (keys in any order): wave-hello installed (then changed in Grok: still this twin's), and
     # old-trick installed and later retired
     (work / "applied.jsonl").write_text(
         '{"after":"' + "a" * 64 + '","before":"-","gen":1,"item":"skill:wave-hello"}\n'
         '{"gen":1,"item":"skill:old-trick","before":"-","after":"' + "b" * 64 + '"}\n'
-        '{"after":"-","before":"' + "b" * 64 + '","gen":2,"item":"skill:old-trick"}\n')
+        '{"after":"-","before":"' + "b" * 64 + '","gen":2,"item":"skill:old-trick"}\n', encoding="utf-8")
     view = work / "view" / "workflows"
 
     def put_list(take):
         body = SS.pairs_text({"acme-helper": ACME_BOX_ID}, {"acme-helper": hashlib.sha256(PASS.encode()).hexdigest()},
                              int(datetime.now(timezone.utc).timestamp()), take).encode()
         (box.root / "inbox" / "pairs.txt").write_bytes(body)
-        (box.root / "inbox" / "pairs.txt.mac").write_text(SS.sign(key, body) + "\n")
+        (box.root / "inbox" / "pairs.txt.mac").write_text(SS.sign(key, body) + "\n", encoding="utf-8")
 
     rc, out = box.run()
     assert rc == 0, out
     assert sorted(p.name for p in view.iterdir()) == ["wave-hello"]
     assert (work / "view" / "agents" / ACME_BOX_ID / "profile.json").is_file()
-    calls = (box.base / "calls.log").read_text().splitlines()
+    calls = (box.base / "calls.log").read_text(encoding="utf-8").splitlines()
     assert (f"mirror digest-items --pair acme-helper --agent-id {ACME_BOX_ID} --agent-data {work}/view --with-skills "
             f"--out {box.root}/acme-helper/from-grok --log {work}/applied.jsonl --key {work}/pair.key") in calls
     assert not any("digest-items" in c and str(box.data) in c for c in calls)  # never the whole library
@@ -971,7 +971,7 @@ def test_box_script_reads_back_only_this_twins_skills_and_the_ones_the_owner_cho
     put_list({"acme-helper": ["example-skill"]})
     rc, out = box.run()
     assert sorted(p.name for p in view.iterdir()) == ["example-skill", "wave-hello"]
-    assert (work / "take-skills").read_text() == "example-skill\n"
+    assert (work / "take-skills").read_text(encoding="utf-8") == "example-skill\n"
     # a list with the choice in it that is not signed by the owner's computer changes nothing
     body = (box.root / "inbox" / "pairs.txt").read_bytes().replace(b"example-skill", b"recipe-ideas")
     (box.root / "inbox" / "pairs.txt").write_bytes(body)
@@ -985,7 +985,7 @@ def test_box_script_reads_back_only_this_twins_skills_and_the_ones_the_owner_cho
     # the choice taken back: the next run reads this twin's own skills only
     put_list({})
     rc, out = box.run()
-    assert sorted(p.name for p in view.iterdir()) == ["wave-hello"] and (work / "take-skills").read_text() == ""
+    assert sorted(p.name for p in view.iterdir()) == ["wave-hello"] and (work / "take-skills").read_text(encoding="utf-8") == ""
     # a link in the library is never followed into the copy, and a twin with no profile in the box is said
     (box.data / "workflows" / "linked").symlink_to(box.data / "workflows" / "wave-hello")
     put_list({"acme-helper": ["*"]})
@@ -998,11 +998,11 @@ def test_box_script_reads_back_only_this_twins_skills_and_the_ones_the_owner_cho
     # a folder name a bot made to break the heartbeat (a line break, then JSON) is no skill name: never written
     evil = 'zz\n"],"passes":{"acme-helper":"0000000000000000"},"script":"' + "a" * 64 + '","skills":["y'
     (box.data / "workflows" / evil).mkdir()
-    (box.data / "workflows" / evil / "SKILL.md").write_text("x")
+    (box.data / "workflows" / evil / "SKILL.md").write_text("x", encoding="utf-8")
     (box.data / "workflows" / "Demo-Skill").mkdir()  # capitals are a skill name botport takes
-    (box.data / "workflows" / "Demo-Skill" / "SKILL.md").write_text("---\nname: Demo-Skill\n---\nx\n")
+    (box.data / "workflows" / "Demo-Skill" / "SKILL.md").write_text("---\nname: Demo-Skill\n---\nx\n", encoding="utf-8")
     rc, out = box.run()
-    raw = (box.root / "status" / "heartbeat.json").read_text()
+    raw = (box.root / "status" / "heartbeat.json").read_text(encoding="utf-8")
     assert raw.count("\n") == 1 and '"passes":{"acme-helper":"' + _h16(PASS) + '"}' in raw
     beat = SS.read_heartbeat(box.root)
     assert beat["passes"] == {"acme-helper": _h16(PASS)} and beat["script"] == SS.script_sha256()
@@ -1025,8 +1025,8 @@ def test_the_owners_choice_of_grok_skills_travels_signed_and_is_named_when_not_c
     assert st["grok_skills"]["taken"] == ["demo-skill.v2", "example-skill"]
     body = (fake.shared / "inbox" / "pairs.txt").read_bytes()
     assert b"\n# skills acme-support demo-skill.v2 example-skill\n" in body
-    key = bytes.fromhex((c / "skill-sync" / "inbox.key").read_text().strip())
-    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text().strip() == SS.sign(key, body)
+    key = bytes.fromhex((c / "skill-sync" / "inbox.key").read_text(encoding="utf-8").strip())
+    assert (fake.shared / "inbox" / "pairs.txt.mac").read_text(encoding="utf-8").strip() == SS.sign(key, body)
     kit = c / "skill-sync" / "skill-sync-kit"
     assert (kit / "pairs.txt").read_bytes() == body  # a set-up folder sent later carries the same choice
     for bad in (["../x"], ["a b"], ["x" * 65], [""], ["a\nb"]):
@@ -1048,7 +1048,7 @@ def test_the_owners_choice_of_grok_skills_travels_signed_and_is_named_when_not_c
             "script": SS.script_sha256(), "check": 0, "list": "ok", "serial": 1, "twins": ["acme-support"],
             "passes": {}, "skills": ["example-skill", "Bad Name", 7, "wave-hello"]}
     (fake.shared / "status").mkdir(exist_ok=True)
-    (fake.shared / "status" / "heartbeat.json").write_text(json.dumps(beat))
+    (fake.shared / "status" / "heartbeat.json").write_text(json.dumps(beat), encoding="utf-8")
     gs = fake.svc.skill_sync_status("acme-support")["grok_skills"]
     assert gs["library"] == ["example-skill", "wave-hello"] and gs["offered"] == ["example-skill", "wave-hello"]
     assert gs["note"].startswith("Grok has skills this twin does not get: example-skill, wave-hello. To bring one")
@@ -1064,12 +1064,12 @@ def test_the_owners_choice_of_grok_skills_travels_signed_and_is_named_when_not_c
     assert "Skills made in Grok that come back here: example-skill." in out and "--take NAME" in out
     # an older script in the box says no names: a choice it cannot carry is said
     beat.pop("skills")
-    (fake.shared / "status" / "heartbeat.json").write_text(json.dumps(beat))
+    (fake.shared / "status" / "heartbeat.json").write_text(json.dumps(beat), encoding="utf-8")
     gs = fake.svc.skill_sync_status("acme-support")["grok_skills"]
     assert gs["library"] is None and gs["note"].startswith("The sync bot runs an older script that does not bring")
     # more names than the heartbeat lists are counted and said
     beat["skills"], beat["skills_count"] = ["example-skill"], 100
-    (fake.shared / "status" / "heartbeat.json").write_text(json.dumps(beat))
+    (fake.shared / "status" / "heartbeat.json").write_text(json.dumps(beat), encoding="utf-8")
     assert ("Grok has skills this twin does not get: 99 more than the sync bot listed."
             in fake.svc.skill_sync_status("acme-support")["grok_skills"]["note"])
     # a choice the box could not take (the signed list would pass 64 kB) is refused before anything changes

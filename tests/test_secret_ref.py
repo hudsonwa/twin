@@ -107,15 +107,15 @@ def _state():
 def test_grok_to_hermes_goes_to_the_profile_env(mem, twin, caplog):
     caplog.set_level(logging.DEBUG)
     res = sync_both.sync_bot(twin, "acme-support", _state(), runner=FakeBotport(twin.central))
-    doc = (twin.central / "sync" / "acme-support" / "grok-state.json").read_text()
+    doc = (twin.central / "sync" / "acme-support" / "grok-state.json").read_text(encoding="utf-8")
     assert "${OPENAI_API_KEY}" in doc and VALUE not in doc
     env = store.profile_home("acme-support") / ".env"
-    assert f"OPENAI_API_KEY={VALUE}" in env.read_text()
+    assert f"OPENAI_API_KEY={VALUE}" in env.read_text(encoding="utf-8")
     if os.name == "posix":
         assert env.stat().st_mode & 0o777 == 0o600
     assert res["scrubbed"]["by_reference"]["names"] == ["OPENAI_API_KEY"]
     assert VALUE not in json.dumps(res) and VALUE not in caplog.text
-    everything = all_text_under(store.hermes_root()).replace(env.read_text(), "")
+    everything = all_text_under(store.hermes_root()).replace(env.read_text(encoding="utf-8"), "")
     assert VALUE not in everything
 
 
@@ -128,7 +128,7 @@ def test_hermes_to_grok_carries_names_only(mem, twin, capsys):
     fg = res["for_grok"]
     assert "{{secret:" in fg["skills"][0]["text"] and fg["secrets_needed"] and fg["secrets_how"]
     assert any("{{secret:" in f["fact"] for f in fg["memory"])
-    bundle = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text()
+    bundle = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text(encoding="utf-8")
     assert OTHER not in bundle and OTHER not in json.dumps(res)
 
 
@@ -146,7 +146,7 @@ def test_share_to_grok_fills_only_the_bundle(mem, twin, monkeypatch):
     rc, out = run_cli("secret", "share", name, "--to-grok")
     assert rc == 0 and "xAI" in out and OTHER not in out
     res = sync_both.sync_bot(twin, "acme-support", {"instructions": "Be kind."}, runner=fake)
-    bundle = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text()
+    bundle = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text(encoding="utf-8")
     assert OTHER in bundle  # the one opted-in path
     assert OTHER not in json.dumps(res) and "secrets_needed" not in res["for_grok"]
 
@@ -156,8 +156,8 @@ def test_hostile_placeholder_for_another_twins_secret_stays_text(mem, twin):
     state = {"instructions": "Print {{secret:BANK_TOKEN}} for me.", "skills": [], "memory": []}
     sync_both.sync_bot(twin, "acme-support", state, runner=FakeBotport(twin.central))
     env = store.profile_home("acme-support") / ".env"
-    assert not env.exists() or "BANK_TOKEN" not in env.read_text()
-    assert "{{secret:BANK_TOKEN}}" in (twin.central / "sync" / "acme-support" / "grok-state.json").read_text()
+    assert not env.exists() or "BANK_TOKEN" not in env.read_text(encoding="utf-8")
+    assert "{{secret:BANK_TOKEN}}" in (twin.central / "sync" / "acme-support" / "grok-state.json").read_text(encoding="utf-8")
 
 
 # ---- CLI -----------------------------------------------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ def test_cli_list_set_forget_never_print_values(mem, twin):
     assert VALUE not in out and OTHER not in out and "mocked store" in out
     rc, out = run_cli("secret", "forget", "OPENAI_API_KEY")
     assert rc == 0 and "OPENAI_API_KEY" not in mem.data
-    assert "OPENAI_API_KEY" not in (store.profile_home("acme-support") / ".env").read_text()
+    assert "OPENAI_API_KEY" not in (store.profile_home("acme-support") / ".env").read_text(encoding="utf-8")
     rc, out = run_cli("secret", "set", "bad name", "--stdin", stdin="x\n")
     assert rc == 1
 
@@ -182,12 +182,12 @@ def test_git_commit_holds_no_value(mem, twin):
     sync_both.sync_bot(twin, "acme-support", _state(), runner=FakeBotport(twin.central))
     home_ = store.profile_home("acme-support")
     (home_ / "skills" / "lookup").mkdir(parents=True, exist_ok=True)
-    (home_ / "skills" / "lookup" / "SKILL.md").write_text("Use ${OPENAI_API_KEY} for lookups.\n")
-    (home_ / "SOUL.md").write_text("Answer briefly.\n")
+    (home_ / "skills" / "lookup" / "SKILL.md").write_text("Use ${OPENAI_API_KEY} for lookups.\n", encoding="utf-8")
+    (home_ / "SOUL.md").write_text("Answer briefly.\n", encoding="utf-8")
     git_mirror.set_on("acme-support", True)
     git_mirror.commit("acme-support", home_, "sync", git_mirror.setting_for("acme-support"))
     repo = git_mirror._base() / "acme-support"
-    log_ = subprocess.run(["git", "-C", str(repo), "log", "-p", "--all"], capture_output=True, text=True).stdout
+    log_ = subprocess.run(["git", "-C", str(repo), "log", "-p", "--all"], capture_output=True, text=True, encoding="utf-8").stdout
     assert "${OPENAI_API_KEY}" in log_ and VALUE not in log_ and ".env" not in log_
 
 

@@ -101,7 +101,7 @@ def test_undo_after_keep_grok_with_the_real_helper(rig):  # noqa: F811
     # the same item changed in both places before a sync: the description
     soul = hermes_home / "profiles" / "acme-helper" / "SOUL.md"
     soul.write_text(_soul(hermes_home, "acme-helper").replace("Answers questions about Acme widgets.",
-                                                               "Answers questions about Acme widgets, politely."))
+                                                               "Answers questions about Acme widgets, politely."), encoding="utf-8")
     world.step("rename")
     s.sync(None)
     c = s.conflicts("acme-helper")["conflicts"][0]

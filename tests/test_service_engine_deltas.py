@@ -38,11 +38,11 @@ def rig(home, tmp_path):
         def mode(self, **kw):
             d = central(home) / "botport-state"
             d.mkdir(parents=True, exist_ok=True)
-            (d / "fake_mode.json").write_text(json.dumps(kw))
+            (d / "fake_mode.json").write_text(json.dumps(kw), encoding="utf-8")
 
         def calls(self):
             p = central(home) / "botport-state" / "fake_calls.jsonl"
-            return [json.loads(x)["argv"] for x in p.read_text().splitlines()] if p.exists() else []
+            return [json.loads(x)["argv"] for x in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
 
     r = R()
     r.settings()
@@ -88,7 +88,7 @@ def test_secret_in_bot_name_is_masked_everywhere(rig, home, monkeypatch):
     # nothing the plugin itself keeps holds it either (botport-state is botport's folder, with the fake's logs)
     for f in central(home).rglob("*"):
         if f.is_file() and "botport-state" not in f.relative_to(central(home)).parts:
-            assert key not in f.read_text(errors="replace"), f.name
+            assert key not in f.read_text(errors="replace", encoding="utf-8"), f.name
 
 
 # ---- --account LABEL ----------------------------------------------------------------------------------------

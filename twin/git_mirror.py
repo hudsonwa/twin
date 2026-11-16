@@ -180,7 +180,7 @@ def _write(repo: Path, files: dict) -> None:
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="true", LC_ALL="C")
     return subprocess.run(["git", *AUTHOR, "-C", str(repo), *args], capture_output=True, text=True,
-                          timeout=GIT_TIMEOUT_S, env=env, check=False)
+                          encoding="utf-8", errors="replace", timeout=GIT_TIMEOUT_S, env=env, check=False)
 
 
 def _message(kind: str, changed: list) -> str:

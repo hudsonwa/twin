@@ -1,6 +1,6 @@
 name: grok-bot-twin
 label: Grok Bot Twin
-version: "0.4.1"
+version: "0.5.0"
 description: >-
   Gives each bot from the Grok desktop app a twin in Hermes that follows it. Experimental: one prompt in Grok
   twins the bot, keeps it in step, moves it to Hermes and back. It runs botport (your own verified download) and writes mainly in
@@ -17,6 +17,7 @@ provides_tools:
   - twin_recent
   - twin_transcripts_search
   - twin_make
+  - twin_from_hermes
 provides_hooks:
   - pre_llm_call
   - on_session_start
@@ -27,7 +28,7 @@ emits: [synced, secrets_withheld, conflict, changed, created, removed, resolved,
         skipped, sent_to_grok, switched, switch_undone, mirror, helper, sync_error, demo, fleet, tasks, setup_export, setup]
 external_dependencies:
   - name: botport
-    install: "Open the Twins page in Hermes Desktop and press Connect my Grok bots. In the terminal: on the Mac with the Grok app, download release v0.2.1 from https://github.com/hudsonwa/botport/releases, then run hermes twin setup --file with the downloaded file. Hermes verifies botport before it is ever run."
+    install: "Open the Twins page in Hermes Desktop and press Connect my Grok bots. In the terminal: on the Mac with the Grok app, download release v0.3.3 from https://github.com/hudsonwa/botport/releases, then run hermes twin setup --file with the downloaded file. Hermes verifies botport before it is ever run."
     check: "botport version --json"
     optional: true
     note: "Needed for your real bots. Without botport only the built-in sample twin works (See a sample first on the Twins page, or hermes twin demo)."
@@ -57,7 +58,7 @@ config_schema:
     type: str
     default: ""
     label: botport release to accept (advanced)
-    description: Leave empty to accept the botport release this plugin version expects (v0.2.1). To accept another one, give its release tag, like v0.2.0; botport is then verified against that release. Anything not shaped like v1.2.3 is refused.
+    description: Leave empty to accept the botport release this plugin version expects (v0.3.3). To accept another one, give its release tag, like v0.2.0; botport is then verified against that release. Anything not shaped like v1.2.3 is refused.
   grok_app_dir:
     type: str
     default: ""

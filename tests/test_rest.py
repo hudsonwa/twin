@@ -6,6 +6,7 @@ import importlib.util
 import pytest
 
 from twin_testlib import ROOT, dumps, fake_key, home, timer  # noqa: F401
+from hermes_plugins.grok_bot_twin.twin import connect, pins
 
 fastapi = pytest.importorskip("fastapi")
 from fastapi import FastAPI  # noqa: E402
@@ -40,8 +41,10 @@ def test_status_empty_then_demo(client):
     hint = body["engine"]["install_hint"]
     assert body["engine"]["available"] is False and "Connect my Grok bots" in hint
     assert "<path>" not in hint and "attestation" not in hint and "PATH" not in hint
+    no_build = pins.platform_target() not in pins.TARGETS  # (Windows: botport has no build there, and says so)
     assert body["setup"] == {"ready": False, "grok_app_found": True, "helper_found": False, "helper_checked": False,
-                             "problem": None, "cause": None}
+                             "problem": connect.P_NO_BUILD if no_build else None,
+                             "cause": "no_build" if no_build else None}
     assert body["sample"] == {"on": False, "hide_real": False, "instructions_example": None}
     assert body["has_data"] is False
     r = client.post(P + "/demo", json={"action": "start"})

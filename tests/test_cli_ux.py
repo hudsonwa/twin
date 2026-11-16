@@ -312,16 +312,17 @@ def test_turning_skill_sync_off_asks_first(svc):
 
 # ---- setup: real values, no unsafe advice ----------------------------------------------------------------------
 def test_setup_without_the_helper_gives_real_commands(svc):
+    from hermes_plugins.grok_bot_twin.twin import engine as E
     rc, out, err = run(["setup"])
     assert rc == 1
-    assert "https://github.com/hudsonwa/botport/releases/tag/v0.2.1" in err
+    assert f"https://github.com/hudsonwa/botport/releases/tag/{E.EXPECTED_BOTPORT_TAG}" in err
     assert "hermes twin setup --file ~/Downloads/botport-" in err and ".tar.gz" in err
     assert "Connect my Grok bots" in err  # the page first
     assert "botport, a small free app that reads your bot list from Grok" in err and "helper" not in err
     assert "<" not in err and "allow-unattested" not in err and "PATH" not in err
     assert "gh release" not in err and "GitHub" not in err  # the GitHub route is shown only when asked for
     rc, out, err = run(["setup", "--with-github"])
-    assert rc == 1 and "gh release download v0.2.1 --repo hudsonwa/botport --pattern botport-" in err
+    assert rc == 1 and f"gh release download {E.EXPECTED_BOTPORT_TAG} --repo hudsonwa/botport --pattern botport-" in err
     assert "hermes twin setup --file botport-" in err and "<" not in err and "allow-unattested" not in err
     # the older spelling of the option still works
     assert cli.build_parser().parse_args(["setup", "--helper", "x.tar.gz"]).helper == "x.tar.gz"

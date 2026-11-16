@@ -15,7 +15,7 @@ cannot do that and do nothing else. Moving to Hermes and coming back are below.
 ## The one local command
 
 Everything here goes to the user's own computer through your **"Run a command on your local computer"** tool
-(never your own cloud computer). Each prompt runs **exactly ONE** such command (the one exception is in step 7: a retry without `history` when Grok refused the first as too long): do not check, list, test or look
+(never your own cloud computer). Each prompt runs **exactly ONE** such command (the exceptions: in step 7, a retry without `history` when Grok refused the first as too long; and the chat-sync command when the request asks for chat sync, see "Chat sync"): do not check, list, test or look
 at anything on that computer first or afterwards, not even how an earlier run ended (each run's answer says
 everything, and running it again is always safe). Build the JSON in your head, not in a file. The command passes your state as ONE JSON object on standard
 input, in exactly this form (the quoted heredoc marker keeps the text as it is):
@@ -68,6 +68,24 @@ If the computer answers that `hermes` is not found, say: "The Grok app's shell c
 installed, add it to your login shell's PATH: see https://github.com/hudsonwa/twin/blob/next/docs/ONE-PROMPT.md#before-you-start"
 and stop. If `hermes` is found but `twin from-grok` is not, say: "Grok Bot Twin 0.4 or newer is not installed or
 not switched on in Hermes: see https://github.com/hudsonwa/twin#install" and stop.
+
+## Chat sync (when the request asks for it)
+
+A request may also ask you to set up continuous chat sync (Hermes sends this when the user runs
+`hermes twin from-hermes`). Then, in the same turn and after the from-grok command:
+
+1. With your own **CreateRoutine** tool, make one routine named exactly "Sync chats to Hermes", on the schedule
+   and with the prompt the request gives, word for word. If you already have a routine of that name, keep it and
+   change nothing.
+2. Run that routine's work once now: ONE `hermes twin chat-sync --bot "<your name>"` command, the same way as
+   from-grok, with `{"bot_name": "<your name>", "history": [...]}` on standard input. `history` is as in step 6
+   above, but only the messages of the period the request names; give each conversation its `id` when you have
+   one, and the time the conversation itself `started`. Messages Hermes already has are skipped.
+3. Answer with the lines the request asks for (`TWIN:`, `SYNC:`, `ROUTINE:`), each command's first line exactly as
+   it came back.
+
+This request allows exactly these two commands (from-grok, then chat-sync). When the routine runs later, it runs
+only the chat-sync command, once. Never set up chat sync unless the request asks for it.
 
 ## Move to Hermes (one prompt)
 

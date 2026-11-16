@@ -650,7 +650,7 @@ def test_give_up_stops_waiting_and_keeps_the_safe_side(tmp_path):
 def test_a_broken_state_file_does_not_crash(tmp_path):
     world = World(tmp_path)
     (tmp_path / "central" / h2g.STATE_FILE).write_text(json.dumps(
-        {"v": 1, "allow": {PID: "x"}, "base": [], "runner": {PID: 3}, "changes": [None, {"id": 5}, {"id": "c-1"}]}))
+        {"v": 1, "allow": {PID: "x"}, "base": [], "runner": {PID: 3}, "changes": [None, {"id": 5}, {"id": "c-1"}]}), encoding="utf-8")
     assert world.x.allowed(PID) == []
     world.x.allow(PID, "all")
     assert world.x.preview(PID)["nothing"] is True

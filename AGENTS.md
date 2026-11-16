@@ -24,6 +24,40 @@ step that is done is skipped. You never need another way in.
 
 Add `--json` to `--check` or `--plan` for a machine-readable answer.
 
+### Zero-touch: "install Grok Bot Twin"
+
+`setup --auto` needs botport 0.3.0 or newer (the release with the Grok engine, `botport grok`); this plugin
+version pins botport 0.3.3. Only if the owner chose an older release with `botport_release_tag` does it end with
+`FAIL: hermes twin setup --auto: needs botport 0.3.0 or newer (the Grok engine);
+the botport_release_tag setting chooses 0.2.1`. Then pass that line on unchanged and use
+"The steps" below instead.
+
+When your owner says only "install Grok Bot Twin" (or "set up Grok Bot Twin") and you can run commands, run the
+pinned one-line install, then nothing else:
+
+```sh
+hermes plugins install hudsonwa/twin --ref COMMIT --enable && hermes twin setup --auto
+```
+
+COMMIT is the full commit id of the plugin version to install (an installed plugin prints its own line with
+`hermes twin setup --install-line`). `setup --auto` asks nothing and ends with one line, `PASS: hermes twin setup
+--auto: ...` or `FAIL: hermes twin setup --auto: STEP: reason`. Pass that line on unchanged. What it does:
+
+- downloads the pinned botport release for this computer itself and checks its SHA-256 against the table this
+  plugin version carries before anything uses it (no Downloads folder, no GitHub login);
+- makes `hermes twin` work from the profile the terminal is on (no `-p default`): it links the plugin into that
+  profile and enables it with `hermes -p PROFILE plugins enable grok-bot-twin`, and the PASS line says so. It
+  refuses a twin's own profile and leaves another copy of the plugin there alone (a FAIL);
+- reads the PATH the Grok app gets from launchd and says whether `hermes` and `botport` are on it (twin starts
+  both by absolute path, so nothing is changed);
+- checks botport's Grok engine; sets botport's `fast` preset only when no Grok policy was saved yet (an owner's
+  choice is kept); the Grok port then opens on demand. `--open-port` opens it now, which restarts the Grok app;
+- reads Grok's "Execution on Local Computer" setting before and after and FAILs if it changed. It never writes a
+  Grok setting and never clicks an approval card.
+
+It does not twin a bot. A FAIL at `engine` means this botport has no Grok engine: that needs botport 0.3.0 or
+newer.
+
 ### The steps
 
 1. **Is Hermes there?** Run `hermes --version`. It must be 0.22.7 or newer. If the command is missing, stop
@@ -43,8 +77,9 @@ Add `--json` to `--check` or `--plan` for a machine-readable answer.
    plugin is on and which kind of computer this is.
 4. **If botport is missing, ask for it now.** botport is a small free app that reads the bot list from
    Grok; only the computer with the Grok desktop app needs it. When `--check` marks it with `!`, give your
-   owner the file name and the page from that line and ask them to download it with their browser. This
-   plugin never downloads botport, and neither do you. Go on when they say it is in their Downloads folder:
+   owner the file name and the page from that line and ask them to download it with their browser (or run
+   `hermes twin setup --auto`, which downloads the pinned release itself and checks its SHA-256). Outside
+   `--auto` the plugin never downloads botport, and neither do you. Go on when they say it is in their Downloads folder:
    setup finds it there by its exact name, and uses it only after a yes.
 5. **Ask your owner what they want**, in the same message if you like:
    - On the computer with the Grok desktop app: which Grok bots should get a twin? They type the names, or

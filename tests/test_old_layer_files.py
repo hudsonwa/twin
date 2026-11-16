@@ -4,7 +4,7 @@ from twin import service, store
 
 def _touch(p, text="x"):
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 

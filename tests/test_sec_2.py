@@ -146,5 +146,5 @@ def test_SEC_2_one_guard_and_a_real_process_without_a_terminal_is_refused(home):
     if sys.platform == "win32":
         pytest.skip("a new session without a console is a POSIX test")
     cp = subprocess.run([sys.executable, "-c", code, str(root / "__init__.py"), str(root)], capture_output=True,
-                        text=True, timeout=60, start_new_session=True, stdin=subprocess.DEVNULL)
+                        text=True, timeout=60, start_new_session=True, stdin=subprocess.DEVNULL, encoding="utf-8")
     assert cp.stdout.strip().splitlines()[-1:] == ["False"], cp.stdout + cp.stderr

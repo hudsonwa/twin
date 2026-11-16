@@ -58,7 +58,7 @@ class Hermes:
 
     def jobs(self, prof: str) -> list:
         f = self.file(prof)
-        return json.loads(f.read_text())["jobs"] if f.exists() else []
+        return json.loads(f.read_text(encoding="utf-8"))["jobs"] if f.exists() else []
 
     def create(self, prof, name, schedule, prompt, timezone="", reason=""):
         self.asked.append(prof)
@@ -67,7 +67,7 @@ class Hermes:
         jobs = self.jobs(prof) + [{"id": f"j{len(self.asked):04d}{prof[:4]}", "name": name, "prompt": prompt,
                                    "enabled": False, "state": "paused", "paused_reason": reason,
                                    "schedule": {"kind": "cron", "expr": schedule, "display": schedule}}]
-        f.write_text(json.dumps({"jobs": jobs}))
+        f.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
         return True, ""
 
 
@@ -209,7 +209,7 @@ def test_import_saves_instructions_and_adds_routines_switched_off_for_each_ticke
     assert sorted(h.asked) == ["acme-support", "recipe-planner"]
     # memories and facts about the owner are nowhere: not in a twin's folder, the plugin's notes or its events
     nothing_kept(home)
-    ev = [json.loads(line) for line in (central(home) / "events.jsonl").read_text().splitlines()]
+    ev = [json.loads(line) for line in (central(home) / "events.jsonl").read_text(encoding="utf-8").splitlines()]
     assert {"type": "batch_import", "payload": {"files": 1, "twins": 2}}.items() <= ev[-1].items()
 
 
@@ -242,7 +242,7 @@ def test_downloads_imports_new_exports_once_and_says_who_waits(world, home, monk
     save("plain.json", json.dumps({"bots": [bot("Recipe Planner")]}), mtime=start + 8)  # no "grok-bot-export"
     (downloads() / "link.json").symlink_to(save("elsewhere.md", "x", mtime=start - 100))
     target = home.parent / "outside.json"
-    target.write_text(export(bot("Recipe Planner")))
+    target.write_text(export(bot("Recipe Planner")), encoding="utf-8")
     (downloads() / "recipe-link.json").symlink_to(target)
     got = world.downloads_scan(start, ticked)
     assert got["files"] == 1 and got["waiting"] == ["recipe-planner"]
@@ -250,9 +250,9 @@ def test_downloads_imports_new_exports_once_and_says_who_waits(world, home, monk
     assert h.asked == ["acme-support"]
     # the next look imports nothing again, in this process or a new one (only digests are kept)
     assert world.downloads_scan(start, ticked)["results"] == []
-    seen = json.loads((central(home) / batch.SEEN_FILE).read_text())
+    seen = json.loads((central(home) / batch.SEEN_FILE).read_text(encoding="utf-8"))
     assert list(seen) == ["seen"] and len(seen["seen"]) == 1 and len(seen["seen"][0]) == 64
-    assert "acme" not in (central(home) / batch.SEEN_FILE).read_text()
+    assert "acme" not in (central(home) / batch.SEEN_FILE).read_text(encoding="utf-8")
     world._batch_files = {}
     again = world.downloads_scan(start, ticked)
     assert again["results"] == [] and again["files"] == 1 and again["waiting"] == ["recipe-planner"]
@@ -287,7 +287,7 @@ def test_the_seen_list_keeps_only_digests_and_at_most_500(world, home):
     seen = world._seen_digests()
     assert len(seen) == 500 and all(len(d) == 64 and int(d, 16) >= 0 for d in seen)
     world._note_seen(["f" * 64])
-    kept = json.loads((central(home) / batch.SEEN_FILE).read_text())["seen"]
+    kept = json.loads((central(home) / batch.SEEN_FILE).read_text(encoding="utf-8"))["seen"]
     assert len(kept) == 500 and kept[-1] == "f" * 64
 
 
@@ -316,7 +316,8 @@ def test_set_model_keeps_the_other_keys_and_the_rest_of_the_file(world, home):
     assert doc == {"model": {"default": "grok-4.7", "provider": "invented-cloud",
                                               "base_url": "http://127.0.0.1:9/v1"}, "agent": {"max_turns": 7}}
     assert text.startswith("# my own note\n")  # only the model entry was changed
-    assert oct(cfg.stat().st_mode & 0o777) == "0o600"
+    if os.name != "nt":  # (permission bits: macOS and Linux)
+        assert oct(cfg.stat().st_mode & 0o777) == "0o600"
     assert world._registry()["acme-support"]["model"] == {"from": "owner", "value": "grok-4.7"}
     assert world.set_model("acme-support", "grok-4.7")["state"] == "same"
     # a text, or no entry at all: the id is set
@@ -347,19 +348,19 @@ def test_set_model_refuses_what_is_not_a_plain_model_id_and_the_default_profile(
     assert ei.value.code == "bad_profile" and not (home / "config.yaml").exists()
     # a config that is a link is not followed
     outside = home.parent / "elsewhere.yaml"
-    outside.write_text("model: x\n")
+    outside.write_text("model: x\n", encoding="utf-8")
     if config_of(home, "recipe-planner").exists():
         config_of(home, "recipe-planner").replace(home.parent / "moved-aside.yaml")
     config_of(home, "recipe-planner").symlink_to(outside)
     with pytest.raises(EngineError) as ei:
         world.set_model("recipe-planner", "grok-4.7")
-    assert ei.value.code == "unsafe_folder" and outside.read_text() == "model: x\n"
+    assert ei.value.code == "unsafe_folder" and outside.read_text(encoding="utf-8") == "model: x\n"
     # the sample twin is never written
     assert world.set_model(SAMPLE, "grok-4.7") == {"pair_id": SAMPLE, "model": "grok-4.7", "state": "sample"}
 
 
 def test_batch_models_says_per_twin(world, home):
-    config_of(home, "recipe-planner").write_text("model:\n  default: grok-4.7\n")
+    config_of(home, "recipe-planner").write_text("model:\n  default: grok-4.7\n", encoding="utf-8")
     reg = world._registry()
     reg["test-scout"]["hermes"]["profile"] = "default"
     world._save_registry(reg)
@@ -386,9 +387,9 @@ def test_set_model_takes_model_off_what_the_twin_needs(twin, home):
 # =====================================================================================================================
 
 def test_batch_info(world, home):
-    (home / "config.yaml").write_text("model:\n  default: grok-4.7\n  provider: invented-cloud\n")
-    config_of(home, "recipe-planner").write_text("model: invented/model-2\n")
-    config_of(home, "test-scout").write_text("model: not a plain id\n")
+    (home / "config.yaml").write_text("model:\n  default: grok-4.7\n  provider: invented-cloud\n", encoding="utf-8")
+    config_of(home, "recipe-planner").write_text("model: invented/model-2\n", encoding="utf-8")
+    config_of(home, "test-scout").write_text("model: not a plain id\n", encoding="utf-8")
     info = world.batch_info(["recipe-planner", "acme-support", SAMPLE])
     assert set(info) == {"request", "pickup", "privacy", "default_model", "models", "twins", "downloads", "skill_sync",
                          "endpoints"}

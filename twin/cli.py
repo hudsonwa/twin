@@ -81,6 +81,8 @@ Advanced
   checklist [TWIN]       what you do yourself, and what moving routines to Hermes takes
   syncs [TWIN]           what syncs with Grok, which way, and when it last did (ITEM from-grok|to-grok|both|off)
   secret list|set|forget|share|pull [NAME]  secrets kept by reference in this computer's OS store
+  telegram on|off|status [TWIN...]  reach twins through your existing Hermes Telegram bot (no BotFather)
+  safety [TWIN] [strict|standard|open]  a twin's tool preset (chosen by rule; --apply, --model-policy)
   import [TWIN] FILE     import the setup export a Grok bot wrote about itself (--request prints what to ask it)
   import-exports DIR     import every setup export in a folder, each into its bot's twin (--show)
   switch [TWIN]          move routines to Hermes: turn the copied routines on (--undo pauses them again)
@@ -102,6 +104,11 @@ One prompt in Grok
   git on|off|status [TWIN|--all]  optional git history of a twin (off by default; --remote URL to push)
   from-grok --bot NAME   one prompt in Grok: twin, back up or move the bot (its state as JSON on stdin; the
                          bot runs this on this computer; docs/ONE-PROMPT.md). back-to-grok: bring it back
+  from-hermes BOT|--all  from Hermes, through botport's Grok engine (needs botport 0.3.0+): the bot exports
+                         itself with its own tools, Hermes imports and checks it, chat sync starts (--route shell:
+                         the old route, --wait)
+  chat-sync              keep a twin's Hermes chats up with the bot's new messages (--status, --pull;
+                         --bot NAME is what the bot's routine runs)
   mcp --bot NAME         the same two calls as a local MCP server (for a future local connector)
   bot-driven [TWIN]      let the twin's Grok bot keep it in step with one prompt instead of botport (your
                          own step, once; --dry-run shows what changes)
@@ -554,11 +561,12 @@ def cmd_add(a) -> int:
         _waiting_lines(p, many, called)
     for k in res.get("skipped", []):
         _out(f" {names.get(k['grok_id'], k['grok_id'])}: skipped, {SKIP_REASON.get(k['reason'], k['reason'])}")
+    unsafe = [n for n in res.get("notes", []) if n.startswith("FAIL")]
     for n in res.get("notes", []):
-        _out(f" note: {n}")
+        _out(f" {n}" if n in unsafe else f" note: {n}")
     if res["pairs"]:
         _out(f"See it on {PAGE}, or run hermes twin.")
-    return 0
+    return 1 if unsafe else 0
 
 
 def cmd_conflicts(a) -> int:
@@ -1411,12 +1419,15 @@ def cmd_remove(a) -> int:
     if not a.yes and not _confirm(ask):
         _out("Nothing changed.")
         return 1
-    svc.remove(pid, False, keep_data=not getattr(a, "remove_data", True))
+    done = svc.remove(pid, False, keep_data=not getattr(a, "remove_data", True))
     if sample:
         _out("Sample removed. Nothing of yours was changed." if ends
              else f"The sample twin of {name} is removed. Nothing of yours was changed.")
     else:
         _out(f"{name} is no longer twinned. Its Hermes bot is still here.")
+        for line in (done or {}).get("stays") or []:
+            if line.startswith("Its Hermes bot's config.yaml"):  # (what stop did to the safe defaults)
+                _out(f"  {line}")
     return 0
 
 
@@ -1469,6 +1480,8 @@ def cmd_setup(a) -> int:
     computer stands and `--plan` what a run with the same options would do; neither changes anything. A run does
     only what is left: it verifies botport as it always did, and asks once (or takes --yes) before it uses a
     download it found by itself, twins a bot, shares or links. See onboard.py."""
+    if getattr(a, "auto", False) or getattr(a, "install_line", False):  # zero-touch: twin/auto_setup.py
+        return _zt_cli.cmd_setup_auto(a)
     from . import onboard
     svc = _svc()
     onboard.check_usage(svc, a)
@@ -1749,6 +1762,16 @@ from . import mcp_server as _mcp_server  # noqa: E402  (mcp)
 
 HANDLERS.update(_mcp_server.HANDLERS)
 
+from . import chat_sync as _chat_sync_cli  # noqa: E402  (chat-sync)
+from . import from_hermes as _from_hermes_cli  # noqa: E402  (from-hermes)
+
+HANDLERS.update(_chat_sync_cli.HANDLERS)
+
+from . import zt_cli as _zt_cli  # noqa: E402  (setup --auto, telegram, safety)
+
+HANDLERS.update(_zt_cli.HANDLERS)
+HANDLERS.update(_from_hermes_cli.HANDLERS)
+
 from . import routines as _routines_cli  # noqa: E402  (routines)
 
 HANDLERS.update(_routines_cli.HANDLERS)
@@ -1926,6 +1949,8 @@ def setup(parser: argparse.ArgumentParser) -> None:
     _tasks_cli.setup(subs)
     _transcripts_cli.setup(subs)
     _mcp_server.setup(subs)
+    _from_hermes_cli.setup(subs)
+    _chat_sync_cli.setup(subs)
     _routines_cli.setup(subs)
     _instr_cli.setup(subs)
     _h2g_cli.setup(subs)
@@ -1934,6 +1959,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
     _bulk.setup(subs)
     _git_cli.setup(subs, _twin)
     _secret_cli.setup(subs)
+    _zt_cli.setup(subs)
     p = subs.add_parser("setup", help="Set up this computer or finish what is left (--check, --plan; safe to run again)")
     p.add_argument("--file", "--helper", dest="helper", metavar="FILE",
                    help="The downloaded botport file or archive; Hermes keeps its own copy of it (also: --helper)")
@@ -1967,6 +1993,7 @@ def setup(parser: argparse.ArgumentParser) -> None:
                    help="Also share your twins with your other computers; prints a link code")
     p.add_argument("--link", metavar="CODE",
                    help="On a computer without the Grok app: link it with the code the sharing computer shows")
+    _zt_cli.add_setup_flags(p)
     p = subs.add_parser("verify", aliases=["attest"],
                         help="Check botport against the publisher's signed build record on GitHub (needs GitHub's "
                              "command-line tool)")
@@ -1996,8 +2023,24 @@ def _admin_install_note(sub, args) -> None:
         pass
 
 
+def _utf8_when_piped() -> None:
+    """Windows: output to a pipe or file is in the ANSI code page (cp1252), which has no ✓, → or ·, so the first
+    such line raised UnicodeEncodeError and the command died (an agent or a script reading `hermes twin setup`).
+    There, a piped stream becomes UTF-8; a console keeps Python's own Unicode console output."""
+    if os.name != "nt":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream is None or stream.isatty() or (stream.encoding or "").lower().replace("-", "") == "utf8":
+                continue
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            continue  # (a stream that cannot change is left as it is)
+
+
 def handle(args) -> int:
     sub = getattr(args, "twin_command", None)
+    _utf8_when_piped()
     try:
         return _handle(args, sub)
     finally:

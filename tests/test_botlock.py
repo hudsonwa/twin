@@ -59,7 +59,7 @@ def test_a_lock_left_by_a_dead_process_is_taken_over(home):
     if not hasattr(os, "fork"):
         pytest.skip("POSIX flock")
     p = subprocess.Popen([sys.executable, "-c", code, str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         text=True)
+                         text=True, encoding="utf-8")
     assert p.stdout.readline().strip() == "held"
     with pytest.raises(botlock.Busy):
         with botlock.held("Acme Support", wait=False):

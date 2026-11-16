@@ -44,10 +44,10 @@ class FakeBotport:
             out = self.central / "sync" / "acme-support" / "hermes-out"
             (out / "memory").mkdir(parents=True, exist_ok=True)
             (out / "memory" / "memory.jsonl").write_text(
-                "".join(json.dumps({"tier": "note", "source": "hermes", "fact": f}) + "\n" for f in self.facts))
+                "".join(json.dumps({"tier": "note", "source": "hermes", "fact": f}) + "\n" for f in self.facts), encoding="utf-8")
             for n, t in self.skills.items():
                 (out / "normalized" / "skills" / n).mkdir(parents=True, exist_ok=True)
-                (out / "normalized" / "skills" / n / "SKILL.md").write_text(t)
+                (out / "normalized" / "skills" / n / "SKILL.md").write_text(t, encoding="utf-8")
             return {"h2g": {"items": []}, "_rc": 0}
         return dict(self.proof, _rc=0 if self.proof.get("in_sync") else 1)
 
@@ -68,13 +68,13 @@ def test_clean_both_ways_passes_and_calls_botport_in_order(twin):
         ("drift", "--direction=g2h"), ("apply", ""), ("sync", "--direction=h2g"), ("drift", "")]
     assert all("--no-cron" in c and "--profile=acme-support" in c for c in fake.calls)
     assert "--adopt" in fake.calls[1]
-    spec = (twin.central / "sync" / "acme-support" / "botport.toml").read_text()
+    spec = (twin.central / "sync" / "acme-support" / "botport.toml").read_text(encoding="utf-8")
     assert 'profile = "acme-support"' in spec and "[hermes_export]" in spec
 
 
 def test_input_becomes_grok_bot_export_with_secrets_scrubbed(twin):
     sync_both.sync_bot(twin, "acme-support", json.dumps(STATE), runner=FakeBotport(twin.central))
-    doc = json.loads((twin.central / "sync" / "acme-support" / "grok-state.json").read_text())
+    doc = json.loads((twin.central / "sync" / "acme-support" / "grok-state.json").read_text(encoding="utf-8"))
     bot = doc["bots"][0]
     assert doc["format"] == "grok-bot-export" and doc["version"] == 1 and bot["name"] == "Acme Support"
     assert bot["memories"] == ["The owner prefers short answers."] and bot["user_facts"] == ["Lives in Lisbon."]
@@ -84,7 +84,7 @@ def test_input_becomes_grok_bot_export_with_secrets_scrubbed(twin):
 def test_grok_bot_export_document_is_taken_as_is(twin):
     exp = {"format": "grok-bot-export", "version": 1, "bots": [{"name": "Acme Support", "memories": ["A fact."]}]}
     sync_both.sync_bot(twin, "acme-support", exp, runner=FakeBotport(twin.central))
-    doc = json.loads((twin.central / "sync" / "acme-support" / "grok-state.json").read_text())
+    doc = json.loads((twin.central / "sync" / "acme-support" / "grok-state.json").read_text(encoding="utf-8"))
     assert doc["bots"][0]["memories"] == ["A fact."]
     with pytest.raises(E.EngineError):
         sync_both.sync_bot(twin, "acme-support", {"format": "grok-bot-export", "bots": []},
@@ -102,21 +102,21 @@ def test_hermes_learned_goes_back_as_bundle_for_grok(twin):
     assert fg["memory"] == [{"tier": "note", "fact": "Ships on Fridays."}]
     assert fg["skills"] == [{"name": "triage", "text": "# triage\nSort tickets."}]
     assert res["ok"] and res["line"].startswith("PASS: Grok -> Hermes level; Hermes -> Grok: 1 fact(s) and 1 skill")
-    kept = json.loads((twin.central / "sync" / "acme-support" / "for-grok.json").read_text())
+    kept = json.loads((twin.central / "sync" / "acme-support" / "for-grok.json").read_text(encoding="utf-8"))
     assert kept == fg
 
 
 def test_both_sides_edited_keeps_hermes_and_grok_copy_as_restore_point(twin):
     skill = store.profile_home("acme-support") / "skills" / "grok-twin" / "refunds"
     skill.mkdir(parents=True)
-    (skill / "SKILL.md").write_text("# refunds\nHermes edit.")
+    (skill / "SKILL.md").write_text("# refunds\nHermes edit.", encoding="utf-8")
     fake = FakeBotport(twin.central, conflict="refunds", proof={"in_sync": False, "h2g": {"items": []}, "items": [
         {"area": "skill", "path": "skills/grok-twin/refunds", "status": "conflict"}]})
     res = sync_both.sync_bot(twin, "acme-support", STATE, runner=fake)
     assert res["ok"] and res["grok_to_hermes"]["conflicts"] == ["refunds"]
     assert {"name": "refunds", "text": "# refunds\nHermes edit."} in res["for_grok"]["skills"]
     point = twin.central / "sync" / "acme-support" / "restore" / res["restore_point"] / "refunds.grok.json"
-    assert json.loads(point.read_text())["instructions"] == "Check the order first."
+    assert json.loads(point.read_text(encoding="utf-8"))["instructions"] == "Check the order first."
 
 
 def test_difference_nobody_carries_fails(twin):
@@ -168,7 +168,7 @@ def run(argv):
 
 def test_cli_last_line_is_the_verdict(twin, monkeypatch, tmp_path):
     f = tmp_path / "state.json"
-    f.write_text(json.dumps(STATE))
+    f.write_text(json.dumps(STATE), encoding="utf-8")
     monkeypatch.setattr(cli, "_svc", lambda: twin)
     monkeypatch.setattr(sync_both, "_botport_runner", lambda eng: FakeBotport(twin.central, facts=["Ships on Fridays."]))
     monkeypatch.setattr(twin, "engine_for", lambda pid: None)
@@ -186,7 +186,7 @@ def test_cli_last_line_is_the_verdict(twin, monkeypatch, tmp_path):
 def test_cli_failure_is_one_fail_line(twin, monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "_svc", lambda: twin)
     f = tmp_path / "state.json"
-    f.write_text("not json")
+    f.write_text("not json", encoding="utf-8")
     rc, out, _ = run(["sync", "Acme Support", "--from-file", str(f)])
     assert rc == 1 and out.strip().splitlines()[-1] == 'FAIL: sync of "Acme Support": That is not JSON.'
 
@@ -210,7 +210,7 @@ def test_hermes_to_grok_is_scrubbed_too(twin, capsys):
     assert fg["memory"] == [{"tier": "note", "fact": "Ships on Fridays."}]
     assert fg["skills"][0]["name"] == "deploy" and "Then tell the owner." in fg["skills"][0]["text"]
     assert res["scrubbed"]["to_grok_facts_left_out"] == 1 and res["scrubbed"]["to_grok_lines_hidden"] == 1
-    kept = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text()
+    kept = (twin.central / "sync" / "acme-support" / "for-grok.json").read_text(encoding="utf-8")
     assert key not in kept and key not in json.dumps(res)
 
 
@@ -226,7 +226,7 @@ def test_default_profile_is_refused(svc):
 
 def test_owned_profile_is_made_bot_driven_before_botport_is_asked(twin, monkeypatch):
     prof = store.ensure_dir(store.profile_home("acme-support"))
-    (prof / "botport.mirror.json").write_text("{}")  # `botport twin create` made it: spec commands refuse it
+    (prof / "botport.mirror.json").write_text("{}", encoding="utf-8")  # `botport twin create` made it: spec commands refuse it
     with pytest.raises(E.EngineError, match="mirrored profile"):
         FakeBotport(twin.central)(["apply", "--profile=acme-support"])
     removed = []

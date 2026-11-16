@@ -20,8 +20,8 @@ Just moving once? Hermes' own `hermes migrate grok-bot` does a one-time import. 
 - **A Mac with the Grok desktop app** (called Grok Bot, 1.0.1 or newer), signed in. Your other computers (Mac, Linux, Windows) can hold copies of
   the twins, but only the Mac reads Grok.
 - **git**, for the install line.
-- **[botport](https://github.com/hudsonwa/botport)**, a small free app by the same author that reads your bot
-  list from the Grok app. Setup asks you to download it and checks it before it runs. The sample needs none of this.
+- **[botport](https://github.com/hudsonwa/botport)** (free, same author): the engine that does the copying. Setup
+  downloads a ready-made, checked copy for you; **no Rust needed**. How they fit: [docs/BOTPORT.md](docs/BOTPORT.md).
 - **Costs:** each one prompt is one Grok turn (your Grok plan's usage) plus a few short test chats on your Hermes
   model; skill sync uses Grok on every run. **Time:** about 10 minutes the first time.
 
@@ -83,7 +83,7 @@ in Grok. Both are below; the table says how they differ.
    If you trust every bot in your Grok app with this computer, then switch to **Always allow**: no click per
    prompt, but any bot may run any command ([Safety](docs/ONE-PROMPT.md#safety)).
 4. In the bot's chat: "Clone yourself to Hermes". It answers with a line such as
-   `PASS: Acme Support twinned to Hermes (profile acme-support): 3 skills, 12 memories, ...`.
+   `PASS: Acme Support twinned to Hermes (profile acme-support): 3 skills, 12 memories, ...`. Or from Hermes, experimental: `hermes twin from-hermes "Acme Support"` (or `--all`, or "twin all my Grok bots" in a Hermes chat) asks the bot for its own export through botport's Grok engine, with no skill, no local command and no approval (steps 2 and 3 are then not needed), checks it, imports it and sets up [chat sync](docs/ONE-PROMPT.md#from-hermes-and-chat-sync); it needs botport 0.3.0 or newer (the Grok engine), which this plugin version pins (Grok Bot Twin 0.5.0 ↔ botport 0.3.3; see [docs/BOTPORT.md](docs/BOTPORT.md#which-versions-go-together)).
 
 **The Twins page** (full steps: [GUIDE.md](docs/GUIDE.md#connect-your-grok-bots)):
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -164,10 +165,10 @@ def fake_bp(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_SECRET_TOKEN", "xai-FAKEFAKEFAKEFAKE0000")
 
     def mode(m):
-        (exe.parent / "mode").write_text(m)
+        (exe.parent / "mode").write_text(m, encoding="utf-8")
 
     def calls():
-        return [json.loads(x) for x in (exe.parent / "calls.jsonl").read_text().splitlines()]
+        return [json.loads(x) for x in (exe.parent / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
     mode("pass")
     return eng, mode, calls
 
@@ -206,10 +207,10 @@ class FakeEngine:
 
     def battery_init(self, export, out):
         self.calls.append(("init", export, out))
-        Path(out).write_text("{}")
+        Path(out).write_text("{}", encoding="utf-8")
         return {}
 
-    def behaviour_test(self, profile, battery, hermes, out):
+    def behaviour_test(self, profile, battery, hermes, out, only=None, timeout=None):
         self.calls.append(("test", profile, battery, hermes, out))
         return {"pass": self.passed, "total": 2, "results": [
             {"id": "persona", "pass": True, "why": []},
@@ -223,9 +224,10 @@ def real_twin(svc, monkeypatch, tmp_path):
     fake = FakeEngine()
     monkeypatch.setattr(svc, "engine_for", lambda pid: fake)
     monkeypatch.setattr(behaviour, "hermes_path", lambda: str(tmp_path / "hermes"))
+    monkeypatch.setattr(type(svc), "_first_token_s", lambda self, hermes, profile: 1.0, raising=False)
     monkeypatch.setattr(cli, "_twin_names", lambda s: {"acme-support": "Acme Support"})
     export = tmp_path / "acme-export.json"
-    export.write_text('{"format": "grok-bot-export", "version": 1, "bots": [{"name": "Acme Support"}]}')
+    export.write_text('{"format": "grok-bot-export", "version": 1, "bots": [{"name": "Acme Support"}]}', encoding="utf-8")
     return fake, export
 
 
@@ -234,17 +236,64 @@ def test_service_keeps_counts_and_failed_ids_only(svc, real_twin):
     fake.passed = 1
     res = svc.behaviour_test("acme-support", from_export=str(export))
     assert (res["passed"], res["total"], res["ok"], res["failed"]) == (1, 2, False, ["memory-1"])
-    assert [c[0] for c in fake.calls] == ["init", "test"]
+    assert [c[0] for c in fake.calls] == ["init", "test", "test"]  # memory-1 is retried once (still fails)
     kept = svc._battery_path("acme-support")
     assert kept.is_file() and fake.calls[1][2] == str(kept) and fake.calls[1][1] == "acme-support"
     rec = svc._registry()["acme-support"]["test"]
-    assert set(rec) == {"at", "passed", "total", "failed"} and "no match" not in json.dumps(rec)
+    assert set(rec) == {"at", "passed", "total", "failed", "retried"} and "no match" not in json.dumps(rec)
     # the next run reuses the kept battery; a refresh of the twin keeps the result
     fake.passed = 2
     assert svc.behaviour_test("acme-support")["ok"] is True
     svc._remember([{"pair_id": "acme-support", "grok": {"id": "g-acme", "name": "Acme Support"},
                     "hermes": {"profile": "acme-support"}}])
     assert svc._registry()["acme-support"]["test"]["passed"] == 2
+
+
+class FlakyEngine(FakeEngine):
+    """live-skills fails on the first run (the model answered from its prompt's skill index, no tool call)."""
+    def __init__(self, retry_passes=True, memory_ok=True, persona_ok=True):
+        super().__init__()
+        self.retry_passes, self.memory_ok, self.persona_ok = retry_passes, memory_ok, persona_ok
+        self.timeouts = []
+
+    def behaviour_test(self, profile, battery, hermes, out, only=None, timeout=None):
+        self.calls.append(("test", profile, battery, hermes, out, only))
+        self.timeouts.append(timeout)
+        rows = [{"id": "persona", "family": "persona", "pass": self.persona_ok, "why": []},
+                {"id": "memory-1", "family": "memory", "pass": self.memory_ok, "why": []},
+                {"id": "live-skills", "family": "live", "pass": bool(only) and self.retry_passes,
+                 "why": [] if only and self.retry_passes else ["expected one of [\"skills_list\", \"skill_view\"]"]}]
+        rows = [r for r in rows if not only or r["id"] in only]
+        return {"pass": sum(r["pass"] for r in rows), "total": len(rows), "results": rows}
+
+
+def test_a_model_flaky_case_is_retried_once_and_passes_only_if_the_retry_passes(svc, real_twin, monkeypatch):
+    _fake, export = real_twin
+    flaky = FlakyEngine()
+    monkeypatch.setattr(svc, "engine_for", lambda pid: flaky)
+    res = svc.behaviour_test("acme-support", from_export=str(export))
+    assert (res["passed"], res["total"], res["ok"], res["retried"]) == (3, 3, True, ["live-skills"])
+    assert [c[5] for c in flaky.calls if c[0] == "test"] == [None, ["live-skills"]]  # that case only, once
+    assert svc._registry()["acme-support"]["test"]["retried"] == ["live-skills"]
+    flaky.calls.clear()
+    flaky.retry_passes = False  # still strict: a retry that fails is a FAIL, never a third try
+    res = svc.behaviour_test("acme-support")
+    assert (res["passed"], res["ok"], res["failed"]) == (2, False, ["live-skills"])
+    assert len([c for c in flaky.calls if c[0] == "test"]) == 2
+
+
+def test_no_retry_when_a_content_case_fails(svc, real_twin, monkeypatch):
+    _fake, export = real_twin
+    flaky = FlakyEngine(persona_ok=False)
+    monkeypatch.setattr(svc, "engine_for", lambda pid: flaky)
+    res = svc.behaviour_test("acme-support", from_export=str(export))
+    assert res["ok"] is False and "retried" not in res and len([c for c in flaky.calls if c[0] == "test"]) == 1
+
+
+def test_engine_test_only_flag(fake_bp):
+    eng, _mode, calls = fake_bp
+    eng.behaviour_test("acme-support", "/b", "/h", "/o", only=["live-skills", "live-time"])
+    assert "--only=live-skills,live-time" in calls()[-1]["argv"]
 
 
 def test_service_needs_a_battery_and_refuses_both(svc, real_twin, tmp_path):
@@ -314,7 +363,7 @@ def test_quick_takes_the_export_on_stdin_without_paste_or_wait(svc, monkeypatch)
 def test_quick_takes_the_export_from_a_file(svc, monkeypatch, tmp_path):
     s = Steps(svc, monkeypatch, twinned=True)
     f = tmp_path / "acme.json"
-    f.write_text(EXPORT)
+    f.write_text(EXPORT, encoding="utf-8")
     rc, _out, _err = run(["quick", "Acme Support", "--from-file", str(f), "--yes"])
     assert rc == 0 and s.calls[0][1][0] == EXPORT and s.scans == 0
     with pytest.raises(SystemExit):
@@ -324,15 +373,139 @@ def test_quick_takes_the_export_from_a_file(svc, monkeypatch, tmp_path):
 
 def test_hermes_is_found_by_absolute_path_not_path(tmp_path, monkeypatch):
     """M6: a connector started with a minimal PATH still finds Hermes next to its own Python."""
-    venv = tmp_path / "venv" / "bin"
+    venv = tmp_path / "venv" / ("Scripts" if os.name == "nt" else "bin")
     venv.mkdir(parents=True)
-    exe = venv / "hermes"
-    exe.write_text("#!/bin/sh\n")
+    exe = venv / ("hermes.exe" if os.name == "nt" else "hermes")
+    exe.write_text("#!/bin/sh\n", encoding="utf-8")
     exe.chmod(0o755)
     monkeypatch.setenv("PATH", "/nonexistent")
     monkeypatch.setattr(behaviour.sys, "executable", str(venv / "python"))
     monkeypatch.setattr(behaviour.sys, "argv", ["/x/mcp"])
     assert behaviour.hermes_path() == str(exe)
+    if os.name == "nt":  # (no "writable by others" bit there: the rest is about that bit)
+        return
     exe.chmod(0o777)  # writable by others: never used
     monkeypatch.setenv("HOME", str(tmp_path / "nohome"))
     assert behaviour.hermes_path() is None
+
+
+# ---------------------------------------------------------------------------------------------- audit 16 Nov (#10)
+
+class MemoryOnceEngine(FakeEngine):
+    """memory-1 fails on the first run in a few seconds (no tool call), then passes: retried, counted as such."""
+    def __init__(self):
+        super().__init__()
+        self.timeouts = []
+
+    def behaviour_test(self, profile, battery, hermes, out, only=None, timeout=None):
+        self.calls.append(("test", only))
+        self.timeouts.append(timeout)
+        rows = [{"id": "persona", "family": "persona", "pass": True, "why": [], "wall_s": 41.2},
+                {"id": "memory-1", "family": "memory", "pass": bool(only), "why": [] if only else ["no tool call"],
+                 "wall_s": 4.8}]
+        rows = [r for r in rows if not only or r["id"] in only]
+        return {"pass": sum(r["pass"] for r in rows), "total": len(rows), "results": rows}
+
+
+def test_a_memory_case_that_fails_once_then_passes_counts_as_retried(svc, real_twin, monkeypatch):
+    _fake, export = real_twin
+    eng = MemoryOnceEngine()
+    monkeypatch.setattr(svc, "engine_for", lambda pid: eng)
+    res = svc.behaviour_test("acme-support", from_export=str(export))
+    assert (res["passed"], res["total"], res["ok"], res["retried"]) == (2, 2, True, ["memory-1"])
+    assert [c[1] for c in eng.calls if c[0] == "test"] == [None, ["memory-1"]]
+    assert {r["id"]: r["wall_s"] for r in res["results"]} == {"persona": 41.2, "memory-1": 4.8}
+
+
+def test_budget_scales_from_the_first_answer_and_covers_every_case(tmp_path):
+    assert behaviour.per_case_budget(None) == behaviour.PER_CASE_FLOOR_S
+    assert behaviour.per_case_budget(1.0) == behaviour.PER_CASE_FLOOR_S  # a fast model keeps the floor
+    assert behaviour.per_case_budget(12.0) == 360.0  # a slow one gets more per case
+    assert behaviour.per_case_budget(999.0) == behaviour.PER_CASE_MAX_S
+    for n, ft in ((6, None), (6, 12.0), (12, 20.0)):
+        per = behaviour.per_case_budget(ft)
+        assert behaviour.call_budget(n, 3, per) >= n * per  # the whole call >= cases x per-case cap
+    assert behaviour.call_budget(1, 3, 180) == E.TEST_TIMEOUT_S  # never below the old fixed budget
+    b = tmp_path / "b.json"
+    b.write_text(json.dumps({"gateway": {"prompt": "p", "expect": "ok"}, "cases": [{}] * 6, "gap_s": 5}))
+    assert behaviour.battery_shape(str(b)) == (7, 5.0)
+    assert behaviour.battery_shape(str(tmp_path / "missing.json")) == (6, 3.0)
+
+
+def test_a_slow_fake_model_passes_inside_the_budget(svc, real_twin, monkeypatch, tmp_path):
+    """A model that needs 12 s for one word and ~5 min per case: the call budget covers 6 such cases."""
+    _fake, export = real_twin
+    monkeypatch.setattr(type(svc), "_first_token_s", lambda self, hermes, profile: 12.0, raising=False)
+
+    class Slow(FakeEngine):
+        def behaviour_test(self, profile, battery, hermes, out, only=None, timeout=None):
+            self.calls.append(("test", timeout))
+            need = 6 * (300 + 3)  # six cases of 5 min each plus the gaps, as the slow model takes
+            if timeout is None or timeout < need:
+                raise E.EngineError("timeout", "botport did not finish in time.")
+            rows = [{"id": f"case-{i}", "family": "persona", "pass": True, "why": [], "wall_s": 300.0} for i in range(6)]
+            return {"pass": 6, "total": 6, "results": rows}
+    eng = Slow()
+    monkeypatch.setattr(svc, "engine_for", lambda pid: eng)
+    kept = svc._battery_path("acme-support")
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(json.dumps({"cases": [{}] * 6, "gap_s": 3}))
+    res = svc.behaviour_test("acme-support")
+    assert res["ok"] is True and res["budget"] == {"per_case_s": 360, "first_answer_s": 12.0}
+
+
+def test_concurrent_tests_on_one_model_take_turns(svc, real_twin, monkeypatch):
+    import threading
+    _fake, export = real_twin
+    monkeypatch.setattr(behaviour, "model_endpoint", lambda profile: "http://127.0.0.1:9/v1")
+    inside, most, said = [0], [0], []
+    gate = threading.Lock()
+
+    class Busy(FakeEngine):
+        def behaviour_test(self, profile, battery, hermes, out, only=None, timeout=None):
+            with gate:
+                inside[0] += 1
+                most[0] = max(most[0], inside[0])
+            import time as _t
+            _t.sleep(0.3)
+            with gate:
+                inside[0] -= 1
+            return super().behaviour_test(profile, battery, hermes, out)
+    eng = Busy()
+    monkeypatch.setattr(svc, "engine_for", lambda pid: eng)
+    svc.behaviour_test("acme-support", from_export=str(export))  # makes the kept battery
+    errs = []
+
+    def one():
+        try:
+            svc.behaviour_test("acme-support", say=said.append)
+        except Exception as exc:  # pragma: no cover - shown on failure
+            errs.append(exc)
+    threads = [threading.Thread(target=one) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert not errs and most[0] == 1  # never two at once on one endpoint
+    assert any("Another behaviour test is running" in s for s in said)
+
+
+def test_the_endpoint_is_read_from_the_profile_config(svc, monkeypatch):
+    from hermes_plugins.grok_bot_twin.twin import fleet_profiles
+    home = fleet_profiles.profile_dir("acme-support")
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "config.yaml").write_text("model:\n  default: local-7b\n  base_url: http://127.0.0.1:9/V1/\n")
+    assert behaviour.model_endpoint("acme-support") == "http://127.0.0.1:9/v1"
+    assert behaviour.model_endpoint("recipe-planner") == "default"
+
+
+def test_cli_test_on_fail_prints_each_case_wall_time(svc, real_twin, monkeypatch):
+    _fake, export = real_twin
+    eng = MemoryOnceEngine()
+    eng.behaviour_test = lambda *a, only=None, timeout=None: {"pass": 1, "total": 2, "results": [
+        {"id": "persona", "family": "persona", "pass": True, "why": [], "wall_s": 41.2},
+        {"id": "gateway-oneshot", "family": "gateway", "pass": False, "why": ["rc=1"], "wall_s": 181.0}]}
+    monkeypatch.setattr(svc, "engine_for", lambda pid: eng)
+    rc, out, _err = run(["test", "Acme Support", "--from-export", str(export)])
+    assert rc == 1 and "✗ gateway-oneshot (181.0 s): rc=1" in out and "✓ persona (41.2 s)" in out
+    assert "Budget: 180 s per case (a one-word answer took 1.0 s)" in out

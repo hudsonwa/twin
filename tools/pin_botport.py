@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Release-time tool (not part of the running plugin): fill twin/botport_pins.json for one botport release.
+"""Release-time tool (not part of the running plugin): pin one botport release in this plugin, in one step.
 
-    1. Put the release archives in a folder yourself, for example:
-         gh release download v0.2.1 --repo hudsonwa/botport --pattern 'botport-*.tar.gz' --pattern SHA256SUMS --dir DIR
-    2. python3 tools/pin_botport.py DIR --tag v0.2.1 --write
+    python3 tools/pin_botport.py --tag v0.3.0
 
-For every archive found (botport-<target>.tar.gz, four targets) it takes the SHA-256 of the archive and of the
-`botport` program inside it, and runs `gh attestation verify` on both (the same repo, signer workflow and release
-tag the plugin's own GitHub check uses). Nothing is written unless every file passed. `--no-verify` skips the
+With no folder it downloads the release's archives and SHA256SUMS itself with `gh release download` into a private
+temporary folder (or give a FOLDER that already holds them). For every archive (botport-<target>.tar.gz, four
+targets) it takes the SHA-256 of the archive and of the `botport` program inside it, and runs `gh attestation
+verify` on both (the same repo, signer workflow and release tag the plugin's own GitHub check uses); the archive
+digests are compared with SHA256SUMS as well. Only when every file passed it writes twin/botport_pins.json and sets
+EXPECTED_BOTPORT_TAG in twin/engine.py to the tag. `--dry-run` writes nothing. `--no-verify` skips the
 attestation check and then needs `--write-unverified` to write: use that only for a throwaway test table.
-When DIR holds a SHA256SUMS file, the archive digests are compared with it as well.
 
-This script downloads nothing and the plugin never runs it. It only reads DIR and writes the one JSON file.
+The plugin never runs this script.
 """
 from __future__ import annotations
 
@@ -30,6 +30,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PINS = ROOT / "twin" / "botport_pins.json"
+ENGINE_PY = ROOT / "twin" / "engine.py"
+_TAG_LINE = re.compile(r'^EXPECTED_BOTPORT_TAG = "v\d+\.\d+\.\d+"$', re.MULTILINE)
 TARGETS = ("aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")
 REPO = "hudsonwa/botport"
 WORKFLOW = "hudsonwa/botport/.github/workflows/release.yml"
@@ -56,22 +58,49 @@ def attested(gh: str, path: str, tag: str) -> bool:
     return cp.returncode == 0
 
 
+def set_expected_tag(text: str, tag: str) -> str:
+    """twin/engine.py's text with EXPECTED_BOTPORT_TAG set to `tag` (exactly one such line, else SystemExit)."""
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        raise SystemExit("the tag must look like v0.3.0")
+    new, n = _TAG_LINE.subn(f'EXPECTED_BOTPORT_TAG = "{tag}"', text)
+    if n != 1:
+        raise SystemExit("twin/engine.py has no single EXPECTED_BOTPORT_TAG line")
+    return new
+
+
+def download(gh: str, tag: str, folder: str) -> None:
+    cp = subprocess.run([gh, "release", "download", tag, "--repo", REPO, "--pattern", "botport-*.tar.gz",
+                         "--pattern", "SHA256SUMS", "--dir", folder], stdin=subprocess.DEVNULL, capture_output=True,
+                        timeout=600)
+    if cp.returncode != 0:
+        raise SystemExit(f"gh release download {tag} failed: {cp.stderr.decode('utf-8', 'replace')[:300]}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("folder", help="folder that holds the downloaded release archives")
-    ap.add_argument("--tag", required=True, help="the release tag, like v0.2.1")
-    ap.add_argument("--write", action="store_true", help="write twin/botport_pins.json (every file must have passed)")
+    ap.add_argument("folder", nargs="?", help="a folder that already holds the release archives (default: download)")
+    ap.add_argument("--tag", required=True, help="the release tag, like v0.3.0")
+    ap.add_argument("--dry-run", action="store_true", help="check only; write nothing")
+    ap.add_argument("--write", action="store_true", help=argparse.SUPPRESS)  # (the default now; kept for old notes)
     ap.add_argument("--no-verify", action="store_true", help="skip gh attestation verify")
     ap.add_argument("--write-unverified", action="store_true", help="with --no-verify: write anyway (test tables only)")
     a = ap.parse_args()
     if not re.fullmatch(r"v\d+\.\d+\.\d+", a.tag):
         raise SystemExit("the tag must look like v0.2.1")
-    folder = Path(a.folder)
     gh = None
-    if not a.no_verify:
+    if not a.no_verify or not a.folder:
         gh = shutil.which("gh")
         if not gh:
-            raise SystemExit("gh is not installed; install it and run gh auth login, or pass --no-verify")
+            raise SystemExit("gh is not installed; install it and run gh auth login, or pass --no-verify and FOLDER")
+    if a.folder:
+        return pin(Path(a.folder), a, None if a.no_verify else gh)
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chmod(tmp, 0o700)
+        download(gh, a.tag, tmp)
+        return pin(Path(tmp), a, None if a.no_verify else gh)
+
+
+def pin(folder: Path, a: argparse.Namespace, gh: "str | None") -> int:
     sums: dict = {}
     sums_file = folder / "SHA256SUMS"
     if sums_file.is_file():
@@ -112,8 +141,8 @@ def main() -> int:
         raise SystemExit("no release archive found in the folder")
     if not ok:
         raise SystemExit("a check failed: nothing written")
-    if not a.write:
-        print("dry run: pass --write to update twin/botport_pins.json")
+    if a.dry_run:
+        print("dry run: nothing written")
         return 0
     if a.no_verify and not a.write_unverified:
         raise SystemExit("not verified: pass --write-unverified to write a test table anyway")
@@ -122,7 +151,9 @@ def main() -> int:
     tmp = PINS.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, PINS)
-    print(f"wrote {PINS.relative_to(ROOT)} for {a.tag}: {len(programs)} of {len(TARGETS)} targets")
+    ENGINE_PY.write_text(set_expected_tag(ENGINE_PY.read_text(encoding="utf-8"), a.tag), encoding="utf-8")
+    print(f"wrote {PINS.relative_to(ROOT)} for {a.tag}: {len(programs)} of {len(TARGETS)} targets; "
+          f"EXPECTED_BOTPORT_TAG in {ENGINE_PY.relative_to(ROOT)} is now {a.tag}")
     return 0
 
 

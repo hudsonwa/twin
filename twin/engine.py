@@ -77,8 +77,37 @@ VALUE_CAP = 1024
 
 # The botport release this plugin version expects. `hermes twin setup` pins it in `gh attestation verify
 # --source-ref refs/tags/<tag>`; the owner may override it with the botport_release_tag setting or --tag.
-EXPECTED_BOTPORT_TAG = "v0.2.1"
+# (Release time: `python3 tools/pin_botport.py --tag vX.Y.Z` downloads and checks a release, writes
+# twin/botport_pins.json and this tag, in one step.)
+EXPECTED_BOTPORT_TAG = "v0.3.3"
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+ENGINE_MIN_TAG = "v0.3.0"  # the first botport release with the Grok engine (`botport grok`)
+
+
+def _tag_tuple(tag: str) -> tuple:
+    return tuple(int(x) for x in tag[1:].split(".")) if isinstance(tag, str) and TAG_RE.match(tag) else ()
+
+
+def configured_tag() -> str:
+    """The botport release this install uses: the botport_release_tag setting, else EXPECTED_BOTPORT_TAG."""
+    try:
+        from . import config
+        tag = config.settings().get("botport_release_tag") or ""
+    except Exception:  # noqa: BLE001  (no readable settings: the pinned release)
+        tag = ""
+    return tag if TAG_RE.match(tag or "") else EXPECTED_BOTPORT_TAG
+
+
+def engine_pinned(tag: str = "") -> bool:
+    """Whether the botport release in use (`tag`, else the setting, else the pin) has the Grok engine. Only an
+    older release chosen with botport_release_tag fails this: the pinned release has the engine."""
+    got = _tag_tuple(tag or configured_tag())
+    return bool(got) and got >= _tag_tuple(ENGINE_MIN_TAG)
+
+
+def engine_needed_line(tag: str = "") -> str:
+    return (f"needs botport {ENGINE_MIN_TAG[1:]} or newer (the Grok engine); the botport_release_tag setting "
+            f"chooses {(tag or configured_tag())[1:]}")
 
 
 def command_words(args: list) -> str:
@@ -290,6 +319,20 @@ def resolve_tool(name: str, search_path: Optional[str] = None) -> tuple[Optional
     if real is None:
         return None, f"{name} was not found on PATH"
     return real, check_path_safety(real, name)
+
+
+def gh_config_dir() -> str:
+    """Where the owner's gh keeps its sign-in, as gh itself finds it from the real home: GH_CONFIG_DIR, else
+    $XDG_CONFIG_HOME/gh, else %AppData%\\GitHub CLI on Windows, else ~/.config/gh."""
+    given = os.environ.get("GH_CONFIG_DIR")
+    if given:
+        return given
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return os.path.join(xdg, "gh")
+    if os.name == "nt" and os.environ.get("AppData"):
+        return os.path.join(os.environ["AppData"], "GitHub CLI")
+    return os.path.join(os.path.expanduser("~"), ".config", "gh")
 
 
 def find_gh(search_path: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
@@ -559,6 +602,13 @@ class BotportEngine(Engine):
         for k, sub in (("XDG_CONFIG_HOME", "config"), ("XDG_STATE_HOME", "state"), ("XDG_CACHE_HOME", "cache"),
                        ("XDG_DATA_HOME", "data")):
             env[k] = str(xdg / sub)
+        return env
+
+    def _gh_env(self) -> dict:
+        """botport's minimal environment, with gh pointed at the owner's own sign-in (twin#63): _env's private XDG
+        folders would hide it, and gh would say it is not signed in when it is."""
+        env = self._env()
+        env["GH_CONFIG_DIR"] = gh_config_dir()
         return env
 
     # -- trust record ---------------------------------------------------------------------------------
@@ -891,7 +941,7 @@ class BotportEngine(Engine):
         argv = attestation_command(exe, tag)
         argv[0] = gh
         try:
-            rc, _out, err, _over = run_capped(argv, timeout or ATTEST_TIMEOUT_S, env=self._env(),
+            rc, _out, err, _over = run_capped(argv, timeout or ATTEST_TIMEOUT_S, env=self._gh_env(),
                                               out_cap=256 * 1024, what=WHAT_GH)
         except EngineError as exc:
             res["problem"] = exc.message
@@ -1136,11 +1186,16 @@ class BotportEngine(Engine):
         return self._exec_report(["battery", "init", _arg("bundle", export_file), _arg("out", out)],
                                  LONG_TIMEOUT_S)
 
-    def behaviour_test(self, profile: str, battery: str, hermes_bin: str, out_dir: str) -> dict:
+    def behaviour_test(self, profile: str, battery: str, hermes_bin: str, out_dir: str,
+                       only: Optional[list] = None, timeout: Optional[float] = None) -> dict:
         """`botport test`: each case is asked of the twin's Hermes bot (`hermes chat`), and its answer checked.
-        -> {"pass": n, "total": n, "results": [{"id","family","pass","why"}], "file"}"""
-        return self._exec_report(["test", _arg("profile", profile), _arg("battery", battery),
-                                  _arg("hermes-bin", hermes_bin), _arg("out", out_dir)], TEST_TIMEOUT_S)
+        `only`: just these case ids (`--only id,id`). -> {"pass": n, "total": n, "results": [{"id","family","pass",
+        "why"}], "file"}"""
+        args = ["test", _arg("profile", profile), _arg("battery", battery), _arg("hermes-bin", hermes_bin),
+                _arg("out", out_dir)]
+        if only:
+            args.append(_arg("only", ",".join(only)))
+        return self._exec_report(args, max(TEST_TIMEOUT_S, timeout or 0.0))
 
     # -- one prompt from a Grok bot (twin/one_prompt.py): `botport sync` and `botport drift` with a grok-bot-export
     # file as the bundle, into one named profile. --no-cron: routines go through the plugin's own paused import.

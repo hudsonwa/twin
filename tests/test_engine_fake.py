@@ -40,11 +40,11 @@ class Rig:
 
     def mode(self, **kw) -> None:
         self.state.mkdir(parents=True, exist_ok=True)
-        (self.state / "fake_mode.json").write_text(json.dumps(kw))
+        (self.state / "fake_mode.json").write_text(json.dumps(kw), encoding="utf-8")
 
     def calls(self) -> list[dict]:
         p = self.state / "fake_calls.jsonl"
-        return [json.loads(l) for l in p.read_text().splitlines()] if p.exists() else []
+        return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
 
     def last_args(self) -> list[str]:
         """argv of the last call without the global flags."""
@@ -241,7 +241,7 @@ def test_untrusted_until_trust(tmp_path):
     assert st["trusted"] is True and st["version"] == "0.1.2" and len(st["sha256"]) == 64
     rec = r.central / "botport-trust.json"
     assert stat.S_IMODE(rec.stat().st_mode) == 0o600
-    saved = json.loads(rec.read_text())
+    saved = json.loads(rec.read_text(encoding="utf-8"))
     assert saved["path"] == os.path.realpath(r.exe) and saved["size"] == r.exe.stat().st_size
     assert saved["attestation"] == {"verified": False}
     assert r.eng.info()["available"] is True
@@ -267,7 +267,7 @@ def test_a_program_too_large_to_be_botport_is_not_read_whole_into_memory(rig, mo
 
 
 def test_digest_change_fails_closed(rig):
-    rig.exe.write_text(rig.exe.read_text() + "\n# changed\n")
+    rig.exe.write_text(rig.exe.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
     rig.exe.chmod(0o755)
     n = len(rig.calls())
     with pytest.raises(EngineError) as ei:
@@ -324,7 +324,7 @@ def test_binary_replaced_by_symlink(rig):
 def test_tampered_copy_is_replaced(rig):
     rig.eng.status()
     copy = Path(rig.calls()[-1]["exe"])
-    copy.write_text(f"#!{sys.executable}\nimport sys; print('{{}}'); sys.exit(0)\n")
+    copy.write_text(f"#!{sys.executable}\nimport sys; print('{{}}'); sys.exit(0)\n", encoding="utf-8")
     d = rig.eng.status()  # the tampered copy fails its digest check and is re-made from the trusted binary
     assert d["pairs"][0]["pair_id"] == "acme-support"
     assert E.sha256_file(str(copy)) == E.sha256_file(str(rig.exe))
@@ -333,7 +333,7 @@ def test_tampered_copy_is_replaced(rig):
 def test_retrust_prunes_old_copy(rig):
     rig.eng.status()
     old = Path(rig.calls()[-1]["exe"])
-    rig.exe.write_text(rig.exe.read_text() + "\n# new build\n")
+    rig.exe.write_text(rig.exe.read_text(encoding="utf-8") + "\n# new build\n", encoding="utf-8")
     rig.exe.chmod(0o755)
     rig.eng.trust(allow_unattested=True)
     rig.eng.status()
@@ -435,7 +435,7 @@ def test_verify_attestation(rig, tmp_path, monkeypatch, rc):
     monkeypatch.setenv("PATH", f"{tmp_path / 'ghbin'}:/usr/bin:/bin")
     res = rig.eng.verify_attestation(tag="v0.2.0")
     assert res["verified"] is (rc == 0)
-    call = json.loads(log.read_text().splitlines()[-1])
+    call = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
     assert call["argv"][:2] == ["attestation", "verify"]
     assert Path(call["argv"][2]).parent == rig.central / "botport-bin"  # the exact bytes we execute
     assert call["argv"][3:] == ["--repo", "hudsonwa/botport", "--signer-workflow",
@@ -478,12 +478,12 @@ def test_trust_never_runs_binary_before_attestation(tmp_path, monkeypatch):
         r.eng.trust()
     assert ei.value.code == "check_failed"
     assert not marker.exists() and r.calls() == []
-    call = json.loads(log.read_text().splitlines()[-1])
+    call = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
     assert Path(call["argv"][2]).parent == r.central / "botport-bin"  # gh checked the private copy
     assert not (r.central / "botport-trust.json").exists()
     _fake_gh(tmp_path, 0)
     assert r.eng.trust()["trusted"]
-    assert marker.read_text() == "ran\n"  # `version` ran exactly once, after the attestation passed
+    assert marker.read_text(encoding="utf-8") == "ran\n"  # `version` ran exactly once, after the attestation passed
 
 
 def test_doctor_merges_checks(rig):

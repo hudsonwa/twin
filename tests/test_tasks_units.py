@@ -262,8 +262,8 @@ def test_a_computer_at_work_on_one_request_is_not_taken_for_switched_off(home, m
     first = hub.ask(st, orchard, {"to": ME, "twin": SCOUT, "text": "one"})[1]["id"]
     assert hub.poll(surface, {"accept": True, "wait_s": 0})[1]["task"]["id"] == first
     hub.update(surface, {"id": first, "state": "waiting_approval"})
-    monkeypatch.setattr(tasks_hub, "POLL_FRESH_S", 0.05)
-    time.sleep(0.12)  # long after its last fetch
+    monkeypatch.setattr(tasks_hub, "POLL_FRESH_S", 0.5)
+    time.sleep(0.7)  # long after its last fetch (0.5 s: a slow disk between two steps is not "long")
     assert hub.is_listening(ME) is None
     status, out = hub.ask(st, orchard, {"to": ME, "twin": SCOUT, "text": "two"})
     assert status == 200 and out["state"] == "queued"
@@ -275,8 +275,8 @@ def test_a_computer_at_work_on_one_request_is_not_taken_for_switched_off(home, m
     hub.update(surface, {"id": second, "state": "done", "reply": "ok", "seconds": 1})
     monkeypatch.setattr(tasks_hub, "POLL_FRESH_S", 30)
     third = hub.ask(st, orchard, {"to": ME, "twin": SCOUT, "text": "three"})[1]["id"]
-    monkeypatch.setattr(tasks_hub, "POLL_FRESH_S", 0.05)
-    time.sleep(0.12)
+    monkeypatch.setattr(tasks_hub, "POLL_FRESH_S", 0.5)
+    time.sleep(0.7)
     assert hub.wait(orchard, {"id": third, "wait_s": 0})[1]["code"] == "tasks_unreachable"
 
 
@@ -769,7 +769,7 @@ def test_the_bridge_never_loads_the_plugins_modules_in_place_of_pythons(tmp_path
              % (str(bridge), str(bridge), str(ROOT / "twin")))
     for flags in ([], ["-P"]):
         cp = subprocess.run([sys.executable, *flags, "-c", probe], capture_output=True, text=True, timeout=60,
-                            cwd=str(ROOT / "twin"))
+                            cwd=str(ROOT / "twin"), encoding="utf-8")
         assert cp.stdout.strip().endswith("True False"), (flags, cp.stdout, cp.stderr[-400:])
 
 

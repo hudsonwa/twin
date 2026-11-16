@@ -31,12 +31,29 @@ WIRE_KEYS = {
 }
 
 
+_NEXT_PORT = [0]
+
+
 def free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
+    """A port free right now, below every system's ephemeral range (Linux 32768+, Windows and macOS 49152+), in a
+    block of its own per pytest-xdist worker. A port the kernel hands out with bind(0) is an ephemeral one, so the
+    client side of any other connection on the computer could take it between this call and the share server's
+    bind (seen as "Another program on this computer is in the way of sharing" under -n 8)."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+    n = int(worker[2:]) if worker[2:].isdigit() else 0
+    base = 20000 + (n % 12) * 1000
+    for _ in range(1000):
+        port = base + _NEXT_PORT[0] % 1000
+        _NEXT_PORT[0] += 1
+        s = socket.socket()
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        finally:
+            s.close()
+        return port
+    raise RuntimeError("no free test port in this worker's block")
 
 
 def wait_until(check, timeout: float = 20.0, step: float = 0.1, what: str = "the condition"):
@@ -72,7 +89,7 @@ class Machine:
         return argv + list(words)
 
     def run(self, *words: str, check: bool = True, timeout: float = 60) -> subprocess.CompletedProcess:
-        cp = subprocess.run(self._argv(*words), capture_output=True, text=True, timeout=timeout)
+        cp = subprocess.run(self._argv(*words), capture_output=True, text=True, timeout=timeout, encoding="utf-8")
         if check and cp.returncode != 0:
             raise AssertionError(f"{self.name}: {' '.join(words)} failed ({cp.returncode}):\n{cp.stdout}\n{cp.stderr}")
         return cp
@@ -82,7 +99,7 @@ class Machine:
 
     def fx(self, *words: str) -> None:
         cp = subprocess.run([sys.executable, str(TOOLS / "fleet_fixture.py"), "--home", str(self.home), *words],
-                            capture_output=True, text=True, timeout=60)
+                            capture_output=True, text=True, timeout=60, encoding="utf-8")
         assert cp.returncode == 0, cp.stdout + cp.stderr
 
     def start(self) -> None:
@@ -258,7 +275,7 @@ def key_problems(obj: Any, where: str = "") -> list:
 
 
 def cpu_seconds(pid: int) -> float:
-    out = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    out = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True, encoding="utf-8").stdout.strip()
     parts = out.replace("-", ":").split(":")
     try:
         nums = [float(p) for p in parts]

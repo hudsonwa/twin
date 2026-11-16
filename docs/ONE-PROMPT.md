@@ -14,7 +14,8 @@ moving the bot to Hermes, and bringing it back.
 
 **On this page:** [Before you start](#before-you-start) · [Set it up](#set-it-up-once-per-bot) ·
 [What it copies](#what-it-copies) · [What the bot sends](#what-the-bot-sends) · [If it says FAIL](#if-it-says-fail) ·
-[Undo or stop](#undo-or-stop) · [Safety](#safety) · [Git history](#optional-git-history). Words such as
+[Undo or stop](#undo-or-stop) · [Safety](#safety) · [Git history](#optional-git-history) ·
+[From Hermes, and chat sync](#from-hermes-and-chat-sync). Words such as
 *bot-driven* and *behaviour test* are in [Words used](GUIDE.md#words-used).
 
 ## Before you start
@@ -100,6 +101,138 @@ The next time it says "synced with Hermes", or "already level with Hermes" when 
 
 A custom connector of type *Command* (Connect apps → Add a custom connector) does not work for this: the Grok
 app runs those on the bot's cloud computer, not on yours.
+
+## From Hermes, and chat sync
+
+**Experimental, and it needs botport's Grok engine** (`botport grok`, which is not in a botport release yet; the
+file route below also needs its `files fetch` and `routines` commands, on botport's P3 branch). Without it
+`hermes twin from-hermes` says FAIL and names the ways that work. It reaches the bot through the Grok app on this
+Mac, not through Grok's servers.
+
+    hermes twin from-hermes "Acme Support"
+    hermes twin from-hermes --all
+
+or say "twin all my Grok bots" in a Hermes chat (the tool `twin_from_hermes`).
+
+### The export route (the default)
+
+No skill in the bot, no local command, no approval card, no Grok setting to check. Hermes:
+
+1. reads Grok's Execution on Local Computer setting (read only), to compare at the end;
+2. reads the bot's chat (`botport grok read`) and lists its routines (`botport grok routines`) **through the
+   engine**: history and routines never come from the bot's own words;
+3. asks the bot for a `grok-bot-export/1` (its instructions, memory and skills, nothing else) made with its own
+   cloud tools only ("use no local-computer tools; do not store this in your memory"). Up to about 20 000
+   characters the bot pastes it as one ```json block; above that it sends it as a file, `twin-export.json`, which
+   Hermes saves with `botport grok files fetch` into a private temporary folder, reads, and removes at once
+   (`--file` asks for the file in any case);
+4. checks the export as untrusted data, in memory, before anything is written: a strict schema (no unknown fields,
+   right types, size caps), the bot's name must be the one the engine reported, skill names must be plain
+   (letters, digits, space, `. _ -`; no paths, newlines or escape codes), no text may look like a password or key,
+   and no text may drive this plugin's or botport's own commands. Any of these is a FAIL with nothing written;
+5. imports it with the same importer as the one prompt (botport `sync` into the twin's profile, the engine's
+   routines added switched off, the chat from step 2 as Hermes chats), with the same proof: botport drift, the
+   behaviour test, the secret check, and everything put back on a FAIL;
+6. checks once more: the one-prompt log holds the importer's PASS, the Grok setting reads as in step 1, and the
+   export turn held no approval card. When the bot sent a file, it is asked to delete it again.
+
+```
+PASS: Acme Support: twinned through the engine, no local command (the bot pasted its export): Acme Support twinned to Hermes (profile acme-support): 3 skills, 12 memories, 2 routines added switched off; matches what the bot sent; behaviour test 5/5. Skills imported: 3; made by other bots or shared, not imported: team-notes. History: 40 message(s) read by the engine; routines: 2 from the engine, all switched off. Chat sync: this computer reads the chat every 360 min from after the export. Checked: the one-prompt log has the PASS at 14:02:11; Grok's Execution on Local Computer setting reads Ask every time as before; no approval card in the export turn.
+```
+
+**Skills made by other bots.** Grok's skills look account-wide: a bot's export can list skills other bots made.
+The bot marks each skill as its own or not; only its own come in. With `--all`, a skill that more than one bot
+marks as its own goes into each of those twins and is named in the PASS line ("claimed as their own by several
+bots, imported into each"). Skills a bot does not mark as its own are named in the PASS line and not imported;
+`--shared-skills` imports them too. A skill another bot made that fails the export checks (or has the same name as
+one of the bot's own) is skipped and named; it never fails the bot's export. In the `twin_from_hermes` tool's
+answer to the Hermes model, skills other bots made are counted, not named.
+A skill in which the bot wrote `[REDACTED]` for a key is held back and named; memories it redacted are left out.
+
+**Without the engine.** This plugin version pins botport 0.3.3, which has the Grok engine. If an older release is
+chosen with `botport_release_tag`, `from-hermes` with no engine FAILs with "needs botport 0.3.0 or newer (the Grok
+engine); the botport_release_tag setting chooses 0.2.1" and setup is not run; say the prompt in Grok instead. Otherwise
+when botport is missing, too old or not verified, `from-hermes` first runs `hermes twin setup --auto` once by itself (the pinned, SHA-256-checked botport release; no Grok setting changed; the port is
+not opened), then carries on, so twinning stays one prompt. If setup FAILs, the line is the usual "engine not
+available" FAIL with setup's reason. A closed port is not "missing": no setup runs, run `botport grok launch`.
+
+**Safe profile defaults.** Every twin profile this makes or adopts gets the safe defaults by rule
+(`hermes twin safety`: `strict` for a bot whose instructions, skills or routines mention shell, ssh, servers and
+the like; `standard` otherwise), applied on what the import wrote and before the behaviour test or anything else
+runs in it. A choice you made with `hermes twin safety TWIN strict|standard|open` is kept. `hermes twin add` and the
+one prompt from Grok do the same when they make a profile. If `add` cannot apply them, its line is a FAIL and the
+twin's routines and Telegram route stay off until `hermes twin safety TWIN --apply` passes.
+
+**Only from this computer.** A messaging chat (Telegram and the like) cannot start twinning or setup: the
+`twin_from_hermes` and `twin_make` tools refuse when Hermes says the chat is a messaging one, unless the setting
+`setup_from_messaging` is on. A from-hermes run and chat sync's background pull share one lock, so a pull never
+closes the Grok port during an export.
+
+**Command-like text in an export (N6).** Text that drives this plugin's or botport's own commands (`hermes twin
+...`, `hermes -p X twin ...`, `botport grok|sync|apply|twin|drift|export|test|setup ...`) anywhere in the
+instructions, skills or memories is a FAIL with nothing written. Any other command-like text ("run `ls -la`",
+"deploy with make") is imported as plain data: it is written only into the twin's own profile and nothing runs
+it. Issue #49's "commands" means the first kind only.
+
+Not yet, said plainly: the engine cannot open a new chat, so the export turn happens in the bot's usual chat (chat
+sync starts after it, so it never lands in Hermes chats); the engine cannot list files a bot sent, so the clean-up
+of a sent file is the bot's own word (the line says whether it answered DONE); the file route is tested against
+the engine's fake transport and a stub, not yet live.
+
+| What you see | What to do |
+|---|---|
+| the Grok engine is not available | botport is missing, has no Grok engine yet, or the Grok app's local port is closed. Run `botport grok launch` (the fast preset; it restarts the Grok app with its local port open) and try again. |
+| the export was refused: … | The bot's answer broke a rule in step 4. Nothing was written. Try again; if the bot keeps doing it, its instructions or skills hold what the line names. |
+| the bot is waiting for an approval in Grok … the card is left for you | The export asks for no local command, so the bot did this by itself. Hermes never clicks it. Answer or deny it in Grok. |
+| the setting read … before and … after | Grok's Execution on Local Computer setting changed during the run; nothing was written. |
+| botport's policy refused it / run botport grok canary | botport's own settings, or an untested Grok version. |
+
+### The shell route (`--route shell`, kept as an option)
+
+After the setup above (skill added, local commands allowed), `--route shell` (or the setting
+`from_hermes_route: shell`) sends the bot "Clone yourself to Hermes" through the engine and the bot runs
+`hermes twin from-grok` on this computer, as when you say the prompt in Grok. It waits while the bot works (up to
+15 minutes per bot, `--timeout`), then checks two things: the bot's own PASS line, **and** a PASS for that bot in
+this computer's one-prompt log since the ask.
+
+| What you see | What to do |
+|---|---|
+| the bot is waiting for an approval in Grok | Usually the local-command box (Ask every time). Check the command as in step 2 above and answer it **in Grok**; Hermes never answers it. Then `hermes twin from-hermes "Acme Support" --route shell --wait`: it waits for the same run and asks nothing again. |
+| chat sync by routine needs … Always allow | Use `chat_sync_mode` `pull` (the default), or set Always allow in Grok yourself ([Safety](#safety): any bot may then run any command) and run it again. |
+| the bot is still working after … s | `hermes twin from-hermes "Acme Support" --route shell --wait` later. |
+| the bot reported PASS, but this computer's one-prompt log has no PASS | The bot did not run the command here (on its cloud computer, say). See the table under [If it says FAIL](#if-it-says-fail). |
+
+**Chat sync** keeps the twin's Hermes chats up with the bot's new messages. The setting `chat_sync_mode` in the
+plugin's settings chooses how, and `chat_sync_minutes` how often (360, every 6 h, by default; 15 to 1440):
+
+| `chat_sync_mode` | How | Costs |
+|---|---|---|
+| `pull` (default) | This computer reads the bot's chat through the engine on the plugin's background check, from where it left off (it keeps that place itself), in a short port window opened only while the Mac is idle (below). The first read is part of the PASS. | No Grok usage. Needs the engine, Hermes running, and the Grok app open. |
+| `routine` (opt-in, `--route shell` only) | The prompt also asks the bot to make a Grok routine, **Sync chats to Hermes**, that sends its recent messages with one local command, `hermes twin chat-sync --bot "NAME"`, and to run it once right away. The PASS line confirms the routine (the bot's word, until botport can list routines) and that this first sync landed. | One Grok turn per run, and the Grok app must be open. **Only when Grok's Settings → Bot → Execution on Local Computer is Always allow.** Hermes reads that setting and never changes it; otherwise it says FAIL and why. |
+| `off` | No chat sync; the prompt copies recent conversations as before. | – |
+
+**Idle-only windows (default, twin#52).** The engine reads the chat through the Grok app's local port, and opening
+the port restarts the app. So each due pull asks botport for a short window, `botport grok launch --for 10m
+--when-idle 10`: a port already open long enough is reused with no restart; otherwise the app restarts only when
+the Mac has had no keyboard or mouse input for `chat_sync_idle_minutes` (10 by default). If the Mac is in use
+(exit 2) the pull is skipped and tried again 30 minutes later: nobody is interrupted and no turn is cut off. A
+window the pull opened is closed again with `botport grok restore` (botport's TTL guard closes it in any case).
+`chat_sync_window: port` never launches: it pulls only when the port is already open. Needs botport 0.3.0 or newer
+(this plugin version pins 0.3.3). A pull that fails waits a full `chat_sync_minutes` before the
+next try, and a stopped twin leaves chat sync (and the Telegram route) at once, so neither opens a window again.
+`hermes twin chat-sync --status` shows the last skipped window and why.
+
+Why `routine` needs Always allow: in a live test (Grok Bot 1.1.0) a routine running on its own under **Ask every
+time** never ran the command. Each run stopped at an approval card, which expired after about 10 minutes, so
+nothing was sent. With the Grok app quit, the run failed. A routine also does not know what it sent last time, so
+the routine always sends the whole recent window and this computer keeps track of which messages are new.
+
+Either way a message lands once: messages Hermes already has are skipped, even when a conversation comes back with
+another title. `hermes twin chat-sync --status` shows each twin's last run; `hermes twin chat-sync --pull "Acme
+Support"` pulls now. To stop a routine, pause or delete it in Grok.
+
+The routine needs the skill text of this version (`hermes twin skill-text`): its "Chat sync" part lets the bot
+run the chat-sync command, and only when the request asks for it.
 
 ## What it copies
 

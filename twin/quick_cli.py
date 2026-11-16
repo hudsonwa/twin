@@ -163,12 +163,20 @@ def cmd_test(a) -> int:
     svc = c._svc()
     pid = c._one(svc, a.pair)
     c._out("Running botport's behaviour test: each case is a real chat with the twin's model…")
-    res = svc.behaviour_test(pid, a.battery, a.from_export)
+    res = svc.behaviour_test(pid, a.battery, a.from_export, say=c._out)
+    retried = res.get("retried") or []
     c._out(f"Behaviour test of {c._call(c._twin_names(svc), pid)}: {res['passed']} of {res['total']} pass "
-           f"{'✓' if res['ok'] else '✗'}")
+           f"{'✓' if res['ok'] else '✗'}" + (f" ({len(retried)} case(s) retried once: "
+                                              f"{', '.join(retried)})" if retried else ""))
     rows = res.get("results") or []
+    timed = not res["ok"]  # on a FAIL each case's wall time, to tell a slow model from a wrong answer
     for r in [r for r in rows if not r["pass"]] + [r for r in rows if r["pass"]]:
-        c._out(f" {'✓' if r['pass'] else '✗'} {r['id']}" + ("" if r["pass"] or not r["why"] else f": {r['why']}"))
+        wall = f" ({r['wall_s']} s)" if timed and r.get("wall_s") is not None else ""
+        c._out(f" {'✓' if r['pass'] else '✗'} {r['id']}{wall}" + ("" if r["pass"] or not r["why"] else f": {r['why']}"))
+    b = res.get("budget") or {}
+    if timed and b.get("per_case_s"):
+        c._out(f"Budget: {b['per_case_s']} s per case" + (f" (a one-word answer took {b['first_answer_s']} s)"
+                                                         if b.get("first_answer_s") is not None else ""))
     return 0 if res["ok"] else 1
 
 

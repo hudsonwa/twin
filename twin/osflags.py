@@ -111,12 +111,14 @@ def _open_checked(path: Any, flags: int, mode: int) -> int:
             before = None
         if before is not None and is_link(before):
             raise OSError(errno.ELOOP, "refusing to open a link", str(path))
+        if before is not None and flags & os.O_EXCL:  # the caller asked for a new file: one is there already
+            raise FileExistsError(errno.EEXIST, "the file is already there", str(path))
         try:
             # a file that was not there is made with O_EXCL, so nothing put there in between is opened
             fd = os.open(path, flags | os.O_EXCL if before is None else flags & ~os.O_EXCL, mode)
         except FileExistsError:
-            if flags & os.O_EXCL and before is not None:
-                raise
+            if flags & os.O_EXCL:
+                raise  # (made by someone else between the look and the open: still not a new file)
             continue  # made by someone else between the look and the open: look again
         except FileNotFoundError:
             if before is None:
@@ -328,3 +330,16 @@ def try_lock_file(fd: int) -> bool:
         return True
     except OSError:
         return False
+
+
+def kill_tree(pid: int) -> None:
+    """Windows: end a process and everything it started, while it is still there to name its children
+    (taskkill /T walks the tree from the living parent; once the parent is gone its children are orphans that
+    nothing finds). Windows' own taskkill.exe from the system folder, never looked up on PATH. Never raises."""
+    import subprocess
+    try:
+        subprocess.run([os.path.join(windows_system_folder(), "taskkill.exe"), "/PID", str(int(pid)), "/T", "/F"],
+                       capture_output=True, timeout=10, stdin=subprocess.DEVNULL,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except Exception:
+        pass

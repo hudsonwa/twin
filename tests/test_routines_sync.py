@@ -20,7 +20,7 @@ from fleet_testlib import Machine, free_port, key_problems, next_count, shape_pr
 from twin_testlib import ROOT, config, home, service  # noqa: F401
 from hermes_plugins.grok_bot_twin.twin import fleet, routines, routines_jobs as rj
 
-fleet_testlib._SHAPES.update(json.loads((ROOT / "tests" / "contract" / "routines_shapes.json").read_text())["shapes"])
+fleet_testlib._SHAPES.update(json.loads((ROOT / "tests" / "contract" / "routines_shapes.json").read_text(encoding="utf-8"))["shapes"])
 
 ITEM_KEYS = {"id", "twin", "name", "prompt", "schedule", "skills", "timezone", "on", "version", "updated_at",
              "runs_on", "go", "epoch"}
@@ -29,7 +29,7 @@ ANSWER_KEYS = {"v", "gen", "rev", "on", "list", "removed", "can_run"}
 
 def rfx(m: Machine, *words: str) -> None:
     cp = subprocess.run([sys.executable, str(ROOT / "tools" / "routines_fixture.py"), "--home", str(m.home), *words],
-                        capture_output=True, text=True, timeout=60)
+                        capture_output=True, text=True, timeout=60, encoding="utf-8")
     assert cp.returncode == 0, cp.stdout + cp.stderr
 
 
@@ -280,7 +280,7 @@ def test_a_computer_that_unlinks_itself_stops_its_routines_first_and_they_come_h
     left = list(surface.home.rglob("jobs.json"))  # (the bot was moved to the kept place, its jobs with it)
     assert left and not (surface.home / "profiles" / "test-scout").exists()
     for path in left:
-        assert not any(rj.runnable(j) for j in json.loads(path.read_text())["jobs"])
+        assert not any(rj.runnable(j) for j in json.loads(path.read_text(encoding="utf-8"))["jobs"])
     wait_until(lambda: on(mini), what="the routine to run on mini again")
     assert row(mini)["label"] == "runs here"
 
@@ -344,7 +344,7 @@ def test_what_leaves_is_the_named_fields_of_prompt_routines_and_nothing_else(min
     rfx(mini, "add", "Test Scout", "Hourly check", "every 60m",
         "Check the trail report.\napi_key = sk-test-0123456789abcdef0123456789abcdef\nThen say what changed.")
     path = mini.home / "profiles" / "test-scout" / "cron" / "jobs.json"
-    doc = json.loads(path.read_text())
+    doc = json.loads(path.read_text(encoding="utf-8"))
     for j in doc["jobs"]:
         j.update(model="secret-model-name", provider="secret-provider", base_url="http://secret-host.invalid/v1",
                  deliver="telegram:secret-chat-7788", origin={"platform": "telegram", "chat_id": "secret-chat-7788"},
@@ -352,7 +352,7 @@ def test_what_leaves_is_the_named_fields_of_prompt_routines_and_nothing_else(min
     doc["jobs"].append({**doc["jobs"][0], "id": "aaaaaaaaaaaa", "name": "One-off", "schedule":
                         {"kind": "once", "run_at": "2000-01-01T09:00:00+00:00", "display": "once"}})
     doc["jobs"].append({**doc["jobs"][0], "id": "bbbbbbbbbbbb", "name": "In a folder", "workdir": "/secret/folder"})
-    path.write_text(json.dumps(doc))
+    path.write_text(json.dumps(doc), encoding="utf-8")
     mini.run("routines", "tend")
     _s, linked, _r = wire_link(mini.port, mini.code(), mid="m-aaaaaaaaaa02")
     token = linked["pass"]
@@ -626,25 +626,31 @@ def test_the_jobs_file_is_changed_only_under_hermes_own_lock_and_keeps_what_it_d
     mine = rj.new_record(spec, "Grok Bot Twin: runs on mini")
     theirs = {"id": "feedfeedfeed", "name": "The owner's own", "prompt": "x", "enabled": True, "state": "scheduled",
               "schedule": {"kind": "interval", "minutes": 5, "display": "every 5m"}, "future_key": {"kept": True}}
-    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [theirs, mine], "format": 7}))
+    (prof / "cron" / "jobs.json").write_text(json.dumps({"jobs": [theirs, mine], "format": 7}), encoding="utf-8")
     rj.edit(prof, lambda jobs: (rj.set_running(rj.find(jobs, mine["id"])), None))
-    doc = json.loads((prof / "cron" / "jobs.json").read_text())
+    doc = json.loads((prof / "cron" / "jobs.json").read_text(encoding="utf-8"))
     assert doc["format"] == 7 and doc["jobs"][0] == theirs  # untouched, unknown keys included
     assert rj.runnable(doc["jobs"][1]) and doc["jobs"][1]["paused_reason"] is None and doc["jobs"][1]["paused_at"] is None
     # while Hermes (or anything else) holds its lock, nothing is written and the caller is told
-    import fcntl
     monkeypatch.setattr(rj, "LOCK_WAIT_S", 0.3)
-    with open(prof / "cron" / ".jobs.lock", "a+") as held:
-        fcntl.flock(held, fcntl.LOCK_EX)
+    import os
+    with open(prof / "cron" / ".jobs.lock", "a+b") as held:
+        if os.name == "nt":  # (Hermes' lock there: one byte at the start, msvcrt)
+            import msvcrt
+            held.seek(0)
+            msvcrt.locking(held.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(held, fcntl.LOCK_EX)
         with pytest.raises(OSError):
             rj.edit(prof, lambda jobs: (rj.set_paused(rj.find(jobs, mine["id"]), "x"), None))
     assert rj.runnable(rj.find(rj.load(prof), mine["id"]))
     # a file that cannot be understood is never written over, and counts as "could be running"
-    (prof / "cron" / "jobs.json").write_text("{not json")
+    (prof / "cron" / "jobs.json").write_text("{not json", encoding="utf-8")
     assert rj.load(prof) is None
     with pytest.raises(OSError):
         rj.edit(prof, lambda jobs: (True, None))
-    assert (prof / "cron" / "jobs.json").read_text() == "{not json"
+    assert (prof / "cron" / "jobs.json").read_text(encoding="utf-8") == "{not json"
 
 
 # ---- the page's routes ---------------------------------------------------------------------------------------------------

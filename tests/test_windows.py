@@ -150,9 +150,14 @@ def test_two_files_without_a_file_number_are_never_taken_for_the_same(tmp_path):
 def test_a_stopped_request_is_ended_with_the_systems_own_taskkill_never_one_from_the_path():
     """Requests on Windows: the program that ends a stopped chat turn is named by its full path in the system
     folder, like every other Windows tool the plugin starts."""
-    source = (ROOT / "twin" / "tasks_run.py").read_text(encoding="utf-8")
-    assert 'os.path.join(_osflags.windows_system_folder(), "taskkill.exe")' in source
-    assert '["taskkill"' not in source
+    flags = (ROOT / "twin" / "osflags.py").read_text(encoding="utf-8")
+    assert 'os.path.join(windows_system_folder(), "taskkill.exe")' in flags
+    for name in ("tasks_run.py", "tasks_turn.py", "osflags.py"):
+        source = (ROOT / "twin" / name).read_text(encoding="utf-8")
+        assert '["taskkill"' not in source and '"taskkill.exe", "/' not in source
+    # the tree is ended first, while the program started first can still name its children
+    run = (ROOT / "twin" / "tasks_run.py").read_text(encoding="utf-8")
+    assert run.index("_osflags.kill_tree(proc.pid)") < run.index("proc.terminate()")
 
 
 def test_the_system_folder_is_asked_from_windows_and_the_variables_are_only_what_is_left(monkeypatch):
@@ -698,5 +703,5 @@ def test_no_input_is_not_a_person_to_ask(monkeypatch):
     if os.name != "nt":
         assert osflags.is_terminal(Nul()) is True   # macOS and Linux: isatty() is the whole answer
         return
-    with open(os.devnull) as nul:
+    with open(os.devnull, encoding="utf-8") as nul:
         assert nul.isatty() is True and osflags.is_terminal(nul) is False

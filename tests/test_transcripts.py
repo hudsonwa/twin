@@ -532,6 +532,7 @@ def test_the_twins_search_excerpts_hold_back_password_pin_code_card_and_instruct
 
 
 # ---- owner-only archive, the session database's path -------------------------------------------------------------------
+@pytest.mark.skipif(os.name == "nt", reason="umask and permission bits: macOS and Linux only")
 def test_the_archive_file_is_owner_only_from_the_start_even_under_an_open_umask(home):
     old = os.umask(0)
     try:

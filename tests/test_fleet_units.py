@@ -404,7 +404,7 @@ def test_a_mirrored_bot_deleted_here_is_made_again_and_copies_of_the_plugin_agre
     assert svc.fleet()["twins"][0]["profile"] == "test-scout-2"
     # a copy of the plugin made from a copy carries the same stamp as one made from the install
     copy = home / "profiles" / "test-scout-2" / "plugins" / "grok-bot-twin"
-    assert fp._source_stamp(copy) == fp._source_stamp(fp.plugin_source()) == (copy / fp.COPY_MARKER).read_text().strip()
+    assert fp._source_stamp(copy) == fp._source_stamp(fp.plugin_source()) == (copy / fp.COPY_MARKER).read_text(encoding="utf-8").strip()
 
 
 def test_linking_again_brings_the_same_hermes_bots_back_without_doubles(home, tmp_path):  # noqa: F811
@@ -498,9 +498,9 @@ def test_linking_again_brings_the_same_hermes_bots_back_without_doubles(home, tm
     (d / "state.db-wal").write_text("x", encoding="utf-8")
     assert not fp.is_shell(d)
     # what is not an empty shell: a folder with any file outside logs/, or a folder Hermes does not make itself
-    for name, make in (("has-a-file", lambda d: (d / "notes.txt").write_text("x")),
+    for name, make in (("has-a-file", lambda d: (d / "notes.txt").write_text("x", encoding="utf-8")),
                        ("has-a-skill", lambda d: ((d / "skills" / "s").mkdir(parents=True),
-                                                  (d / "skills" / "s" / "SKILL.md").write_text("x"))),
+                                                  (d / "skills" / "s" / "SKILL.md").write_text("x", encoding="utf-8"))),
                        ("has-a-folder", lambda d: (d / "my-stuff").mkdir())):
         d = home / "profiles" / name
         d.mkdir()

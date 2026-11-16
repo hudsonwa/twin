@@ -16,13 +16,14 @@ import stat
 import sys
 from pathlib import Path
 
+# (HERMES_GIT_BASH_PATH: a setting of the computer that Hermes' Windows installer makes, not of a session)
 FAKE = r'''
 import json, os, sys, time
 words = sys.argv[1:]
 text = sys.stdin.read()
 rec = {"argv": words, "stdin": text, "home": os.environ.get("HERMES_HOME"), "pid": os.getpid(),
        "asked": os.environ.get("GROK_BOT_TWIN_ASKED_TURN"),
-       "env": {k: v for k, v in os.environ.items() if k.startswith("HERMES_") and k not in ("HERMES_HOME", "HERMES_GATEWAY_LOCK_DIR")}}
+       "env": {k: v for k, v in os.environ.items() if k.startswith("HERMES_") and k not in ("HERMES_HOME", "HERMES_GATEWAY_LOCK_DIR", "HERMES_GIT_BASH_PATH")}}
 log = os.environ.get("FAKE_HERMES_LOG")
 if log:
     with open(log, "a", encoding="utf-8") as fh:
@@ -80,7 +81,7 @@ def event(kind, payload=None, sid="s1s1s1s1"):
     out({"jsonrpc": "2.0", "method": "event", "params": {"type": kind, "session_id": sid, "payload": payload or {}}})
 rec = {"rpc": True, "argv": sys.argv[1:], "home": os.environ.get("HERMES_HOME"), "cwd": os.getcwd(), "got": [],
        "asked": os.environ.get("GROK_BOT_TWIN_ASKED_TURN"),
-       "env": {k: v for k, v in os.environ.items() if k.startswith("HERMES_") and k not in ("HERMES_HOME", "HERMES_GATEWAY_LOCK_DIR")}}
+       "env": {k: v for k, v in os.environ.items() if k.startswith("HERMES_") and k not in ("HERMES_HOME", "HERMES_GATEWAY_LOCK_DIR", "HERMES_GIT_BASH_PATH")}}
 def save():
     log = os.environ.get("FAKE_HERMES_LOG")
     if log:

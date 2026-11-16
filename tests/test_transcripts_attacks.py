@@ -335,3 +335,14 @@ def test_a_home_the_tool_cannot_name_for_sure_is_no_bot_never_the_main_one(home,
     monkeypatch.setitem(sys.modules, "hermes_constants", consts)
     out = json.loads(tools.twin_transcripts_search({"query": "sourdough"}))
     assert "hits" not in out and "sourdough" not in json.dumps(out)
+
+
+def test_a_key_holding_line_end_bytes_reads_back_unchanged(home, monkeypatch):
+    """Windows opens a file in text mode unless told otherwise, and then writes every "\\n" byte as "\\r\\n": one
+    key in eight (32 random bytes) came back the wrong length and the archive read as "key missing"."""
+    key = b"\n\r\n" + bytes(range(29))
+    monkeypatch.setattr(tr._rand, "token_bytes", lambda n: key[:n])
+    tr.switch(A, True)
+    assert tr._key(False) == key and (tr._key_dir() / tr.KEY_NAME).read_bytes() == key
+    tr.ingest_grok(A, _export(_conv("g1", "Kale", "kale needs netting")))
+    assert tr.search(A, "kale")["hits"]

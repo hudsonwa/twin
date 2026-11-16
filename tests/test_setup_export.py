@@ -77,11 +77,11 @@ class Hermes:
         monkeypatch.setattr(importer, "pause_cron", self.pause)
 
     def jobs(self) -> list:
-        return json.loads(self.file.read_text())["jobs"] if self.file.exists() else []
+        return json.loads(self.file.read_text(encoding="utf-8"))["jobs"] if self.file.exists() else []
 
     def _write(self, jobs: list) -> None:
         self.file.parent.mkdir(parents=True, exist_ok=True)
-        self.file.write_text(json.dumps({"jobs": jobs}))
+        self.file.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
 
     def create(self, prof, name, schedule, prompt, timezone="", reason=""):
         self.asked.append({"profile": prof, "name": name, "schedule": schedule, "prompt": prompt,
@@ -194,10 +194,10 @@ def test_an_import_fills_the_twin_and_keeps_none_of_the_memories(twin, home, mon
     plan = twin.checklist(PID)["switch"]
     assert [j["job_id"] for j in plan["hermes_jobs_paused"]] == [job["id"]] and plan["hermes_jobs_resumed"] == []
     assert _pair(twin)["routines"]["paused_in_hermes"] == 1 and _pair(twin)["routines"]["on_in_hermes"] == 0
-    reg = json.loads((central(home) / "pairs.json").read_text())["pairs"][0]
+    reg = json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))["pairs"][0]
     assert reg["job_ids"] == [job["id"]] and reg["instructions"]["from"] == "export"
     # the routine came from Grok: noted (a digest, no text), so its Hermes copy does not ask to go to Grok
-    noted = json.loads((central(home) / "copied.json").read_text())[PID]
+    noted = json.loads((central(home) / "copied.json").read_text(encoding="utf-8"))[PID]
     assert noted == {"routine:Morning summary": importer.routine_digest(home / "profiles" / PID, "Morning summary")}
     assert len(noted["routine:Morning summary"]) == 12
     # connectors: names, to set up on this computer, found again later
@@ -548,9 +548,9 @@ def test_the_command_line(twin, home, tmp_path, monkeypatch, capsys):
 def test_stop_twinning_forgets_the_list_and_keeps_the_hermes_bot(twin, home, monkeypatch):
     Hermes(home, monkeypatch)
     twin.import_setup(PID, text_of(), True)
-    assert PID in json.loads((central(home) / sx.NOTES_FILE).read_text())
+    assert PID in json.loads((central(home) / sx.NOTES_FILE).read_text(encoding="utf-8"))
     twin.remove(PID, False)
-    assert json.loads((central(home) / sx.NOTES_FILE).read_text()) == {}
+    assert json.loads((central(home) / sx.NOTES_FILE).read_text(encoding="utf-8")) == {}
     assert "You are Acme Support." in soul(home)  # the Hermes bot keeps what was imported into it
 
 
@@ -739,7 +739,7 @@ def test_names_that_look_the_same_are_one_name_and_every_new_routine_is_checked(
     r = twin.import_setup(PID, json.dumps(two), True)
     new = next(j for j in h.jobs() if j["name"] == "Evening summary (2)")
     assert h.paused_now == [new["id"]] and new["enabled"] is False and r["routines"][0]["state"] == "added"
-    assert new["id"] in json.loads((central(home) / "pairs.json").read_text())["pairs"][0]["job_ids"]
+    assert new["id"] in json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))["pairs"][0]["job_ids"]
 
 
 def test_a_command_that_ran_out_of_time_may_still_have_made_the_routine(twin, home, monkeypatch):
@@ -748,7 +748,7 @@ def test_a_command_that_ran_out_of_time_may_still_have_made_the_routine(twin, ho
     r = twin.import_setup(PID, text_of(instructions=""), True)
     row = next(x for x in r["routines"] if x["name"] == "Morning summary")
     assert row["state"] == "added" and r["added"] == 1 and h.jobs()[0]["enabled"] is False
-    assert json.loads((central(home) / "pairs.json").read_text())["pairs"][0]["job_ids"] == [h.jobs()[0]["id"]]
+    assert json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))["pairs"][0]["job_ids"] == [h.jobs()[0]["id"]]
     # the sentence names Hermes, not botport
     from hermes_plugins.grok_bot_twin.twin.engine import EngineError
 

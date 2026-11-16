@@ -562,11 +562,11 @@ def test_the_launchd_guard_ends_quietly_when_the_command_is_gone_and_otherwise_b
         return subprocess.run(["/bin/sh", "-c", bgagent.LAUNCHD_GUARD, exe, *words], capture_output=True).returncode
 
     assert run(good, "twin", "fleet", "run; echo pwned > x") == 7  # the real command's own status
-    assert log.read_text().splitlines() == ["twin --help", "twin fleet run; echo pwned > x"]
+    assert log.read_text(encoding="utf-8").splitlines() == ["twin --help", "twin fleet run; echo pwned > x"]
     assert not (tmp_path / "x").exists() and not Path("x").exists()
-    log.write_text("")
+    log.write_text("", encoding="utf-8")
     assert run(gone, "twin", "fleet", "run") == 0
-    assert log.read_text().splitlines() == ["twin --help"]  # asked once, never started
+    assert log.read_text(encoding="utf-8").splitlines() == ["twin --help"]  # asked once, never started
     assert run(str(tmp_path / "no-such-hermes"), "twin", "fleet", "run") == 0
 
 
@@ -600,19 +600,19 @@ def test_live_systemd_user_unit_starts_restarts_and_is_gone_after_remove(tmp_pat
         res = bgagent.install(root=root, hermes=exe)
         assert res["state"] == "on" and Path(res["file"]).is_file()
         assert "live-agent-test" in res["label"]
-        assert _wait(mark.exists) and mark.read_text().splitlines()[0] == f"{root} twin fleet run"
+        assert _wait(mark.exists) and mark.read_text(encoding="utf-8").splitlines()[0] == f"{root} twin fleet run"
         ctl = bgagent._systemctl()
         pid = subprocess.run([ctl, "--user", "show", res["label"], "--property=MainPID", "--value"],
-                             capture_output=True, text=True, env=bgagent._tool_env()).stdout.strip()
+                             capture_output=True, text=True, env=bgagent._tool_env(), encoding="utf-8").stdout.strip()
         os.kill(int(pid), 9)  # a crash
-        assert _wait(lambda: len(mark.read_text().splitlines()) >= 2), "not restarted after a crash"
+        assert _wait(lambda: len(mark.read_text(encoding="utf-8").splitlines()) >= 2), "not restarted after a crash"
         assert _wait(lambda: bgagent.status(root=root)["state"] == "on")
     finally:
         gone = bgagent.remove(root=root)
     assert gone["removed"] is True and not Path(gone["file"]).exists()
     assert bgagent.status(root=root)["state"] == "off"
     out = subprocess.run([bgagent._systemctl(), "--user", "list-unit-files", res["label"]],
-                         capture_output=True, text=True, env=bgagent._tool_env()).stdout
+                         capture_output=True, text=True, env=bgagent._tool_env(), encoding="utf-8").stdout
     assert res["label"] not in out
 
 
@@ -632,12 +632,12 @@ def test_live_launchd_agent_starts_restarts_and_is_gone_after_remove(tmp_path, m
     try:
         res = bgagent.install(root=root, hermes=exe)
         assert Path(res["file"]).is_file() and "live-agent-test" in res["label"]
-        assert _wait(mark.exists) and mark.read_text().splitlines()[0] == f"{root} twin fleet run"
+        assert _wait(mark.exists) and mark.read_text(encoding="utf-8").splitlines()[0] == f"{root} twin fleet run"
         assert _wait(lambda: bgagent.status(root=root)["state"] == "on")
         dom, running, pid = bgagent._launchd_loaded(bgagent.plan(root=root, hermes=exe), bgagent._run)
         assert dom and running and pid
         os.kill(pid, 9)  # a crash
-        assert _wait(lambda: len(mark.read_text().splitlines()) >= 2, 30), "not restarted after a crash"
+        assert _wait(lambda: len(mark.read_text(encoding="utf-8").splitlines()) >= 2, 30), "not restarted after a crash"
         last_pid = bgagent._launchd_loaded(bgagent.plan(root=root, hermes=exe), bgagent._run)[2]
     finally:
         gone = bgagent.remove(root=root)
@@ -664,11 +664,11 @@ def test_live_systemd_does_not_loop_when_the_plugin_was_removed_under_the_helper
         res = bgagent.install(root=root, hermes=exe)
         assert _wait(mark.exists)
         time.sleep(5)  # five restart intervals
-        assert mark.read_text().splitlines() == ["twin fleet run"], "restarted although the command is gone"
+        assert mark.read_text(encoding="utf-8").splitlines() == ["twin fleet run"], "restarted although the command is gone"
         assert bgagent.status(root=root)["state"] == "stopped"
         ctl = bgagent._systemctl()
         n = subprocess.run([ctl, "--user", "show", res["label"], "--property=NRestarts", "--value"],
-                           capture_output=True, text=True, env=bgagent._tool_env()).stdout.strip()
+                           capture_output=True, text=True, env=bgagent._tool_env(), encoding="utf-8").stdout.strip()
         assert n == "0"
     finally:
         gone = bgagent.remove(root=root)
@@ -692,7 +692,7 @@ def test_live_launchd_does_not_loop_when_the_plugin_was_removed_under_the_helper
         bgagent.install(root=root, hermes=exe)
         assert _wait(mark.exists)
         time.sleep(6)
-        assert mark.read_text().splitlines() == ["twin --help"], "asked again, or started, although the command is gone"
+        assert mark.read_text(encoding="utf-8").splitlines() == ["twin --help"], "asked again, or started, although the command is gone"
         st = bgagent.status(root=root)
         assert st["installed"] and not st["running"] and st["state"] == "stopped"
     finally:

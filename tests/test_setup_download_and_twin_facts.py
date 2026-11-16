@@ -45,7 +45,7 @@ def runnable() -> bytes:
 
 def calls(home: Path) -> list:
     f = central(home) / "botport-state" / "fake_calls.jsonl"
-    return [json.loads(line)["argv"] for line in f.read_text().splitlines()] if f.exists() else []
+    return [json.loads(line)["argv"] for line in f.read_text(encoding="utf-8").splitlines()] if f.exists() else []
 
 
 def mode(home: Path, **fields) -> None:
@@ -103,7 +103,7 @@ def test_a_pinned_download_connects_without_githubs_tool(home, tmp_path, monkeyp
     assert e.code == "not_genuine" and e.message == f"That file is not the genuine botport {VERSION}."
     assert e.hint == "Download it again with the Download botport button, then choose the new file."
     # not botport at all
-    (tmp_path / "notes.txt").write_text("shopping list")
+    (tmp_path / "notes.txt").write_text("shopping list", encoding="utf-8")
     e = err(svc.choose_helper, str(tmp_path / "notes.txt"))
     assert (e.code, e.message) == ("not_botport", "That is not botport.")
     assert e.hint == "Choose the file you downloaded with the Download botport button."
@@ -114,7 +114,7 @@ def test_a_pinned_download_connects_without_githubs_tool(home, tmp_path, monkeyp
     assert res["ready"] is True and res["helper"] == {"found": True, "version": "0.1.2", "source": "chosen"}
     assert res["check"] == {"done": True, "problem": None, "gh_found": False, "unattested": False, "method": "pinned"}
     assert res["download"]["found"] is None and res["problem"] is None and res["cause"] is None
-    rec = json.loads((data / "botport-trust.json").read_text())
+    rec = json.loads((data / "botport-trust.json").read_text(encoding="utf-8"))
     assert rec["pinned"] == {"tag": TAG} and rec["allow_unattested"] is False and rec["release_tag"] == TAG
     assert rec["sha256"] == sha(prog) and (data / "helper" / "botport").read_bytes() == prog
     assert [c[0] for c in calls(home)] == ["version"]  # the first and only run came after the match
@@ -243,7 +243,7 @@ def test_one_cause_when_twins_cannot_follow_grok(fake, home, tmp_path):
         "Acme Support is not following Grok right now. The Grok desktop app is not on this computer any more.")
     # botport changed on disk: it has to be verified again
     svc = _svc(botport_path=str(fake.exe))
-    with open(fake.exe, "a") as fh:
+    with open(fake.exe, "a", encoding="utf-8") as fh:
         fh.write("\n# updated\n")
     st = svc.status(fresh=True)
     assert st["setup"]["cause"] == "botport_unverified" and st["setup"]["ready"] is False
@@ -368,7 +368,7 @@ def test_asm_1_a_new_process_after_setup_yes_does_not_call_the_new_twin_finished
         rc = cli.main(["setup", "--yes", "--bot", "Acme Support"])
     assert rc == 0 and "1 bot now has a twin." in out.getvalue()
     assert "Setup is complete on this computer." not in out.getvalue()  # the run's own summary knows too
-    cache = json.loads((central(home) / "status-cache.json").read_text())  # the run remembered the status
+    cache = json.loads((central(home) / "status-cache.json").read_text(encoding="utf-8"))  # the run remembered the status
     assert [p["pair_id"] for p in cache["status"]["pairs"] if not p.get("demo")] == ["acme-support"]
     service.reset_service()  # a new process
     plan = _check(home)
@@ -480,7 +480,7 @@ def test_a_refused_paste_names_the_line_and_can_be_overruled_for_that_line(home,
     seen = json.dumps([svc.events(), svc.status(fresh=True), svc.recent("acme-support"),
                        svc.restore_points("acme-support")])
     assert key not in seen
-    assert key not in (central(home) / "events.jsonl").read_text()
+    assert key not in (central(home) / "events.jsonl").read_text(encoding="utf-8")
     # and an earlier version that holds such a line shows it hidden
     svc.set_instructions("acme-support", "A clean version.")
     kept = next(p for p in svc.restore_points("acme-support")["points"] if "Be brief." in (p["text"] or ""))
@@ -510,7 +510,7 @@ def test_a_real_twin_is_started_then_finished(fake, home, monkeypatch):
     assert r == {"pair_id": "acme-support", "saved": True, "setup_left": ["model"]}
     soul = (prof / "SOUL.md").read_text(encoding="utf-8")
     assert soul.startswith(SOUL) and "You are Acme Support.\nBe friendly and brief." in soul  # botport's part untouched
-    reg = json.loads((central(home) / "pairs.json").read_text())["pairs"][0]
+    reg = json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))["pairs"][0]
     assert reg["instructions"]["by"] == "owner"
     pts = svc.restore_points("acme-support")["points"]
     # the version from before the paste holds nothing: it is not listed (a list of blank "versions" on a new
@@ -549,7 +549,7 @@ def test_a_new_twin_gets_the_owners_default_model(fake, home):
     made = svc.create(["b-acme-0001"])["pairs"][0]
     assert made["setup_left"] == ["instructions"] and made["hermes"]["model_from"] == "default"
     assert "model_hint" not in made
-    assert fake_key() not in (prof / "config.yaml").read_text()
+    assert fake_key() not in (prof / "config.yaml").read_text(encoding="utf-8")
     # the owner picks another model for the twin later: it is their own from then on
     (prof / "config.yaml").write_text("model:\n  default: another-model\n", encoding="utf-8")
     assert _pair(svc)["hermes"]["model_from"] == "own"
@@ -572,7 +572,9 @@ def test_a_twin_that_botport_already_gave_the_default_model_counts_as_default(fa
     (prof / "config.yaml").write_text(by_botport, encoding="utf-8")
     made = svc.create(["b-acme-0001"])["pairs"][0]
     assert made["hermes"]["model_from"] == "default" and made["setup_left"] == ["instructions"]
-    assert (prof / "config.yaml").read_text(encoding="utf-8") == by_botport + "plugins:\n  enabled:\n  - grok-bot-twin\n"
+    # (twin#54: the safe profile defaults rewrite the file while twinned; the model stays, the plugin is on)
+    now = (prof / "config.yaml").read_text(encoding="utf-8")
+    assert "example-model" in now and "grok-bot-twin" in now
     # a twin whose Hermes bot already had a model of its own is not called "default"
     svc.remove("acme-support", False)
     assert (prof / "config.yaml").read_text(encoding="utf-8") == by_botport  # byte for byte what botport wrote
@@ -658,7 +660,7 @@ def test_real_twin_skill_text_and_pasted_it(twin, home, monkeypatch):
     assert out["skipped"] == []
     p = _pair(svc)
     assert p["waiting"] == [] and p["pending"]["waiting_approval"] == 0 and p["skipped"] == []
-    assert json.loads((central(home) / "copied.json").read_text()) == {
+    assert json.loads((central(home) / "copied.json").read_text(encoding="utf-8")) == {
         "acme-support": {"skill:pick-a-book": hs.text_digest("# Pick a book\nSuggest one book.\n")}}  # a digest, no text
     # the skill changes in Hermes later: it asks again
     (d / "SKILL.md").write_text("# Pick a book\nSuggest two books.\n", encoding="utf-8")
@@ -735,9 +737,9 @@ def test_ending_the_sample_forgets_what_was_kept_in_hermes_only(home):
     svc.demo_action("hermes-edit")
     svc.sync()
     svc.skip("acme-support", "skill:fun-fact")
-    assert _pair(svc)["waiting"] == [] and json.loads((central(home) / "skipped.json").read_text())
+    assert _pair(svc)["waiting"] == [] and json.loads((central(home) / "skipped.json").read_text(encoding="utf-8"))
     svc.demo_action("remove")
-    assert json.loads((central(home) / "skipped.json").read_text()) == {}
+    assert json.loads((central(home) / "skipped.json").read_text(encoding="utf-8")) == {}
     svc.demo_action("start")
     svc.demo_action("hermes-edit")
     svc.sync()
@@ -752,18 +754,18 @@ def test_stop_twinning_says_what_keeps_running(fake, home, monkeypatch):
     jobs_file.parent.mkdir(parents=True)
     made = [_job("a1b2c3d4e5f6", reason="Imported by botport from the Grok bot; resume once the Grok routine is off"),
             _job("a1b2c3d4e5f7", reason="Imported by botport from the Grok bot; resume once the Grok routine is off")]
-    jobs_file.write_text(json.dumps({"jobs": made}))
+    jobs_file.write_text(json.dumps({"jobs": made}), encoding="utf-8")
     svc.create(["b-acme-0001"])
     plan = svc.remove("acme-support", True)
     assert plan["stays"] == ["Your bot in Grok, unchanged.", "Its Hermes bot and all its chats."]
     assert _pair(svc)["routines"] == {"in_grok": 0, "paused_in_hermes": 2, "on_in_hermes": 0}
 
     def resume(job_id, prof_name, ctx=None):
-        data = json.loads(jobs_file.read_text())
+        data = json.loads(jobs_file.read_text(encoding="utf-8"))
         for j in data["jobs"]:
             if j["id"] == job_id:
                 j["enabled"], j["state"] = True, "scheduled"
-        jobs_file.write_text(json.dumps(data))
+        jobs_file.write_text(json.dumps(data), encoding="utf-8")
         return True, ""
 
     monkeypatch.setattr(importer, "resume_cron", resume)
@@ -783,12 +785,12 @@ def test_stop_twinning_says_what_keeps_running(fake, home, monkeypatch):
     assert plan["again"] == "You can twin it again later; it picks up this Hermes bot again."
     # for real: the plugin's own notes about the twin go with the link
     svc.set_instructions("acme-support", "You are Trail Guide.")
-    assert json.loads((central(home) / "kept.json").read_text())
+    assert json.loads((central(home) / "kept.json").read_text(encoding="utf-8"))
     svc.remove("acme-support", False)
-    assert json.loads((central(home) / "kept.json").read_text()) == {}
-    assert "You are Trail Guide." in (prof / "SOUL.md").read_text()  # the Hermes bot keeps its instructions
+    assert json.loads((central(home) / "kept.json").read_text(encoding="utf-8")) == {}
+    assert "You are Trail Guide." in (prof / "SOUL.md").read_text(encoding="utf-8")  # the Hermes bot keeps its instructions
     # "again" is what create then really does: the same Hermes bot is named to botport, which picks it up
-    assert json.loads((central(home) / "former.json").read_text()) == {"b-acme-0001": "acme-support"}
+    assert json.loads((central(home) / "former.json").read_text(encoding="utf-8")) == {"b-acme-0001": "acme-support"}
     n = len(fake.calls())
     again = svc.create(["b-acme-0001"])["pairs"][0]
     creates = [c_ for c_ in fake.calls()[n:] if c_[:2] == ["twin", "create"]]
@@ -886,8 +888,8 @@ def test_a_twin_botport_stopped_updating_says_which_line_and_how_to_fix_it(twin,
     assert p["error"]["message"] == ("Updates from Grok stopped: line 3 of Acme Support's instructions looks like a "
                                      "password or key to botport.")
     assert "Earlier versions" in p["error"]["hint"] and "without that line" in p["error"]["hint"]
-    assert json.loads((central(home) / "stuck.json").read_text())["acme-support"]["line"] == at
-    assert key not in (central(home) / "stuck.json").read_text() and key not in json.dumps(p)
+    assert json.loads((central(home) / "stuck.json").read_text(encoding="utf-8"))["acme-support"]["line"] == at
+    assert key not in (central(home) / "stuck.json").read_text(encoding="utf-8") and key not in json.dumps(p)
     # it survives a restart of Hermes (botport's own status would only say "updating")
     again = _svc(botport_path=config.get("botport_path"))
     assert _pair(again)["error"]["code"] == "secret_refused"
@@ -898,7 +900,7 @@ def test_a_twin_botport_stopped_updating_says_which_line_and_how_to_fix_it(twin,
     assert any(c_[:2] == ["twin", "sync"] for c_ in calls(home)[n:])
     p = _pair(again)
     assert p["state"] == "in_step" and p["error"] is None
-    assert json.loads((central(home) / "stuck.json").read_text()) == {}
+    assert json.loads((central(home) / "stuck.json").read_text(encoding="utf-8")) == {}
     # a refusal about another file names the file, and never guesses a line of the instructions
     mode(home, status=waiting, sync_refused={"code": "secret_refused",
                                              "message": "live file config.yaml: line 4 looks like it holds a secret"})
@@ -909,4 +911,4 @@ def test_a_twin_botport_stopped_updating_says_which_line_and_how_to_fix_it(twin,
     mode(home, sync_refused={"code": "secret_refused", "message": "live file config.yaml: line 4 looks like a secret"})
     assert _pair(again)["state"] == "in_step"
     again.save_status()
-    assert json.loads((central(home) / "stuck.json").read_text()) == {}
+    assert json.loads((central(home) / "stuck.json").read_text(encoding="utf-8")) == {}

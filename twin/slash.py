@@ -20,6 +20,7 @@ HELP = ("/twin                    your twins and what to do next\n"
         "/twin ask COMPUTER: TEXT ask this twin's copy on another of your computers to do something there\n"
         "/twin requests           whether other computers may ask this one, and the log\n"
         "/twin demo [start|remove|grok-edit|hermes-edit|conflict|secret]   a sample twin with invented data\n"
+        "/twin to TWIN TEXT       (Telegram, owner DM) talk to a twin; /twin use TWIN, then /twin say TEXT\n"
         "Everything else (connect your Grok bots, choose a version, earlier versions, skill sync) is on the "
         "Twins page in Hermes Desktop, or: hermes twin --help.")
 
@@ -105,6 +106,15 @@ def _ask(raw: str) -> str:
 
 
 def handle(raw_args: str = "", **kwargs: Any) -> str:
+    from . import tg_route
+    if tg_route.is_route(raw_args or ""):  # /twin to|use|say: the owner's Telegram route to a twin (tg_route.py)
+        try:
+            from .zt_cli import resolve_profile
+            return tg_route.handle(raw_args or "", kwargs.get("platform"), kwargs.get("source"),
+                                   resolve=lambda name: resolve_profile(_svc(), name))
+        except Exception:
+            log.exception("/twin route failed")
+            return "Grok Bot Twin: the twin could not answer just now."
     try:
         if (raw_args or "").strip().lower().startswith("ask ") or (raw_args or "").strip().lower() == "ask":
             if not _local(kwargs.get("platform")):

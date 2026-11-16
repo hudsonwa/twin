@@ -130,7 +130,7 @@ def test_F12_cron_store_still_writes_hermes_shape(tmp_path):
     home = Path(os.environ["HERMES_HOME"]) / "profiles" / "test-scout"
     (home / "cron").mkdir(parents=True)
     path = home / "cron" / "jobs.json"
-    path.write_text(json.dumps({"jobs": [{"id": "a1", "enabled": True, "state": "scheduled"}], "updated_at": None}))
+    path.write_text(json.dumps({"jobs": [{"id": "a1", "enabled": True, "state": "scheduled"}], "updated_at": None}), encoding="utf-8")
     rj.edit(home, lambda jobs: (rj.set_paused(rj.find(jobs, "a1"), rj.MARK + "test"), None))
     doc = json.loads(path.read_text("utf-8"))
     assert doc["jobs"][0]["state"] == "paused" and doc["updated_at"] and rj.ours(doc["jobs"][0])

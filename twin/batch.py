@@ -287,6 +287,8 @@ class BatchMixin:
                 state = self._write_model(Path(home), m, "custom", ep["_base_url"])
             else:
                 state = self._write_model(Path(home), m, providers.get(m, ""))
+        if state == "set":
+            self._refingerprint(prof)  # a model choice is not a change to the safe defaults (twin#62)
         if state == "set" or not isinstance(self._registry().get(pid, {}).get("model"), dict):
             self._note_entry(pid, model={"from": "batch" if _from == "batch" else "owner", "value": m})
         self.invalidate()

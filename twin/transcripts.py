@@ -217,7 +217,7 @@ def _key(create: bool = False) -> Optional[bytes]:
         raise TranscriptsError("no_key")
     key = _rand.token_bytes(32)
     tmp = path.with_name(f".{KEY_NAME}.{_rand.token_hex(4)}.tmp")
-    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
     try:
         os.write(fd, key)
         os.fsync(fd)
@@ -910,7 +910,7 @@ def import_to_hermes(pid: str, profile: str, ids: Optional[list] = None) -> dict
             continue
         path, made = outbox / f"{c['id']}-{_rand.token_hex(4)}.jsonl", False
         try:  # (a write that fails half way still ends in the `finally` below: no decrypted file stays)
-            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
             made = True
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(claude_jsonl(c))

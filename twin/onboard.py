@@ -141,7 +141,10 @@ def build(svc: Any, a: Any) -> dict:
     linked = role == "follower"
     follows = linked or bool(w["link"]) or (not app and not twins and not s["helper"]["found"] and not w["file"]
                                              and role != "source")
-    steps = [_step("plugin", DONE, "Grok Bot Twin is installed and switched on in Hermes.")]
+    from . import auto_setup
+    inst = auto_setup.install_check()
+    steps = [_step("plugin", DONE, "Grok Bot Twin is installed and switched on in Hermes."
+                   + ("" if inst["ok"] else f" Note: {inst['message']}."), how=inst["fix"] or None)]
     if follows:
         _plan_linked(steps, w, f, linked, app)
     else:

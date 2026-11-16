@@ -40,7 +40,7 @@ def _fake_gh(tmp_path: Path, rc: int = 0) -> Path:
 
 
 def _gh_calls(log: Path) -> list[list[str]]:
-    return [json.loads(ln)["argv"] for ln in log.read_text().splitlines()] if log.exists() else []
+    return [json.loads(ln)["argv"] for ln in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def bp(home, tmp_path, monkeypatch):
 
 
 def _record(home: Path) -> dict:
-    return json.loads((central(home) / "botport-trust.json").read_text())
+    return json.loads((central(home) / "botport-trust.json").read_text(encoding="utf-8"))
 
 
 # ---- the attestation pins the release tag ------------------------------------------------------------------
@@ -74,13 +74,14 @@ def test_setup_pins_expected_tag_and_records_it(bp, home):
     argv = _gh_calls(bp.log)[-1]
     assert argv[:2] == ["attestation", "verify"]
     assert argv[3:] == ["--repo", "hudsonwa/botport", "--signer-workflow",
-                        "hudsonwa/botport/.github/workflows/release.yml", "--source-ref", "refs/tags/v0.2.1"]
-    assert E.EXPECTED_BOTPORT_TAG == "v0.2.1"
-    assert res["attested"] and res["release_tag"] == "v0.2.1"
+                        "hudsonwa/botport/.github/workflows/release.yml", "--source-ref", f"refs/tags/{E.EXPECTED_BOTPORT_TAG}"]
+    T = E.EXPECTED_BOTPORT_TAG
+    assert E.engine_pinned(T)
+    assert res["attested"] and res["release_tag"] == T
     rec = _record(home)
-    assert rec["release_tag"] == "v0.2.1" and rec["attestation"]["tag"] == "v0.2.1"
+    assert rec["release_tag"] == T and rec["attestation"]["tag"] == T
     att = [c for c in bp.svc.doctor()["checks"] if c["id"] == "botport_attestation"][0]
-    assert att["ok"] and "release v0.2.1" in att["message"]
+    assert att["ok"] and f"release {T}" in att["message"]
 
 
 def test_setup_tag_from_config_and_re_attests_on_a_new_tag(bp, home):
@@ -220,7 +221,7 @@ def _jobs_home(tmp_path: Path) -> tuple[Path, Path]:
     prof = tmp_path / "prof"
     (prof / "cron").mkdir(parents=True)
     real = tmp_path / "real-jobs.json"
-    real.write_text(json.dumps({"jobs": [{"id": "j1", "paused_reason": "Imported from Grok Bot: resume once"}]}))
+    real.write_text(json.dumps({"jobs": [{"id": "j1", "paused_reason": "Imported from Grok Bot: resume once"}]}), encoding="utf-8")
     return prof, real
 
 
@@ -260,12 +261,12 @@ def test_ref_is_salted_hmac_and_stable(home):
     assert model.pair_ref("acme-support") == ref  # stable across calls
     salt_file = central(home) / store.SALT_FILE
     assert (salt_file.stat().st_mode & 0o777) == 0o600
-    salt = bytes.fromhex(salt_file.read_text().strip())
+    salt = bytes.fromhex(salt_file.read_text(encoding="utf-8").strip())
     assert len(salt) >= 16
     assert ref == "t-" + hmac.new(salt, b"acme-support", hashlib.sha256).hexdigest()[:16]
     assert ref != "t-" + hashlib.sha256(b"acme-support").hexdigest()[:16]  # not an unsalted hash
     store._salts.clear()  # a new process reads the same salt back
-    assert model.pair_ref("acme-support") == ref and salt_file.read_text().strip() == salt.hex()
+    assert model.pair_ref("acme-support") == ref and salt_file.read_text(encoding="utf-8").strip() == salt.hex()
 
 
 def test_ref_differs_across_installs_and_salts(tmp_path, monkeypatch):
@@ -283,7 +284,7 @@ def test_ref_differs_across_installs_and_salts(tmp_path, monkeypatch):
 def test_salt_file_link_refused(home, tmp_path):
     base = store.central_dir()
     fake = tmp_path / "salt"
-    fake.write_text("00" * 32)
+    fake.write_text("00" * 32, encoding="utf-8")
     os.chmod(fake, 0o600)
     os.symlink(fake, base / store.SALT_FILE)
     with pytest.raises(store.UnsafePath):
@@ -309,12 +310,12 @@ def test_jobs_file_parent_link_refused(home, tmp_path):
     root = _store.hermes_root()
     real = tmp_path / "elsewhere" / "cron"
     real.mkdir(parents=True, mode=0o700)
-    (real / "jobs.json").write_text(_json.dumps({"jobs": [{"id": "j1"}]}))
+    (real / "jobs.json").write_text(_json.dumps({"jobs": [{"id": "j1"}]}), encoding="utf-8")
     prof = root / "profiles" / "linked"
     prof.mkdir(parents=True, mode=0o700)
     (prof / "cron").symlink_to(real)
     assert importer._read_jobs_file(prof / "cron" / "jobs.json") is None
     good = root / "profiles" / "plain" / "cron"
     good.mkdir(parents=True, mode=0o700)
-    (good / "jobs.json").write_text(_json.dumps({"jobs": [{"id": "j2"}]}))
+    (good / "jobs.json").write_text(_json.dumps({"jobs": [{"id": "j2"}]}), encoding="utf-8")
     assert importer._read_jobs_file(good / "jobs.json") is not None

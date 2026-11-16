@@ -22,7 +22,7 @@ def repo():
 
 
 def git(*args, cwd=None):
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, encoding="utf-8").stdout
 
 
 def test_off_by_default_nothing_written(svc, home, monkeypatch):
@@ -40,7 +40,7 @@ def test_commit_after_pass_and_push_to_bare_remote(svc, home, monkeypatch, tmp_p
     G.set_on("acme-support", True, remote=str(bare))
     res = call(svc)
     assert res["ok"] and "Git history: commit" in res["line"] and "Pushed." in res["line"], res["line"]
-    assert (repo() / "instructions.md").read_text() == "You answer questions about Acme widgets."
+    assert (repo() / "instructions.md").read_text(encoding="utf-8") == "You answer questions about Acme widgets."
     assert (repo() / "skills" / "grok" / "widget-faq" / "SKILL.md").is_file()
     msg = git("log", "-1", "--format=%s", cwd=repo()).strip()
     assert msg == "PASS twin from Grok: 1 skill changed, instructions changed, memory changed"  # (MEMORY.md, one_prompt)
@@ -65,14 +65,14 @@ def test_secrets_scrubbed_history_excluded_and_key_files_never_read(svc, home, m
     World(svc, monkeypatch, twinned=True)
     h = store.profile_home("acme-support")
     (h / "memories").mkdir(parents=True)
-    (h / "memories" / "MEMORY.md").write_text(f"Short answers.\napi key {KEY}\n")
-    (h / ".env").write_text(f"ANTHROPIC_API_KEY={KEY}\n")
-    (h / "state.db").write_text("not copied")
+    (h / "memories" / "MEMORY.md").write_text(f"Short answers.\napi key {KEY}\n", encoding="utf-8")
+    (h / ".env").write_text(f"ANTHROPIC_API_KEY={KEY}\n", encoding="utf-8")
+    (h / "state.db").write_text("not copied", encoding="utf-8")
     G.set_on("acme-support", True)
     assert call(svc)["ok"]
     mirrored = git("ls-files", cwd=repo()).split()
     assert "memory/MEMORY.md" in mirrored and not any("env" in p or "state" in p or "history" in p for p in mirrored)
-    text = (repo() / "memory" / "MEMORY.md").read_text()
+    text = (repo() / "memory" / "MEMORY.md").read_text(encoding="utf-8")
     assert "Short answers." in text and KEY not in text
     assert KEY not in git("log", "-p", cwd=repo())
 

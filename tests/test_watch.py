@@ -41,10 +41,10 @@ def write_roster(folder: Path, name: str = "Acme Support", in_place: bool = True
     data = json.dumps({"schemaVersion": 1, "value": [{"id": "b-acme-0001", "name": name}]})
     target = folder / ROSTER
     if in_place:
-        target.write_text(data)
+        target.write_text(data, encoding="utf-8")
     else:  # the way a careful app saves: a new file moved over the old one
         tmp = folder / "roster.tmp"
-        tmp.write_text(data)
+        tmp.write_text(data, encoding="utf-8")
         os.replace(tmp, target)
 
 
@@ -109,12 +109,12 @@ def test_only_the_bot_list_file_counts():
 
 
 def test_signature_is_names_dates_and_sizes(cache, tmp_path):
-    (cache / REPLICA).write_text("{}")
-    (cache / "sand-secrets.json").write_text("{}")
+    (cache / REPLICA).write_text("{}", encoding="utf-8")
+    (cache / "sand-secrets.json").write_text("{}", encoding="utf-8")
     sig = watch.roster_signature(cache)
     st = (cache / ROSTER).stat()
     assert sig == ((ROSTER, st.st_mtime_ns, st.st_size, st.st_ino),)
-    (cache / REPLICA).write_text('{"more": 1}')  # a chat in Grok: not the bot list
+    (cache / REPLICA).write_text('{"more": 1}', encoding="utf-8")  # a chat in Grok: not the bot list
     assert watch.roster_signature(cache) == sig
     write_roster(cache, "Acme Support Desk")
     assert watch.roster_signature(cache) != sig
@@ -124,7 +124,7 @@ def test_signature_is_names_dates_and_sizes(cache, tmp_path):
 
 def test_a_linked_bot_list_is_not_followed(cache, tmp_path):
     elsewhere = tmp_path / "elsewhere.json"
-    elsewhere.write_text("{}")
+    elsewhere.write_text("{}", encoding="utf-8")
     (cache / ROSTER).unlink()
     (cache / ROSTER).symlink_to(elsewhere)
     assert watch.roster_signature(cache) == ()
@@ -143,7 +143,7 @@ def test_no_content_is_read(cache, run_watch, monkeypatch):
         r = run_watch(lambda: cache, force_poll)
         r.wait_scans(1)
         os.utime(cache / ROSTER, ns=(1, time.time_ns()))  # a new date is all a watcher may notice here
-        (cache / REPLICA).write_text("x")
+        (cache / REPLICA).write_text("x", encoding="utf-8")
         os.replace(cache / REPLICA, cache / "moved.blob")  # stir the folder so the event watcher looks again
         assert r.wait_fires(1), f"force_poll={force_poll}"
         r.close()
@@ -196,8 +196,8 @@ def test_other_files_do_not_wake_the_check(cache, run_watch, monkeypatch, force_
     r = run_watch(lambda: cache, force_poll)
     r.wait_scans(1)
     for i in range(5):  # chats, settings and whatever else the app saves next to the bot list
-        (cache / REPLICA).write_text(f"{{\"n\": {i}}}")
-        (cache / "sand-secrets.json").write_text(str(i))
+        (cache / REPLICA).write_text(f"{{\"n\": {i}}}", encoding="utf-8")
+        (cache / "sand-secrets.json").write_text(str(i), encoding="utf-8")
         time.sleep(0.05)
     time.sleep(0.8)
     assert r.fired == []
@@ -406,15 +406,15 @@ def test_a_rename_in_grok_reaches_the_twin_in_seconds(rig, capsys):  # noqa: F81
         assert watch._watcher.watching
         time.sleep(1.0)
         soul = hermes_home / "profiles" / "acme-helper" / "SOUL.md"
-        assert "spare parts" not in soul.read_text()
+        assert "spare parts" not in soul.read_text(encoding="utf-8")
         t0 = time.monotonic()
         world.step("rename")  # what the Grok app does when the owner renames the bot: it rewrites its bot list
         t_cmd = time.monotonic() - t0
         end = time.monotonic() + 15
-        while "spare parts" not in soul.read_text() and time.monotonic() < end:
+        while "spare parts" not in soul.read_text(encoding="utf-8") and time.monotonic() < end:
             time.sleep(0.02)
         took = time.monotonic() - t0
-        assert "spare parts" in soul.read_text(), "the new description reached the Hermes twin by itself"
+        assert "spare parts" in soul.read_text(encoding="utf-8"), "the new description reached the Hermes twin by itself"
         assert took < 10.0, f"took {took:.2f} s"
         end = time.monotonic() + 10
         name = None

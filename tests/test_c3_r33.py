@@ -30,7 +30,7 @@ def _files(root):
 
 
 def _registry(home):  # noqa: F811
-    return {p["pair_id"]: p for p in json.loads((central(home) / "pairs.json").read_text())["pairs"]}
+    return {p["pair_id"]: p for p in json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))["pairs"]}
 
 
 def test_R33_status_writes_nothing_and_the_tick_keeps_the_files(twin, home):  # noqa: F811
@@ -39,20 +39,20 @@ def test_R33_status_writes_nothing_and_the_tick_keeps_the_files(twin, home):  # 
     cache = central(home) / "status-cache.json"
     # botport now reads a new name in Grok, a refusal note no longer holds (nothing waits), a pasted note is stale
     mode(home, name="Acme Support Desk")
-    (central(home) / "stuck.json").write_text(json.dumps({PID: {"file": "SOUL.md", "line": 3, "at": "2000-01-01T09:00:00Z"}}))
-    (central(home) / "copied.json").write_text(json.dumps({PID: {"skill:gone": "0" * 64}}))
+    (central(home) / "stuck.json").write_text(json.dumps({PID: {"file": "SOUL.md", "line": 3, "at": "2000-01-01T09:00:00Z"}}), encoding="utf-8")
+    (central(home) / "copied.json").write_text(json.dumps({PID: {"skill:gone": "0" * 64}}), encoding="utf-8")
     before = _files(central(home))
     st = svc.status(fresh=True)
     p = next(x for x in st["pairs"] if x["pair_id"] == PID)
     assert p["grok"]["name"] == "Acme Support Desk" and p["state"] != "error"
     assert _files(central(home)) == before  # not one file written, created or touched
     # the tick keeps what the read learnt
-    old_cache = cache.read_text() if cache.exists() else ""
+    old_cache = cache.read_text(encoding="utf-8") if cache.exists() else ""
     svc.tick()
     assert _registry(home)[PID]["grok"]["name"] == "Acme Support Desk"
-    assert json.loads((central(home) / "stuck.json").read_text()) == {}
-    cached = json.loads(cache.read_text())["status"]
-    assert cache.read_text() != old_cache and cached["pairs"][0]["grok"]["name"] == "Acme Support Desk"
+    assert json.loads((central(home) / "stuck.json").read_text(encoding="utf-8")) == {}
+    cached = json.loads(cache.read_text(encoding="utf-8"))["status"]
+    assert cache.read_text(encoding="utf-8") != old_cache and cached["pairs"][0]["grok"]["name"] == "Acme Support Desk"
     # the same snapshot is not written twice
     at = cache.stat().st_mtime_ns
     svc.save_status()
@@ -61,7 +61,7 @@ def test_R33_status_writes_nothing_and_the_tick_keeps_the_files(twin, home):  # 
 
 def test_R33_the_published_snapshot_already_holds_the_open_conflicts(twin, home, monkeypatch):  # noqa: F811
     svc = twin
-    (central(home) / instr_sync.STATE_FILE).write_text(json.dumps({PID: {"state": "conflict"}}))
+    (central(home) / instr_sync.STATE_FILE).write_text(json.dumps({PID: {"state": "conflict"}}), encoding="utf-8")
     svc.status(fresh=True)  # (the choice is open from here on)
     seen = []
     orig = type(svc)._fold_open_conflicts
@@ -98,14 +98,14 @@ def test_R33_a_read_from_before_stop_twinning_never_brings_the_twin_back(twin, h
     mode(home, name="Acme Support Desk")
     assert any(p["pair_id"] == PID for p in svc.status(fresh=True)["pairs"])
     # another process (the terminal) stops twinning it after that read; the tick then keeps the read
-    (central(home) / "pairs.json").write_text(json.dumps({"pairs": []}))
+    (central(home) / "pairs.json").write_text(json.dumps({"pairs": []}), encoding="utf-8")
     svc.save_status()
-    assert json.loads((central(home) / "pairs.json").read_text()) == {"pairs": []}
+    assert json.loads((central(home) / "pairs.json").read_text(encoding="utf-8")) == {"pairs": []}
 
 
 def test_R33_a_twin_made_outside_the_plugin_is_taken_in_by_the_tick(twin, home):  # noqa: F811
     svc = twin
-    (central(home) / "pairs.json").write_text(json.dumps({"pairs": []}))  # botport knows it, the plugin does not
+    (central(home) / "pairs.json").write_text(json.dumps({"pairs": []}), encoding="utf-8")  # botport knows it, the plugin does not
     before = _files(central(home))
     assert any(p["pair_id"] == PID for p in svc.status(fresh=True)["pairs"])
     assert _files(central(home)) == before

@@ -186,6 +186,7 @@ def test_removal_sentences_say_when_an_absent_computer_loses_its_copies_and_keep
 
 
 # ---- the program that is in the way of sharing gets its name -----------------------------------------------------------
+@pytest.mark.skipif(sys.platform == "win32", reason="pretends to be macOS/Linux (os.name, lsof); pathlib cannot do that on Windows")
 def test_the_program_that_holds_the_share_port_is_named_when_the_system_says_it(monkeypatch):
     from hermes_plugins.grok_bot_twin.twin import fleet_server as server
     asked = []

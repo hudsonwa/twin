@@ -52,6 +52,8 @@ def no_grok(home, tmp_path):
 @pytest.fixture
 def with_botport(home, tmp_path):
     """The Grok app and a botport that is there but not verified yet; no twin."""
+    if os.name == "nt":
+        pytest.skip("the Grok-reading side (botport); Windows has no botport build and only follows")
     if not FAKE.is_file():
         pytest.skip("fake_botport.py not present")
     bindir = tmp_path / "bin"
@@ -340,7 +342,7 @@ def test_agents_md_has_the_steps_the_rules_and_the_check():
                  "No secrets in chat.", "No changes to Grok outside the guided steps.",
                  "Do not list your owner's bots.", "Do not go around a refusal.", "Wait for a clear yes.",
                  "## Check your work", "## Undo", "Setup is complete on this computer.",
-                 "This plugin never downloads botport, and neither do you."):
+                 "`--auto` the plugin never downloads botport, and neither do you."):
         assert must in flat, must
     assert "--allow-unattested" in flat and "never add `--allow-unattested`" in flat
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")

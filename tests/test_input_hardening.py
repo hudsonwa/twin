@@ -36,7 +36,7 @@ def _route(svc, monkeypatch, engine, pair=None):
 
 def test_read_json_and_jsonl_refuse_symlinks(home, tmp_path):
     outside = tmp_path / "outside.jsonl"
-    outside.write_text(json.dumps({"stolen": True}) + "\n")
+    outside.write_text(json.dumps({"stolen": True}) + "\n", encoding="utf-8")
     d = central(home)
     store.ensure_dir(d)
     (d / "events.jsonl").symlink_to(outside)
@@ -47,7 +47,7 @@ def test_read_json_and_jsonl_refuse_symlinks(home, tmp_path):
     os.mkfifo(d / "fifo.json")
     assert store.read_json(d / "fifo.json", None) is None
     # a regular file still reads
-    (d / "ok.json").write_text('{"a": 1}')
+    (d / "ok.json").write_text('{"a": 1}', encoding="utf-8")
     assert store.read_json(d / "ok.json") == {"a": 1}
 
 
@@ -66,7 +66,7 @@ def test_checklist_ignores_traversal_profile(svc, home, tmp_path, monkeypatch):
     evil = home / "x" / "evil"  # where <root>/profiles/../evil would land
     (evil / "cron").mkdir(parents=True)
     (evil / "cron" / "jobs.json").write_text(json.dumps(
-        {"jobs": [{"id": "job1", "name": "Acme Support: x", "enabled": False, "schedule": "0 9 * * *"}]}))
+        {"jobs": [{"id": "job1", "name": "Acme Support: x", "enabled": False, "schedule": "0 9 * * *"}]}), encoding="utf-8")
     pair = {"pair_id": "acme-support", "hermes": {"profile": "../evil"}, "grok": {"name": "Acme Support"},
             "by_hand": []}
     _route(svc, monkeypatch, None, pair)
@@ -98,12 +98,12 @@ def test_a_hermes_cli_folder_where_hermes_was_started_is_never_run(tmp_path, mon
     env = importer._env()
     assert env["PYTHONPATH"] == str(real)
     done = subprocess.run(argv + ["cron", "resume", "j1"], cwd=planted, env=env, capture_output=True, text=True,
-                          timeout=60)
+                          timeout=60, encoding="utf-8")
     assert done.stdout.strip() == "the real one ['-p', 'acme-support', 'cron', 'resume', 'j1']", done.stderr[-300:]
     assert not (planted / "planted-ran.txt").exists()
     # the flaw this guards against, shown once: without -P the folder's own package wins
     old = subprocess.run([sys.executable, "-m", "hermes_cli.main"], cwd=planted, env=env, capture_output=True,
-                         text=True, timeout=60)
+                         text=True, timeout=60, encoding="utf-8")
     assert old.stdout.strip() == "planted"
     # a folder of Hermes' code that somebody else could change is refused like any other program the plugin runs
     monkeypatch.setattr(importer, "_folders_safe",

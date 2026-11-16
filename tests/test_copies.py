@@ -39,7 +39,7 @@ def test_the_readme_and_the_page_hold_the_table_as_the_one_file_writes_it():
         assert want == path.read_text(encoding="utf-8"), \
             f"{path.name} differs from twin/copies.py: run `python3 twin/copies.py --write`"
     done = subprocess.run([sys.executable, str(ROOT / "twin" / "copies.py"), "--check"], capture_output=True,
-                          text=True, timeout=60)
+                          text=True, timeout=60, encoding="utf-8")
     assert done.returncode == 0, done.stdout + done.stderr
 
 
@@ -169,7 +169,7 @@ def test_the_table_prints_in_a_terminal():
     assert out[0] == "From Grok to Hermes:" and "  Name and description: By itself, in seconds, while Hermes is open." in out
     assert sum(1 for line in out if not line.startswith("  ")) == 3
     done = subprocess.run([sys.executable, str(ROOT / "twin" / "copies.py")], capture_output=True, text=True,
-                          timeout=60)
+                          timeout=60, encoding="utf-8")
     assert done.returncode == 0 and done.stdout.splitlines() == out
     assert subprocess.run([sys.executable, str(ROOT / "twin" / "copies.py"), "--nope"], capture_output=True,
                           timeout=60).returncode == 2

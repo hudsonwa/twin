@@ -117,6 +117,11 @@ def make(bot_name: Any, model: Any = None) -> dict:
 def twin_make(args: dict | None = None, **kwargs: Any) -> str:
     try:
         args = args if isinstance(args, dict) else {}
+        from . import config
+        from .from_hermes import from_messaging
+        if from_messaging(kwargs) and config.get("setup_from_messaging") is not True:
+            return json.dumps({"verdict": "FAIL: A twin cannot be set up from a messaging chat (Telegram and the "
+                                          "like); ask in Hermes on this computer.", "steps": [], "gaps": []})
         return json.dumps(make(args.get("bot_name"), args.get("model")))
     except Exception as e:  # (a tool never raises)
         return json.dumps({"verdict": f"FAIL: {type(e).__name__}", "steps": [], "gaps": []})

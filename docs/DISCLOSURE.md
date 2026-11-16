@@ -13,7 +13,10 @@ affiliated with xAI.
   secret store; the twin's own `.env` (owner-only, like Hermes' own keys) gets the value so its skills work.
   Never into instructions, skills, memory, logs or git.
 - **Sends over the network:** nothing by itself by default. Only what you switch on: sharing with your own
-  computers (private network only), skill sync through your own Grok account, a git push to the remote you name.
+  computers (private network only), skill sync through your own Grok account, a git push to the remote you name,
+  and, only when you run `hermes twin setup --auto` on a computer without botport, one download of the pinned
+  botport release file from GitHub (nothing is sent but the request). With `hermes twin telegram on`, your
+  messages to a twin and its replies pass through Telegram's servers, through the bot your Hermes already has.
   The behaviour test (every one-prompt run, `hermes twin test`, the `twin_make` tool) asks your Hermes model a few
   questions made from the bot's instructions; with a cloud model these go to that provider.
 - **Changes in Grok:** nothing, unless you allow Hermes → Grok for a twin, or ask the bot to move or come back.
@@ -56,10 +59,15 @@ Hermes process has. A request's chat turn is Hermes itself and gets the environm
 
 The repository also has a `tools/` folder with four programs for releases and tests (`pin_botport.py`,
 `fleet.py`, `fleet_fixture.py`, `routines_fixture.py`). The plugin never runs them, and they are not in the copy
-it puts into a twin's Hermes bot. Run by hand, `pin_botport.py` runs `gh attestation verify` on release files
-you downloaded yourself; the other three work only in a Hermes folder named on their command line.
+it puts into a twin's Hermes bot. Run by hand at release time (`pin_botport.py --tag vX.Y.Z`), `pin_botport.py`
+downloads that botport release with `gh release download`, runs `gh attestation verify` on its files, and writes
+the plugin's pin table and pinned tag; the other three work only in a Hermes folder named on their command line.
 
-botport is never downloaded, bundled or updated by the plugin. The one thing the plugin does with a download is
+botport is never bundled or updated by the plugin, and downloaded only by `hermes twin setup --auto` when this
+computer has none: the release file for this computer from the fixed address
+`https://github.com/hudsonwa/botport/releases/download/TAG/FILE` (https only, at most 64 MB), its SHA-256
+compared with the table this plugin version carries before anything else reads it, then handed to the same
+checks as a file you chose, and deleted once Hermes has its own copy. Otherwise the one thing the plugin does with a download is
 copy it: when you press "Choose the file…" or "Use it" on the Twins page (or run `hermes twin setup --file
 FILE`), it reads the file you picked (a regular file only, no links, at most 64 MB; the file is opened first
 and judged as opened, so nothing can be swapped in between; from the release archive, a gzip or plain tar

@@ -277,9 +277,9 @@ signed() {
   python3 -I - "$W/inbox.key" "$1" "$1.mac" <<'PY'
 import hashlib, hmac, sys
 try:
-    key = bytes.fromhex(open(sys.argv[1]).read().strip())
+    key = bytes.fromhex(open(sys.argv[1], encoding="utf-8").read().strip())
     body = open(sys.argv[2], "rb").read(65537)
-    mac = open(sys.argv[3]).read(200).strip()
+    mac = open(sys.argv[3], encoding="utf-8").read(200).strip()
 except Exception:
     sys.exit(1)
 want = hmac.new(key, b"grok-bot-twin-inbox/1\n" + body, hashlib.sha256).hexdigest()
@@ -458,12 +458,12 @@ def no(why):
     print("change refused: " + why); sys.exit(1)
 def signed(path, macpath, tag):
     body = open(path, "rb").read(1048577)
-    mac = open(macpath).read(200).strip()
+    mac = open(macpath, encoding="utf-8").read(200).strip()
     if len(body) > 1048576 or not hmac.compare_digest(mac, hmac.new(key, tag + body, hashlib.sha256).hexdigest()):
         return None
     return json.loads(body)
 try:
-    key = bytes.fromhex(open(sys.argv[1]).read().strip())
+    key = bytes.fromhex(open(sys.argv[1], encoding="utf-8").read().strip())
     if len(key) != 32:
         raise ValueError
     req = signed(sys.argv[2], sys.argv[3], b"grok-bot-twin-to-grok/1\n")
@@ -479,7 +479,7 @@ if req.get("id") != sys.argv[4]:
     no("the file is not that change")
 ANS = os.path.join(W, "to-grok-answered")
 try:
-    seen = open(ANS).read(2000000).split()
+    seen = open(ANS, encoding="utf-8").read(2000000).split()
 except OSError:
     seen = []
 if req["id"] in seen:
@@ -494,13 +494,13 @@ if not isinstance(serial, int) or not isinstance(want, int):
     no("the list of allowed bots has no serial")
 SER = os.path.join(W, "to-grok-allow-serial")
 try:
-    high = int(open(SER).read(40).strip() or 0)
+    high = int(open(SER, encoding="utf-8").read(40).strip() or 0)
 except (OSError, ValueError):
     high = 0
 if serial < high:
     no("the list of allowed bots is older than one this box has seen")
 if serial > high:  # the newest signed list seen: an older one copied back in later is refused
-    with open(SER + ".new", "w") as f:
+    with open(SER + ".new", "w", encoding="utf-8") as f:
         f.write("%d\n" % serial)
     os.replace(SER + ".new", SER)
 if serial < want:
@@ -517,7 +517,7 @@ except ValueError:
 if (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - made).days >= 14:
     no("it is older than 14 days")
 if sys.argv[5] == "show":
-    with open(ANS, "a") as f:
+    with open(ANS, "a", encoding="utf-8") as f:
         f.write(req["id"] + "\n")
     sys.stdout.write(str(req.get("message") or "") + "\n")
 else:
@@ -593,7 +593,7 @@ def _put(root: Path, rel: str, data: bytes) -> Path:
     except FileNotFoundError:
         pass
     tmp = here / f".{parts[-1]}.{_random.token_hex(4)}.tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0), 0o600)
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)

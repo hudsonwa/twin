@@ -95,7 +95,7 @@ def data_for(cmd, vals, flags, mode):
         hh, prof = one("hermes-home"), one("profile", "acme-support")
         if hh and "dry-run" not in flags:  # real botport: the twin pairing owns the profile it made
             os.makedirs(os.path.join(hh, "profiles", prof), exist_ok=True)
-            with open(os.path.join(hh, "profiles", prof, MIRROR_STATE), "w") as fh:
+            with open(os.path.join(hh, "profiles", prof, MIRROR_STATE), "w", encoding="utf-8") as fh:
                 fh.write("{}")
         return {"dry_run": "dry-run" in flags, "skipped": [], "pairs": [{**sync_entry("acme-support"),
                 "waiting": [] if "dry-run" in flags else CREATE_WAITING,
@@ -181,11 +181,11 @@ def main():
     mode = {}
     if state:
         try:
-            with open(os.path.join(state, "fake_mode.json")) as fh:
+            with open(os.path.join(state, "fake_mode.json"), encoding="utf-8") as fh:
                 mode = json.load(fh)
         except (OSError, ValueError):
             mode = {}
-        with open(os.path.join(state, "fake_calls.jsonl"), "a") as fh:
+        with open(os.path.join(state, "fake_calls.jsonl"), "a", encoding="utf-8") as fh:
             fh.write(json.dumps({"argv": argv, "env": dict(os.environ), "exe": sys.argv[0]}) + "\n")
     cmd = " ".join(pos[:2]) if pos and pos[0] in ("twin", "grok") else (pos[0] if pos else "")
     m = mode.get("mode", "normal")

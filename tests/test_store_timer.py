@@ -24,7 +24,7 @@ def test_atomic_write_perms(home, tmp_path):
         assert _mode(p) == 0o700
     assert not [f for f in os.listdir(d) if f.endswith(".tmp")]  # no temp leftovers
     store.atomic_write_text(d / "x.json", "replaced")
-    assert (d / "x.json").read_text() == "replaced" and _mode(d / "x.json") == 0o600
+    assert (d / "x.json").read_text(encoding="utf-8") == "replaced" and _mode(d / "x.json") == 0o600
 
 
 def test_atomic_write_cleans_up_on_failure(home, tmp_path):
@@ -38,17 +38,17 @@ def test_atomic_write_cleans_up_on_failure(home, tmp_path):
 
 def test_symlinks_not_followed(home, tmp_path):
     target = tmp_path / "outside.json"
-    target.write_text('{"secret": 1}')
+    target.write_text('{"secret": 1}', encoding="utf-8")
     link = tmp_path / "link.json"
     link.symlink_to(target)
     assert store.read_json(link, "default") == "default"
     store.atomic_write_json(link, {"new": 1})  # replaces the link itself, never writes through it
-    assert target.read_text() == '{"secret": 1}' and not link.is_symlink()
+    assert target.read_text(encoding="utf-8") == '{"secret": 1}' and not link.is_symlink()
     jl = tmp_path / "events.jsonl"
     jl.symlink_to(target)
     with pytest.raises(OSError):
         store.append_jsonl(jl, {"a": 1})
-    assert target.read_text() == '{"secret": 1}'
+    assert target.read_text(encoding="utf-8") == '{"secret": 1}'
 
 
 def test_plugin_files_are_private(svc, home):
@@ -66,7 +66,7 @@ def test_plugin_files_are_private(svc, home):
 def test_events_capped(svc, home):
     for i in range(650):
         svc.emit("changed", None, {"n": i})
-    lines = (central(home) / "events.jsonl").read_text().splitlines()
+    lines = (central(home) / "events.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) <= 600
 
 

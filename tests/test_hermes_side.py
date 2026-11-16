@@ -35,9 +35,9 @@ def test_soul_facts_reads_what_botport_keeps_and_whether_there_are_instructions(
     assert hs.soul_facts(prof) == {"name": "Acme Support", "description": "Answers questions about Acme widgets.",
                                    "own": "", "has_instructions": False}
     # botport's own instructions section (a twin started from an export) counts, and so does hand-written text
-    (prof / "SOUL.md").write_text(BOTPORT_SOUL + "<!-- botport:begin persona -->\nBe brief.\n<!-- botport:end persona -->\n")
+    (prof / "SOUL.md").write_text(BOTPORT_SOUL + "<!-- botport:begin persona -->\nBe brief.\n<!-- botport:end persona -->\n", encoding="utf-8")
     assert hs.soul_facts(prof)["has_instructions"] is True
-    (prof / "SOUL.md").write_text("Be kind.\n" + BOTPORT_SOUL)
+    (prof / "SOUL.md").write_text("Be kind.\n" + BOTPORT_SOUL, encoding="utf-8")
     assert hs.soul_facts(prof)["has_instructions"] is True
 
 
@@ -53,7 +53,7 @@ def test_pasted_instructions_go_into_their_own_block_and_nothing_else_changes(ho
     assert facts["name"] == "Acme Support"  # botport's sections still read the same
     # a second paste replaces the block and hands back what was there
     assert hs.write_instructions(prof, "Second version.") == "You are Acme Support.\nBe friendly and brief."
-    assert (prof / "SOUL.md").read_text().count(hs.BEGIN) == 1
+    assert (prof / "SOUL.md").read_text(encoding="utf-8").count(hs.BEGIN) == 1
     # an empty text takes the block out again: the file is exactly what botport wrote
     assert hs.write_instructions(prof, "") == "Second version."
     assert (prof / "SOUL.md").read_text(encoding="utf-8") == BOTPORT_SOUL
@@ -75,7 +75,7 @@ def test_a_linked_profile_or_soul_file_is_never_written(home, tmp_path):
     (prof / "SOUL.md").symlink_to(target)
     with pytest.raises(OSError):
         hs.write_instructions(prof, "text")
-    assert target.read_text() == "keep me"
+    assert target.read_text(encoding="utf-8") == "keep me"
     assert hs.soul_facts(prof)["has_instructions"] is False  # a link is not read either
 
 
@@ -106,7 +106,7 @@ def test_a_new_twin_gets_the_owners_default_model_and_nothing_secret(home):
     got = yaml.safe_load((prof / "config.yaml").read_text(encoding="utf-8"))
     assert got == {"model": {"default": "example-model", "provider": "example"},
                    "fallback_providers": [{"provider": "other", "model": "small-model"}]}
-    assert fake_key() not in (prof / "config.yaml").read_text() and "invalid" not in (prof / "config.yaml").read_text()
+    assert fake_key() not in (prof / "config.yaml").read_text(encoding="utf-8") and "invalid" not in (prof / "config.yaml").read_text(encoding="utf-8")
     assert_private(prof / "config.yaml")
     assert hs.profile_model(prof) == "example-model"
     assert hs.copy_default_model(prof, home) is None  # it has a model now: never overwritten
@@ -264,11 +264,11 @@ def test_the_release_tool_writes_only_what_it_checked(tmp_path):
     before = pins.PINS_FILE.read_bytes()
     run = lambda *a: subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "pin_botport.py"), str(tmp_path),  # noqa: E731
                                      "--tag", "v0.2.1", *a], capture_output=True, text=True, timeout=60,
-                                    stdin=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin"})
-    cp = run("--no-verify")
+                                     stdin=subprocess.DEVNULL, env={"PATH": "/usr/bin:/bin"}, encoding="utf-8")
+    cp = run("--no-verify", "--dry-run")
     assert cp.returncode == 0 and hashlib.sha256(program).hexdigest() in cp.stdout
     assert hashlib.sha256(buf.getvalue()).hexdigest() in cp.stdout and "dry run" in cp.stdout
-    cp = run("--no-verify", "--write")
+    cp = run("--no-verify")  # writing is the default: unverified, nothing is written
     assert cp.returncode != 0 and "not verified" in cp.stderr
     cp = run("--write")  # the default needs gh; this PATH has none, so it stops before anything is read
     assert cp.returncode != 0 and "gh is not installed" in cp.stderr

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+from pathlib import Path
 
 import pytest
 
@@ -54,16 +56,16 @@ class FakeEngine:
         if not same:
             bk = h / "backups" / "botport" / f"restore-{len(self.calls)}"
             bk.mkdir(parents=True, exist_ok=True)
-            (bk / "SOUL.md").write_text((h / "SOUL.md").read_text() if (h / "SOUL.md").exists() else "")
-            (h / "botport-manual.md").write_text("# Set up by hand\n- connectors: none\n")
-        (h / "SOUL.md").write_text(doc["instructions"])
+            (bk / "SOUL.md").write_text((h / "SOUL.md").read_text(encoding="utf-8") if (h / "SOUL.md").exists() else "", encoding="utf-8")
+            (h / "botport-manual.md").write_text("# Set up by hand\n- connectors: none\n", encoding="utf-8")
+        (h / "SOUL.md").write_text(doc["instructions"], encoding="utf-8")
         for s in doc["skills"]:
             d = h / "skills" / "grok" / s["name"]
             d.mkdir(parents=True, exist_ok=True)
-            (d / "SKILL.md").write_text(s["instructions"])
+            (d / "SKILL.md").write_text(s["instructions"], encoding="utf-8")
         mem = h / "skills" / "grok" / "grok-memory"  # (botport keeps Grok's memory as a memory skill)
         mem.mkdir(parents=True, exist_ok=True)
-        (mem / "SKILL.md").write_text("\n§\n".join(doc["memories"]))
+        (mem / "SKILL.md").write_text("\n§\n".join(doc["memories"]), encoding="utf-8")
         self.last = doc
         if self.conflict:
             return {"in_sync": False, "_rc": 3,
@@ -75,12 +77,12 @@ class FakeEngine:
         self.refuse_owned(prof)
         doc = json.loads(open(export_file, encoding="utf-8").read())["bots"][0]
         h = self._home(prof)
-        same = (h / "SOUL.md").read_text() == doc["instructions"]
+        same = (h / "SOUL.md").read_text(encoding="utf-8") == doc["instructions"]
         same = same and all((h / "skills" / "grok" / s["name"] / "SKILL.md").is_file() and
-                            (h / "skills" / "grok" / s["name"] / "SKILL.md").read_text() == s["instructions"]
+                            (h / "skills" / "grok" / s["name"] / "SKILL.md").read_text(encoding="utf-8") == s["instructions"]
                             for s in doc["skills"])
         mem = h / "skills" / "grok" / "grok-memory" / "SKILL.md"
-        same = same and (mem.read_text() if mem.exists() else "") == "\n§\n".join(doc["memories"])
+        same = same and (mem.read_text(encoding="utf-8") if mem.exists() else "") == "\n§\n".join(doc["memories"])
         rc = 0 if same and not self.conflict else 1
         return {"_rc": rc if self.drift_rc is None else self.drift_rc}
 
@@ -111,7 +113,7 @@ class World:
                                     "hermes": {"profile": "acme-support"}, **({} if owned else {"driver": "bot"})}
         h = store.ensure_dir(store.profile_home("acme-support"))
         if owned:
-            (h / one_prompt.MIRROR_STATE).write_text("{}")  # botport twin create: its pairing owns the profile
+            (h / one_prompt.MIRROR_STATE).write_text("{}", encoding="utf-8")  # botport twin create: its pairing owns the profile
 
     def _list(self):
         self.listed += 1
@@ -142,7 +144,7 @@ def call(svc, **kw):
 
 def log_lines(home):
     p = home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "calls.jsonl"
-    return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
+    return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
 
 
 # ---- the tool -------------------------------------------------------------------------------------------------
@@ -155,7 +157,7 @@ def test_one_call_makes_a_tested_twin(svc, home, monkeypatch):
     assert w.created == 1 and [c[0] for c in w.eng.calls] == ["remove", "sync", "drift"]
     assert w.imports == [("acme-support", "Acme Support", ["instructions", "connectors"])]
     prof = store.profile_home("acme-support")
-    assert (prof / "SOUL.md").read_text() == "You answer questions about Acme widgets."
+    assert (prof / "SOUL.md").read_text(encoding="utf-8") == "You answer questions about Acme widgets."
     assert res["compare"] == {"passed": 3, "total": 4}
     log = log_lines(home)
     assert len(log) == 1 and log[0]["result"] == "PASS" and log[0]["bot"] == "Acme Support"
@@ -182,12 +184,12 @@ def test_existing_twin_is_used_and_grok_list_not_read(svc, home, monkeypatch):
 def test_fail_restores_the_snapshot(svc, home, monkeypatch):
     w = World(svc, monkeypatch, twinned=True, drift_rc=1)
     prof = store.profile_home("acme-support")
-    (prof / "SOUL.md").write_text("Earlier soul.")
+    (prof / "SOUL.md").write_text("Earlier soul.", encoding="utf-8")
     res = call(svc)
     assert not res["ok"] and res["restored"]
     assert res["line"].startswith("FAIL: Acme Support: the Hermes bot does not match")
     assert "put back as it was before this call" in res["line"]
-    assert (prof / "SOUL.md").read_text() == "Earlier soul."
+    assert (prof / "SOUL.md").read_text(encoding="utf-8") == "Earlier soul."
     assert not (prof / "skills").exists()  # a part that was not there before is gone again
     assert not (prof / "backups" / "botport").exists()
     assert not (prof / "botport-manual.md").exists()  # botport's own extra files are put back too (M2)
@@ -205,7 +207,7 @@ def test_failed_behaviour_test_fails_and_restores(svc, home, monkeypatch):
     monkeypatch.setattr(svc, "_battery_path", lambda pid: home / "nope.json")
     res = call(svc)
     assert not res["ok"] and "behaviour test 2/3" in res["line"] and res["restored"]
-    assert seen["from_export"].endswith("one-prompt/exports/acme-support.json")
+    assert Path(seen["from_export"]).parts[-3:] == ("one-prompt", "exports", "acme-support.json")
 
 
 def test_passing_behaviour_test_is_in_the_line(svc, home, monkeypatch):
@@ -225,8 +227,8 @@ def test_secrets_are_scrubbed_from_every_input(svc, home, monkeypatch):
     assert res["ok"], res
     assert res["counts"]["scrubbed_lines"] == 3 and res["counts"]["memory"] == 2
     assert "password-like" in res["line"]
-    written = "".join(p.read_text() for p in store.profile_home("acme-support").rglob("*") if p.is_file())
-    export = (home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "exports" / "acme-support.json").read_text()
+    written = "".join(p.read_text(encoding="utf-8") for p in store.profile_home("acme-support").rglob("*") if p.is_file())
+    export = (home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "exports" / "acme-support.json").read_text(encoding="utf-8")
     for text in (written, export, json.dumps(res), json.dumps(log_lines(home))):
         assert key not in text
     assert "Be kind." in written and "Be brief." in written
@@ -278,10 +280,10 @@ def test_one_run_per_bot(svc, home, monkeypatch):
 def test_no_twin_in_default_profile(svc, home, monkeypatch):
     w = World(svc, monkeypatch, twinned=True)
     w.reg["acme-support"]["hermes"]["profile"] = "default"
-    (home / "SOUL.md").write_text("The owner's own default bot.")
+    (home / "SOUL.md").write_text("The owner's own default bot.", encoding="utf-8")
     res = call(svc)
     assert not res["ok"] and "no Hermes bot of its own" in res["line"] and not w.eng.calls
-    assert (home / "SOUL.md").read_text() == "The owner's own default bot."
+    assert (home / "SOUL.md").read_text(encoding="utf-8") == "The owner's own default bot."
 
 
 def test_bot_not_in_grok_is_a_fail(svc, home, monkeypatch):
@@ -405,10 +407,10 @@ def back_runner(home, facts=(), skills=(), ok=True):
             out = home / "plugin-data" / "grok-bot-twin" / "sync" / "acme-support" / "hermes-out"
             (out / "memory").mkdir(parents=True, exist_ok=True)
             (out / "memory" / "memory.jsonl").write_text(
-                "".join(json.dumps({"tier": "note", "fact": f}) + "\n" for f in facts))
+                "".join(json.dumps({"tier": "note", "fact": f}) + "\n" for f in facts), encoding="utf-8")
             for n, t in skills:
                 (out / "normalized" / "skills" / n).mkdir(parents=True, exist_ok=True)
-                (out / "normalized" / "skills" / n / "SKILL.md").write_text(t)
+                (out / "normalized" / "skills" / n / "SKILL.md").write_text(t, encoding="utf-8")
             return {"_rc": 0}
         if args[0] == "drift" and "--direction=g2h" not in args and not ok:
             return {"in_sync": False, "items": [{"area": "skill", "path": "skills/x", "status": "update"}], "_rc": 1}
@@ -501,16 +503,16 @@ def test_ext_1_the_bots_come_back_steps_show_memory_and_skills_and_wait_for_a_ye
     one-prompt guide names the Hermes -> Grok switch that lets them come back at all."""
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
-    skill = " ".join((root / "grok" / "SKILL-twin.md").read_text().split())
+    skill = " ".join((root / "grok" / "SKILL-twin.md").read_text(encoding="utf-8").split())
     back = skill[skill.index("## Bring yourself back to Grok"):]
     assert ("before any UpdateMemory or UpdateSkill, show the user every memory fact and every skill name from the "
             "bundle and wait for their yes in the chat. Without a yes, apply only `bundle.routines_to_enable`") in back
     assert back.index("wait for their yes") < back.index("save its `fact` with **UpdateMemory**")
-    guide = " ".join((root / "docs" / "ONE-PROMPT.md").read_text().split())
+    guide = " ".join((root / "docs" / "ONE-PROMPT.md").read_text(encoding="utf-8").split())
     row = next(r for r in guide.split("| \"Come back to Grok\"")[1:])
     assert "only when you allowed Hermes → Grok for that twin (`hermes twin to-grok TWIN allow`" in row
     for doc in ("README.md", "AGENTS.md"):
-        text = " ".join((root / doc).read_text().split())
+        text = " ".join((root / doc).read_text(encoding="utf-8").split())
         assert "only when you allowed Hermes → Grok" in text or "only under that same allow" in text, doc
 
 
@@ -613,14 +615,15 @@ def test_symlinked_part_is_snapshotted_as_a_link_and_restored(svc, home, monkeyp
     prof = store.profile_home("acme-support")
     shared = tmp_path / "shared-skills"
     (shared / "kept").mkdir(parents=True)
-    (shared / "kept" / "SKILL.md").write_text("# kept")
+    (shared / "kept" / "SKILL.md").write_text("# kept", encoding="utf-8")
     (prof / "skills").symlink_to(shared)
     res = call(svc)
     assert not res["ok"] and res["restored"]
     assert (prof / "skills").is_symlink() and (prof / "skills").resolve() == shared.resolve()
-    assert (shared / "kept" / "SKILL.md").read_text() == "# kept"
+    assert (shared / "kept" / "SKILL.md").read_text(encoding="utf-8") == "# kept"
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs a FIFO; Windows has none")
 def test_restore_leaves_alone_what_was_not_snapshotted(home, tmp_path):
     """M3: a part the manifest does not record (here: a FIFO) is never deleted on restore."""
     import os as _os
@@ -628,7 +631,7 @@ def test_restore_leaves_alone_what_was_not_snapshotted(home, tmp_path):
     prof.mkdir()
     _os.mkfifo(prof / "SOUL.md")
     snap = one_prompt.snapshot("acme-support", prof)
-    assert json.loads((snap / "manifest.json").read_text())["parts"]["SOUL.md"]["kind"] == "other"
+    assert json.loads((snap / "manifest.json").read_text(encoding="utf-8"))["parts"]["SOUL.md"]["kind"] == "other"
     one_prompt.restore(snap, prof)
     assert (prof / "SOUL.md").exists()
 
@@ -639,9 +642,9 @@ def _battery_world(svc, home, monkeypatch, ok=True):
 
     def bt(pid, battery=None, from_export=None):
         if from_export:
-            made.append(json.loads(open(from_export).read())["bots"][0]["instructions"])
+            made.append(json.loads(open(from_export, encoding="utf-8").read())["bots"][0]["instructions"])
             svc._battery_path(pid).parent.mkdir(parents=True, exist_ok=True)
-            svc._battery_path(pid).write_text(json.dumps({"cases": made[-1]}))
+            svc._battery_path(pid).write_text(json.dumps({"cases": made[-1]}), encoding="utf-8")
         return {"passed": 1, "total": 1, "ok": ok if callable(ok) is False else ok()}
     monkeypatch.setattr(svc, "behaviour_test", bt)
     return w, made
@@ -662,11 +665,11 @@ def test_cases_from_a_rolled_back_call_are_not_kept(svc, home, monkeypatch):
     _w, made = _battery_world(svc, home, monkeypatch, ok=lambda: state["ok"])
     assert call(svc)["ok"]
     battery = svc._battery_path("acme-support")
-    old = battery.read_text()
+    old = battery.read_text(encoding="utf-8")
     state["ok"] = False
     res = call(svc, instructions="You answer questions about Acme gadgets.")
     assert not res["ok"] and res["restored"]
-    assert battery.read_text() == old
+    assert battery.read_text(encoding="utf-8") == old
     state["ok"] = True
     assert call(svc, instructions="You answer questions about Acme gadgets.")["ok"]
     assert made[-1] == "You answer questions about Acme gadgets." and len(made) == 3  # made again, not reused
@@ -731,7 +734,7 @@ def test_ext_3_existing_botport_paired_twin_is_refused_untouched(svc, home, monk
     pairs.json entry are exactly as they were. back-to-grok refuses it the same way."""
     w = World(svc, monkeypatch, twinned=True, owned=True)
     prof = store.profile_home("acme-support")
-    (prof / "SOUL.md").write_text("Made by botport twin create.")
+    (prof / "SOUL.md").write_text("Made by botport twin create.", encoding="utf-8")
     before, reg_before = _tree(prof), json.dumps(w.reg, sort_keys=True)
     res = call(svc)
     assert not res["ok"] and not res["restored"], res
@@ -780,7 +783,7 @@ def test_ext_3_bot_driven_command_dry_run_yes_idempotent_and_owner_only(svc, hom
     w = World(svc, monkeypatch, twinned=True, owned=True)
     monkeypatch.setattr(service, "get_service", lambda: svc)
     prof = store.profile_home("acme-support")
-    (prof / "SOUL.md").write_text("Made by botport twin create.")
+    (prof / "SOUL.md").write_text("Made by botport twin create.", encoding="utf-8")
     before, reg_before = _tree(prof), json.dumps(w.reg, sort_keys=True)
     rc, out = _bot_driven(["acme-support", "--dry-run"], monkeypatch, capsys)
     assert rc == 0 and "no longer follows renames" in out and "one-prompt/converted/acme-support/" in out
@@ -796,7 +799,7 @@ def test_ext_3_bot_driven_command_dry_run_yes_idempotent_and_owner_only(svc, hom
     rc, out = _bot_driven(["acme-support"], monkeypatch, capsys, typed="yes\n")
     assert rc == 0 and "is bot-driven now" in out, out
     assert w.eng.calls == [("remove", "acme-support")] and not (prof / one_prompt.MIRROR_STATE).exists()
-    assert (prof / "SOUL.md").read_text() == "Made by botport twin create." and w.reg["acme-support"]["driver"] == "bot"
+    assert (prof / "SOUL.md").read_text(encoding="utf-8") == "Made by botport twin create." and w.reg["acme-support"]["driver"] == "bot"
     copies = list((home / "plugin-data" / "grok-bot-twin" / "one-prompt" / "converted" / "acme-support").iterdir())
     assert len(copies) == 1 and (copies[0] / "home" / one_prompt.MIRROR_STATE).is_file()
     after, reg_after = _tree(prof), json.dumps(w.reg, sort_keys=True)
@@ -884,7 +887,7 @@ def test_only_files_this_call_wrote_are_grepped_for_secrets(svc, home, monkeypat
     prof = store.profile_home("acme-support")
     stock = prof / "skills" / "software-development" / "example-config"
     stock.mkdir(parents=True)
-    (stock / "SKILL.md").write_text("Example: OPENAI_API_KEY=sk-" + "a1B2c3D4" * 6)  # Hermes' own bundled text
+    (stock / "SKILL.md").write_text("Example: OPENAI_API_KEY=sk-" + "a1B2c3D4" * 6, encoding="utf-8")  # Hermes' own bundled text
     res = call(svc)
     assert res["ok"], res["line"]  # unchanged by this call: not its leak
     leaky = [{"name": "widget-faq", "description": "Widget FAQ",
@@ -898,10 +901,10 @@ def test_memory_lands_in_hermes_own_memory_file_once(svc, home, monkeypatch):
     World(svc, monkeypatch)
     prof = store.profile_home("acme-support")
     assert call(svc, memory=["The owner prefers short answers.", "Ships on Fridays."])["ok"]
-    mem = (prof / "memories" / "MEMORY.md").read_text()
+    mem = (prof / "memories" / "MEMORY.md").read_text(encoding="utf-8")
     assert mem == "The owner prefers short answers.\n§\nShips on Fridays."
     assert call(svc, memory=["the owner prefers  SHORT answers.", "Ships on Fridays.", "Closed on Sundays."])["ok"]
-    assert (prof / "memories" / "MEMORY.md").read_text().split("\n§\n") == [
+    assert (prof / "memories" / "MEMORY.md").read_text(encoding="utf-8").split("\n§\n") == [
         "The owner prefers short answers.", "Ships on Fridays.", "Closed on Sundays."]  # a union, no duplicates
 
 
@@ -911,7 +914,7 @@ def test_a_fact_back_from_grok_with_its_from_hermes_tag_is_not_added_twice(svc, 
     prof = store.profile_home("acme-support")
     assert call(svc, memory=["Ships on Fridays."])["ok"]
     assert call(svc, memory=["Ships on Fridays.", "(from Hermes) Ships on  fridays.", "(From Hermes)Closed on Sundays."])["ok"]
-    assert (prof / "memories" / "MEMORY.md").read_text().split("\n§\n") == [
+    assert (prof / "memories" / "MEMORY.md").read_text(encoding="utf-8").split("\n§\n") == [
         "Ships on Fridays.", "(From Hermes)Closed on Sundays."]
 
 
@@ -949,7 +952,7 @@ def test_a_new_twin_gets_the_owners_model_server(svc, home, monkeypatch):
     orig = World._make
     def make(self):
         orig(self)
-        (prof / "config.yaml").write_text('model:\n  default: "sparks"\n  provider: "custom"\n')
+        (prof / "config.yaml").write_text('model:\n  default: "sparks"\n  provider: "custom"\n', encoding="utf-8")
     monkeypatch.setattr(World, "_make", make)
     res = call(svc)
     assert res["ok"] and res["model_server"] is True
@@ -1013,7 +1016,7 @@ def test_every_path_hands_botport_the_one_spec(svc, home, monkeypatch, tmp_path)
                         {"in_sync": True, "items": [], "h2g": {"items": []}, "_rc": 0})
     sync_both.sync_bot(svc, "acme-support", {"instructions": "You answer."})
     specs = {a.split("=", 1)[1] for r in runs for a in r if a.startswith("--spec=")}
-    assert specs == {seen[0]} and 'skill_category = "grok-twin"' in open(seen[0]).read()
+    assert specs == {seen[0]} and 'skill_category = "grok-twin"' in open(seen[0], encoding="utf-8").read()
 
 
 # ---- secrets by reference on the one-prompt paths (docs/SECRETS.md) ------------------------------------------------
@@ -1060,9 +1063,9 @@ def test_from_grok_keeps_a_key_by_reference_not_blanked(svc, home, monkeypatch, 
     assert res["ok"], res["line"]
     assert "1 key(s) kept by reference (OPENAI_API_KEY)" in res["line"]
     prof = store.profile_home("acme-support")
-    soul = (prof / "SOUL.md").read_text()
+    soul = (prof / "SOUL.md").read_text(encoding="utf-8")
     assert "${OPENAI_API_KEY}" in soul and KEY not in soul and "Be brief." in soul  # not a hidden line
-    assert f"OPENAI_API_KEY={KEY}" in (prof / ".env").read_text() and mem.data["OPENAI_API_KEY"] == KEY
+    assert f"OPENAI_API_KEY={KEY}" in (prof / ".env").read_text(encoding="utf-8") and mem.data["OPENAI_API_KEY"] == KEY
     assert KEY not in json.dumps(res) and KEY not in _all_text(home)  # export, snapshots, log, lists: no value
 
 
@@ -1077,7 +1080,7 @@ def test_without_an_os_store_the_key_is_hidden_as_before(svc, home, monkeypatch)
     World(svc, monkeypatch)
     res = call(svc, instructions=f"You answer.\nOPENAI_API_KEY={KEY}")
     assert res["ok"] and "kept by reference" not in res["line"] and "1 line(s) left out as password-like" in res["line"]
-    assert KEY not in (store.profile_home("acme-support") / "SOUL.md").read_text()
+    assert KEY not in (store.profile_home("acme-support") / "SOUL.md").read_text(encoding="utf-8")
 
 
 def test_back_keeps_the_bots_key_by_reference_too(svc, home, monkeypatch, mem):

@@ -361,7 +361,9 @@ def _end(proc: "subprocess.Popen") -> None:
             elif step == "term" and os.name != "nt":
                 import signal
                 os.killpg(proc.pid, signal.SIGTERM)
-            elif step == "term":
+            elif step == "term":  # the whole tree, while the program started first can still name its children
+                from . import osflags as _osflags
+                _osflags.kill_tree(proc.pid)
                 proc.terminate()
             elif os.name != "nt":
                 import signal

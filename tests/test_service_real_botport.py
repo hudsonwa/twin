@@ -200,7 +200,7 @@ def test_real_mode_end_to_end(rig):
     assert all(p["state"] == "in_step" and p["demo"] is False for p in made["pairs"])
     assert {e["pair_id"] for e in _events(svc, "created")} == {"acme-helper", "recipe-planner"}
     assert "Acme Helper" in _soul(home, "acme-helper")
-    reg = json.loads((central(home) / "pairs.json").read_text())
+    reg = json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))
     assert sorted(p["pair_id"] for p in reg["pairs"]) == ["acme-helper", "recipe-planner"]
     again = post("/twins/preview", {"grok_ids": [ACME]})
     assert again["pairs"] == [] and again["skipped"][0]["reason"] == "already_twinned"
@@ -252,7 +252,7 @@ def test_real_mode_end_to_end(rig):
     # 5. the same item changed on both sides: a conflict -> keep Grok -> restore points -> restore
     soul = home / "profiles" / "acme-helper" / "SOUL.md"
     soul.write_text(_soul(home, "acme-helper").replace("Answers questions about Acme widgets.",
-                                                       "Answers questions about Acme widgets, politely."))
+                                                       "Answers questions about Acme widgets, politely."), encoding="utf-8")
     world.step("rename")
     s = _timed("sync --all (conflict)", post, "/sync", {})
     acme_s = next(x for x in s["pairs"] if x["pair_id"] == "acme-helper")
@@ -324,7 +324,7 @@ def test_real_mode_end_to_end(rig):
     assert [p["pair_id"] for p in get("/status")["pairs"]] == ["acme-helper"]
     gone = api.get(P + "/pairs/recipe-planner/conflicts")
     assert gone.status_code == 200 and gone.json()["error"]["code"] == "pair_not_found"
-    reg = json.loads((central(home) / "pairs.json").read_text())
+    reg = json.loads((central(home) / "pairs.json").read_text(encoding="utf-8"))
     assert [p["pair_id"] for p in reg["pairs"]] == ["acme-helper"]
 
     # nothing outgoing carries the fake key or an absolute path of this machine's temp folder

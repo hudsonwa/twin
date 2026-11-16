@@ -19,6 +19,48 @@
     "x86_64-unknown-linux-musl": "67508e19cffb6a25de86a31ded29eb3aa3cc3894ac745fe44a63e86b257f83f3",
     "aarch64-unknown-linux-musl": "250e7a5102ae33657f8e125e9160b2f94da528756b2b0b3c09a8ac0067913ab2"
    }
+  },
+  "v0.3.0": {
+   "archives": {
+    "botport-aarch64-apple-darwin.tar.gz": "1a0fd182e2f911b99edecaefbea262dbb2c6fa6a7dfcd55a935d4b0992962f42",
+    "botport-x86_64-apple-darwin.tar.gz": "9a6912449aba78c162bbac2c221d5c91061c6044977ae87182c18c330699ea85",
+    "botport-x86_64-unknown-linux-musl.tar.gz": "fa7f379ad3c733d49dff75d760d6827a1ab340841ba3b4d380187220a58f66ae",
+    "botport-aarch64-unknown-linux-musl.tar.gz": "5d3c8650064e98bd2d886baf5f6c7592461955385c63a2922bbbb278e5d8a11f"
+   },
+   "programs": {
+    "aarch64-apple-darwin": "0900acd4aa49b109d4f2660c5ce193057edca55305aa9cbe75b211d8bd6af465",
+    "x86_64-apple-darwin": "787f9fe36202bdc9ad83b3a6aad8bf925e62ad8fcde98c84e9058ab1f6a0314c",
+    "x86_64-unknown-linux-musl": "a97cbf4852a40bb72b9a9766d7e0b4580374cd33e1e6d976ebd7f0361b5f6d5f",
+    "aarch64-unknown-linux-musl": "be3d317f922695747261dc2fe9bfa5fab4e29dae34543f5611b6ff36b3698a04"
+   }
+  },
+  "v0.3.2": {
+   "archives": {
+    "botport-aarch64-apple-darwin.tar.gz": "1326745c91935cf37dfd2023cca30fe756f5c57000618a03c550f34c37a09614",
+    "botport-x86_64-apple-darwin.tar.gz": "2024ce08ccfdc2944e1637fe7aefb6646e68eab005a17d0f59db2a6d71fa76c9",
+    "botport-x86_64-unknown-linux-musl.tar.gz": "56e40048829fac1a0cfd5c3b36d21c5c44eaf04f4372959d874fd045b81cf7af",
+    "botport-aarch64-unknown-linux-musl.tar.gz": "af717531ad80d93c869e2088f0879ce5665b89b9afebd4a522f4f6ebd2eed753"
+   },
+   "programs": {
+    "aarch64-apple-darwin": "718e02ab63ebc4a1b3f03352bc4ee1bb5174273116cc5a7bf9dbfbdb426fb50e",
+    "x86_64-apple-darwin": "5637d10f0cca0ee0f6757a782dd9510b1da156aba7acbac5bbeb15dc9b40a1cf",
+    "x86_64-unknown-linux-musl": "e6e2802eb47bee20bfdc55c8380137be545245cf5b2ecd021915af85cbb8d1f8",
+    "aarch64-unknown-linux-musl": "41054f0bf4ee1154f1e7b003d0b91739c55aad2b36009da34ed4932111988127"
+   }
+  },
+  "v0.3.3": {
+   "archives": {
+    "botport-aarch64-apple-darwin.tar.gz": "335b715fb5e0464e2d258781a209f667dd42fc761e543ac12eb6f343fb1814ba",
+    "botport-x86_64-apple-darwin.tar.gz": "4b10c84197b318287fb9652cbe4ab89be82b71879489096190bd21d832868baf",
+    "botport-x86_64-unknown-linux-musl.tar.gz": "e11487abf4c0df1517cd6e16671ef43d9ab6aef0d8b19ccac4cab43b6ddc21dd",
+    "botport-aarch64-unknown-linux-musl.tar.gz": "ee2ceaf08acdbb811e39940b7a57c8f12740a8470ac23ac09aac69395e91ef88"
+   },
+   "programs": {
+    "aarch64-apple-darwin": "cffb2e7143435b27143899a95a4a81ed4f47916a25edfb553c0b01c7ea33d5d7",
+    "x86_64-apple-darwin": "688f17e729c3679de702092d6b448b6e4e6b81d3421ef09035a5574f768986be",
+    "x86_64-unknown-linux-musl": "1353476ef50be10b05657056b8277aef3de6126c47dd81510f2f571f9687fb85",
+    "aarch64-unknown-linux-musl": "13fc0952312026281cf1443c340ca720d3e8a25f0f55f4b5a19ffdff8f2b65b6"
+   }
   }
  }
 }

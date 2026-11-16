@@ -190,6 +190,21 @@ def bot_lock(name: str):
         raise Refused("a twin run for this bot is already going; try again when it has finished")
 
 
+ENGINE_LOCK = "grok-engine-port"  # one lock for every use of the Grok app's port (from-hermes, the chat-sync tick)
+
+
+@contextlib.contextmanager
+def engine_lock(wait: bool = True):
+    """Held across a from-hermes run and a chat-sync pull, so a tick never restores (closes) the port while an
+    export or ask is using it. A tick does not wait (it skips); from-hermes waits for a running tick."""
+    from . import botlock
+    try:
+        with botlock.held(ENGINE_LOCK, wait=wait, timeout=None if wait else 0):
+            yield
+    except botlock.Busy:
+        raise Refused("the Grok engine is in use by another twin run; try again when it has finished")
+
+
 _SNAP_SVC: dict = {}  # snapshot folder -> the service it was taken with (restore puts pairs.json back through it)
 MANIFEST = "manifest.json"
 
@@ -238,7 +253,7 @@ def snapshot(pid: str, home: Path, svc: Any = None, parts: tuple = SNAPSHOT_PART
             if kind == "file":
                 shutil.copy2(extra, dest / f"extra-{i}")
     store.atomic_write_json(dest / MANIFEST, manifest)
-    (dest / ".complete").write_text(now_iso(), newline="\n")
+    (dest / ".complete").write_text(now_iso(), encoding="utf-8", newline="\n")
     old = sorted(p for p in base.iterdir() if p.is_dir() and not p.is_symlink())
     for p in old[:-SNAPSHOTS_KEPT]:
         _SNAP_SVC.pop(str(p), None)
@@ -317,7 +332,7 @@ def restore(snap: Path, home: Path, svc: Any = None) -> None:
 def log_call(entry: dict) -> None:
     with contextlib.suppress(OSError):
         path = _folder() / "calls.jsonl"
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600)
         with os.fdopen(fd, "a", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
@@ -556,10 +571,15 @@ def twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = N
                                    "not_added": sum(1 for r in imp.get("routines", []) if r.get("state") not in
                                                     ("added", "exists"))}
             res["memory"] = merge_memory(home, doc["bots"][0]["memories"])
+            # safe profile defaults by rule on what was just imported (twin#54), before the behaviour test or
+            # anything else runs in this profile; the owner's own choice is kept. config.yaml is in the snapshot.
+            from . import profile_safety
+            res["safety"] = profile_safety.apply_default(prof, home)["preset"]
             drift = eng.bundle_drift(prof, str(export_file), spec)
             res["drift"] = "clean" if drift.get("_rc") == 0 else "differs"
             test = _behaviour(svc, pid, export_file)
-            res["test"] = {"passed": test.get("passed"), "total": test.get("total")}
+            res["test"] = {"passed": test.get("passed"), "total": test.get("total"),
+                           "retried": len(test.get("retried") or [])}
             with contextlib.suppress(EngineError, Refused):
                 par = svc.parity(pid)
                 res["compare"] = {"passed": par.get("passed"), "total": par.get("total")}
@@ -700,7 +720,8 @@ def _line(name: str, res: dict) -> str:
         return f"FAIL: {name}: {res.get('why') or 'not twinned'}.{tail}"
     c = res.get("counts") or {}
     test = res.get("test")
-    tested = f"behaviour test {test['passed']}/{test['total']}"
+    tested = f"behaviour test {test['passed']}/{test['total']}" + (
+        f" ({test['retried']} case(s) passed only on a retry)" if test.get("retried") else "")
     what = (f"{c.get('skills', 0)} skills, {c.get('memory', 0)} memories, "
             f"{(res.get('routines') or {}).get('added', 0)} routines added switched off")
     scrubbed = f"; {c['scrubbed_lines']} line(s) left out as password-like" if c.get("scrubbed_lines") else ""

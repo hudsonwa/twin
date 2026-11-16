@@ -70,6 +70,7 @@ TOOL_SPEC = {
                 "Your own recent conversations, read from your chat history, so your twin has them as Hermes "
                 "chats. Re-sending one already sent adds only its new messages."), "items": {
                 "type": "object", "properties": {
+                    "id": {"type": "string", "description": "The conversation's own id, when you have one."},
                     "title": {"type": "string"}, "started": {"type": "string"},
                     "messages": {"type": "array", "items": {"type": "object", "properties": {
                         "role": {"type": "string", "enum": ["user", "assistant"]}, "text": {"type": "string"},
@@ -154,7 +155,7 @@ def _version() -> str:
         from pathlib import Path
 
         import yaml
-        return str(yaml.safe_load((Path(__file__).resolve().parent.parent / "plugin.yaml").read_text())["version"])
+        return str(yaml.safe_load((Path(__file__).resolve().parent.parent / "plugin.yaml").read_text(encoding="utf-8"))["version"])
     except Exception:  # noqa: BLE001
         return "0"
 

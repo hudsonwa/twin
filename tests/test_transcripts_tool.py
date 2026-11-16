@@ -216,14 +216,14 @@ def test_the_command_switches_on_takes_a_grok_export_searches_exports_and_forget
     assert rc == 1 and "off" in out
     _cli(monkeypatch, capsys, "on")
     f = tmp_path / "export.json"
-    f.write_text(json.dumps(EXPORT))
+    f.write_text(json.dumps(EXPORT), encoding="utf-8")
     rc, out = _cli(monkeypatch, capsys, "add-grok", "--file", str(f))
     assert rc == 0 and "2 new" in out
     rc, out = _cli(monkeypatch, capsys, "search", "--query", "tomato")
     assert "Tomato seedlings" in out
     dest = tmp_path / "mine.json"
     rc, out = _cli(monkeypatch, capsys, "export", "--file", str(dest))
-    assert rc == 0 and json.loads(dest.read_text())["format"] == tr.FORMAT
+    assert rc == 0 and json.loads(dest.read_text(encoding="utf-8"))["format"] == tr.FORMAT
     rc, out = _cli(monkeypatch, capsys, "forget")
     assert "--yes" in out and tr.view("test-scout")["conversations"]["grok"] == 2
     rc, out = _cli(monkeypatch, capsys, "forget", "--yes")

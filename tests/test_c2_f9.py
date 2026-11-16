@@ -42,7 +42,7 @@ def twin(svc, home, monkeypatch):  # noqa: F811
          "job_ids": ["job-1", "job-2"]}]})
     jobs = home / "profiles" / PID / "cron" / "jobs.json"
     jobs.parent.mkdir(parents=True)
-    jobs.write_text(json.dumps({"jobs": [_job("job-1", DIGEST, True), _job("job-2", WATER, False)]}))
+    jobs.write_text(json.dumps({"jobs": [_job("job-1", DIGEST, True), _job("job-2", WATER, False)]}), encoding="utf-8")
     w = h2g.FakeGrokWriter()
     w.put_bot(BOT, name="Test Scout", description="Scouts invented things.", instructions="Be brief.",
               routines=[DIGEST, WATER])
@@ -51,11 +51,11 @@ def twin(svc, home, monkeypatch):  # noqa: F811
 
     def cron(action, job_id, profile, ctx=None):
         calls.append((action, job_id))
-        data = json.loads(jobs.read_text())
+        data = json.loads(jobs.read_text(encoding="utf-8"))
         for j in data["jobs"]:
             if j["id"] == job_id:
                 j["enabled"], j["state"] = action == "resume", "scheduled" if action == "resume" else "paused"
-        jobs.write_text(json.dumps(data))
+        jobs.write_text(json.dumps(data), encoding="utf-8")
         return True, ""
     monkeypatch.setattr(importer, "_cron_action", cron)
     # the switch's own gates (botport's pair state) are not what this test is about: the twin is ready to switch

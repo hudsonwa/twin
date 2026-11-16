@@ -376,7 +376,7 @@ else at the next check (every 60 s); nothing while Hermes is closed.
 | Allow an activity digest to Grok | `digest_to_grok` | `false` | allows a per-twin activity digest (counts and times) that goes along when you send skill changes to Grok; each twin still starts off. In this version only the sample shows it; real twins do not send it yet |
 | Include short titles in the digest | `digest_titles` | `false` | separate opt-in for short, masked titles in that digest |
 | Where botport is (advanced) | `botport_path` | `""` | full path of botport, if you keep it somewhere special |
-| botport release to accept (advanced) | `botport_release_tag` | `""` (uses v0.2.1) | the release botport is verified against; empty means the release this plugin version expects, v0.2.1 |
+| botport release to accept (advanced) | `botport_release_tag` | `""` (uses v0.3.3) | the release botport is verified against; empty means the release this plugin version expects, v0.3.3 |
 | Grok app folder (advanced) | `grok_app_dir` | `""` | only if the Grok app keeps its data somewhere unusual |
 | Grok account (only if you use several) | `grok_account` | `""` | only when the Grok app holds more than one account: the 8-character label botport lists for yours (a label, never the account) |
 | This computer's name | `machine_name` | `""` (the computer's own name) | how this computer is called on your other computers and in each twin's note about where its copies are |
@@ -438,6 +438,7 @@ sample is removed. Nothing of yours changes.
 | `hermes: command not found` | Hermes is not on your path: install it, or open a new terminal. |
 | ``hermes: 'twin' is not a `hermes` command.`` | The plugin is off: `hermes plugins enable grok-bot-twin`. Under `plugins.isolation: host`, see [Known limitations](#known-limitations). |
 | `hermes plugins list` shows Grok Bot Twin 0.2.1 (the plugin, not botport) | You have the catalog version: run the install line in the [README](../README.md#install) with `--force` added. |
+| `doctor` says the plugin build does not match Hermes' install record | The plugin folder was replaced by copying a tree. Install it again with `hermes plugins install hudsonwa/twin --ref <commit> --force`; for a folder copy, run `tools/stamp_build.py --into <copy>` first, then `hermes plugins adopt`. |
 | botport row says the file is wrong | Press **Download botport** again; Hermes checks every download and runs only the real release. |
 | The Grok app row does not tick | Install the Grok desktop app on this Mac and sign in. Bots that exist only on the web or a phone cannot be twinned. |
 | A twin says "Changed in both places" | Open it on the Twins page and choose a version (`hermes twin conflicts`, then `hermes twin resolve TWIN ITEM --keep hermes`). |
