@@ -123,7 +123,8 @@ No skill in the bot, no local command, no approval card, no Grok setting to chec
    engine**: history and routines never come from the bot's own words;
    when the bot's name, routines and last activity read exactly as after its last PASS here (and its twin is still
    there), it is not asked again: its line says "unchanged since its last export", 0 turns (`--force` exports it
-   again);
+   again; it is the engine's reading, so a change it cannot see, such as edited instructions with no new chat
+   message, also needs `--force`);
 3. asks the bot for a `grok-bot-export/1` (its instructions, memory and skills, nothing else) made with its own
    cloud tools only ("use no local-computer tools; do not store this in your memory"). Up to about 20 000
    characters the bot pastes it as one ```json block; above that it sends it as a file, `twin-export.json`, which

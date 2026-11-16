@@ -1,7 +1,9 @@
 # Design: a same-named Telegram bot per twin, through Telegram managed bots
 
-Status: research and design only (twin#67, spike for issues 05 and 06). No code. Nothing here was run against
-Telegram; every example name and id is invented.
+Status: research and design (twin#67, spike for issues 05 and 06). Since 0.5.2 an opt-in prototype is in
+`twin/tg_bots.py` (`telegram_bot_per_twin`, off by default, twin#68): it sends the request button; the `managed_bot`
+update handler is tested against a fake transport only and is not yet called from Hermes' gateway (section 4 is
+still the blocker). Nothing here was run against Telegram; every example name and id is invented.
 
 Sources, read 2026-11-16: core.telegram.org/bots/api (current, Bot API 10.4), /bots/api-changelog, and
 /bots/features ("Managed Bots"). Tags: **[doc]** = stated in the official docs; **[spike]** = not in the docs,
