@@ -24,11 +24,12 @@ Each plugin version accepts exactly the botport release it was tested with (list
 
 | Grok Bot Twin | botport |
 |---|---|
-| 0.5.0 and this version | 0.3.3 |
+| 0.5.2 (this version) | 0.3.4 |
+| 0.5.0, 0.5.1 | 0.3.3 |
 | 0.4.x | 0.2.1 |
 
 The zero-touch parts, `hermes twin setup --auto`, `hermes twin from-hermes` and chat sync's pull, need
-**botport 0.3.0 or newer** (the Grok engine, `botport grok`); this version pins 0.3.3. If you choose an older
+**botport 0.3.0 or newer** (the Grok engine, `botport grok`); this version pins 0.3.4. If you choose an older
 release with `botport_release_tag`, `setup --auto` and `from-hermes` FAIL with "needs botport 0.3.0 or newer (the
 Grok engine); the botport_release_tag setting chooses 0.2.1" (or the release you chose). (For maintainers: one
 step pins a release: `python3 tools/pin_botport.py --tag vX.Y.Z`.)

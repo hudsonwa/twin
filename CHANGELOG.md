@@ -2,7 +2,7 @@
 
 ## 0.5.2 (unreleased, release candidate rc/0.5.2)
 
-Grok Bot Twin 0.5.2 ↔ botport 0.3.3 (pins unchanged; botport 0.3.4 is not released yet).
+Grok Bot Twin 0.5.2 ↔ botport 0.3.4 (twin/botport_pins.json, attestation-checked; botport 0.3.4: turn ledger and weekly budget, routines audit, `mirror push` from the Mac, botport-explain skill).
 
 **What this means for you:** installs and imports are sturdier (Python 3.9, model keys kept by reference, imports
 that fail only on model behaviour are kept and marked), and twin spends fewer Grok turns (unchanged bots are not

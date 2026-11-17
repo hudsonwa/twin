@@ -61,6 +61,20 @@
     "x86_64-unknown-linux-musl": "1353476ef50be10b05657056b8277aef3de6126c47dd81510f2f571f9687fb85",
     "aarch64-unknown-linux-musl": "13fc0952312026281cf1443c340ca720d3e8a25f0f55f4b5a19ffdff8f2b65b6"
    }
+  },
+  "v0.3.4": {
+   "archives": {
+    "botport-aarch64-apple-darwin.tar.gz": "fcfe3b8bd3ed94b796f4494184d8d7d2bc4c5edb8a2fd1f1e5b9aff13a312355",
+    "botport-x86_64-apple-darwin.tar.gz": "1e521c4c7ece900b380fbe397df8a79d4465541972de0e8688e9804bff22db10",
+    "botport-x86_64-unknown-linux-musl.tar.gz": "08d04be5beabd98121e6068771e103f559e5b26b57dc671e1dcb48e41e1b0e92",
+    "botport-aarch64-unknown-linux-musl.tar.gz": "33ba81e38f79950216d6fb6a798a22b2d30da1d6fc0147bee3501f3481e3e810"
+   },
+   "programs": {
+    "aarch64-apple-darwin": "8fe5ed35b94812f19225dfbcbb1007f9b80abafd84d1ac0a433ac5f77524cc47",
+    "x86_64-apple-darwin": "522b79c7b8c84f44c813c643486cd666049059491cb5c4887d0dfef69f6abb96",
+    "x86_64-unknown-linux-musl": "f4daddb0ffa2bb4c2ce206c2fe8fc6d970e974dfd64d6e26847399f313259b12",
+    "aarch64-unknown-linux-musl": "da0fd5df3b46e5b6ce7a325150151f00d3ff606dcf2ba505d8e9058dc6315079"
+   }
   }
  }
 }
