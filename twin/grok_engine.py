@@ -36,7 +36,7 @@ EXIT_WORDS = {DONE: "done", OTHER: "failed", STILL_WORKING: "still working", NEE
 CMDS = {"status": ["grok", "status"], "bots": ["grok", "bots"], "ask": ["grok", "ask"], "wait": ["grok", "wait"],
         "read": ["grok", "read"], "routines": ["grok", "routines"], "files": ["grok", "files"],
         "policy": ["grok", "policy"], "launch": ["grok", "launch"],
-        "restore": ["grok", "restore"], "usage": ["grok", "usage"]}
+        "restore": ["grok", "restore"], "usage": ["grok", "usage"], "canary": ["grok", "canary"]}
 # P3 (botport feat/grok-engine-p3, 4efd374; the frozen file's §6 lists them as "open for the next lanes"):
 #   botport grok routines <bot> list --json      -> {"routines": [Routine]}
 #   botport grok files <bot> fetch [NAME|KEY] --out DIR --json
@@ -48,6 +48,9 @@ FLAGS = {"json": "--json", "quiet": "--quiet", "timeout": "--timeout", "settle":
 FETCH_TIMEOUT_S = 180
 PAD_S = 30          # the subprocess may run this much longer than the engine's own --timeout
 STATUS_TIMEOUT_S = 30
+CANARY_TIMEOUT_S = 300
+# botport's refusal of a write on a Grok app version it has not tested; its read-only canary unlocks that version
+UNKNOWN_VERSION = "unknown_version_writes"
 OUT_CAP = 8 * 1024 * 1024
 
 FALLBACK = ("say \"Clone yourself to Hermes\" in the bot's chat in Grok (docs/ONE-PROMPT.md), or run "
@@ -82,6 +85,11 @@ def _proof(data: dict, stderr: bytes) -> str:
     if err.get("message"):
         return "FAIL: " + safe.clean_summary(err["message"], 300)
     return ""
+
+
+def refused_for_unknown_version(res: "Result") -> bool:
+    """botport exit 4 naming `unknown_version_writes`: the app version is untested and its canary has not passed."""
+    return res.exit == REFUSED and UNKNOWN_VERSION in (res.proof + " " + str(res.data))
 
 
 def parse(rc: int, stdout: bytes, stderr: bytes, over: bool) -> Result:
@@ -132,8 +140,27 @@ class GrokEngine:
         return self._run("bots", [], STATUS_TIMEOUT_S * 2)
 
     def ask(self, bot: str, message: str, timeout_s: int, settle_s: int = 8) -> Result:
-        return self._run("ask", [bot, message, FLAGS["timeout"], str(int(timeout_s)),
-                                 FLAGS["settle"], str(int(settle_s))], timeout_s + PAD_S)
+        args = [bot, message, FLAGS["timeout"], str(int(timeout_s)), FLAGS["settle"], str(int(settle_s))]
+        res = self._run("ask", args, timeout_s + PAD_S)
+        if not refused_for_unknown_version(res):
+            return res
+        # The Grok app updated to a version botport has not tested, so writes are held until its read-only canary
+        # passes on this Mac. Run it once (no Grok turn, nothing sent) and retry; never pass --trust-version for
+        # the owner: a canary that fails means the app changed a shape botport reads, and sending would be a guess.
+        canary = self.canary()
+        if not canary.ok:
+            return Result(REFUSED, res.data, "FAIL: the Grok app was updated to a version botport has not tested, and "
+                                             "its check of that version failed, so nothing was sent "
+                                             f"({safe.clean_summary(canary.proof, 200)}); update the plugin "
+                                             "(hermes twin setup --auto) or try again after a botport release")
+        retry = self._run("ask", args, timeout_s + PAD_S)
+        if retry.ok and retry.proof:
+            retry.proof += "; Grok app version checked first (botport canary PASS)"
+        return retry
+
+    def canary(self) -> Result:
+        """botport's read-only check of the installed Grok app version (sends nothing, no Grok turn)."""
+        return self._run("canary", [], CANARY_TIMEOUT_S)
 
     def wait(self, bot: str, since: Optional[str], timeout_s: int, settle_s: int = 8) -> Result:
         args = [bot, FLAGS["timeout"], str(int(timeout_s)), FLAGS["settle"], str(int(settle_s))] + \

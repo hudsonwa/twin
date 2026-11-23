@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .twin import awareness, cli, from_hermes, hermes_make, origin, remote_create, slash, timer, tools
+from .twin import awareness, cli, from_hermes, hermes_make, origin, remote_create, slash, timer, tool_guard, tools
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +88,7 @@ def register(ctx) -> None:
                       remote_create.twin_remote_create,
                       description="EXPERIMENTAL: put a twin on another computer over SSH; plan first, then the "
                                   "owner's yes", emoji="🪞")
+    ctx.register_hook("pre_tool_call", tool_guard.hook)  # CAPTCHA / remote-debugging veto, twin profiles only
     ctx.register_hook("pre_llm_call", _on_pre_llm_call)
     ctx.register_hook("on_session_start", _on_session_start)
     ctx.register_hook("on_session_end", _on_session_end)

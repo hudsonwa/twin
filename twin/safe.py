@@ -20,7 +20,7 @@ _CTRL = re.compile("[\\x00-\\x08\\x0b-\\x1f\\x7f-\\x9f\\u200b-\\u200f\\u2028-\\u
 _WS = re.compile(r"\s+")
 _URL = re.compile(r"(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-_PATH = re.compile(r"(?:(?<=\s)|^)(?:~|\.{1,2})?/[^\s]*|\b[A-Za-z]:\\[^\s]*")
+_PATH = re.compile(r"(?:(?<=\s)|^)(?:~|\.{1,2})?/[^\s]+|\b[A-Za-z]:\\[^\s]*")
 _MARKER = re.compile(r"(?i)\b(?:end|begin)\s+grok\s+bot\s+twin\b")
 
 

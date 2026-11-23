@@ -27,7 +27,7 @@ Add `--json` to `--check` or `--plan` for a machine-readable answer.
 ### Zero-touch: "install Grok Bot Twin"
 
 `setup --auto` needs botport 0.3.0 or newer (the release with the Grok engine, `botport grok`); this plugin
-version pins botport 0.3.3. Only if the owner chose an older release with `botport_release_tag` does it end with
+version pins botport 0.3.4. Only if the owner chose an older release with `botport_release_tag` does it end with
 `FAIL: hermes twin setup --auto: needs botport 0.3.0 or newer (the Grok engine);
 the botport_release_tag setting chooses 0.2.1`. Then pass that line on unchanged and use
 "The steps" below instead.

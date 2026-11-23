@@ -33,28 +33,36 @@ class Recorder:
         raise AttributeError(name)
 
 
-def test_F8_register_has_no_pre_tool_call_hook_and_one_skill(home):
+def test_F8_register_has_only_the_veto_hook_and_one_skill(home):
+    """The removed 0.3.3 guard could GRANT clicking rights and failed open. The only pre_tool_call hook now is the
+    twin's tool guard (field audit 24 Nov 2026), which can only block, never approve or widen anything."""
     ctx = Recorder()
     plugin.register(ctx)
     names = [n for n, _ in ctx.hooks]
-    assert "pre_tool_call" not in names
-    assert sorted(names) == ["on_session_end", "on_session_start", "pre_llm_call"]
+    assert sorted(names) == ["on_session_end", "on_session_start", "pre_llm_call", "pre_tool_call"]
+    assert dict(ctx.hooks)["pre_tool_call"] is plugin.tool_guard.hook
     assert ctx.skills == ["set-up-grok-bot-twin"]
     assert not (ROOT / "skills" / "finish-twins-in-grok").exists()
     assert not (ROOT / "twin" / "grok_part.py").exists()
     assert not hasattr(plugin, "_on_pre_tool_call") and not hasattr(plugin, "GROK_PART_SKILL")
 
 
-def test_F8_a_computer_use_call_is_not_intercepted(home):
-    """Even with a leftover 0.3.3 flow file on disk (expired or not), no hook of this plugin sees computer_use."""
+def test_F8_a_computer_use_call_is_not_intercepted(home, monkeypatch):
+    """Even with a leftover 0.3.3 flow file on disk, an ordinary computer_use call passes untouched, in the owner's
+    own profile and in a twin's; the guard never answers "approve"."""
     flow = home / "plugin-data" / "grok-bot-twin" / "grok-part.json"
     flow.parent.mkdir(parents=True, exist_ok=True)
     flow.write_text(json.dumps({"pair_ids": ["test-scout"], "names": ["Test Scout"], "request_sha256": "0" * 64,
                                 "until": 0, "flow": "f8"}), encoding="utf-8")
     ctx = Recorder()
     plugin.register(ctx)
-    for name, cb in ctx.hooks:
-        assert name != "pre_tool_call", name
+    guard = dict(ctx.hooks)["pre_tool_call"]
+    call = {"action": "left_click", "coordinate": [10, 10], "description": "open the Grok app's Settings"}
+    assert guard("computer_use", call) is None
+    twin_home = home / "profiles" / "test-scout"
+    (twin_home / "botport").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HERMES_HOME", str(twin_home))
+    assert guard("computer_use", call) is None
     assert flow.exists()  # nothing reads it any more; uninstall empties the whole data folder
 
 

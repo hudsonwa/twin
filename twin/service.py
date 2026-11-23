@@ -1400,6 +1400,11 @@ class TwinService(ConnectMixin, FinishMixin, SetupExportMixin, BatchMixin, Fleet
         if caps and got.get("preset") != "open":
             note = (f"{profile} ({got['preset']}) capabilities: " + profile_safety.capability_words(caps)
                     + " (desktop app and Telegram alike)")
+        from . import access_links  # existing sign-ins on this computer, linked before anything asks the owner
+        with contextlib.suppress(OSError):
+            linked = access_links.note(access_links.link_existing(Path(self._profile_home(profile))))
+            if linked:
+                note = f"{note}; {linked}" if note else linked
         from . import tg_bots  # twin#68: opt-in, off by default (then nothing here runs)
         if tg_bots.enabled():
             try:

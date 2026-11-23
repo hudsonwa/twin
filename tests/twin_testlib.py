@@ -94,8 +94,12 @@ def central(home: Path) -> Path:
 
 
 def all_text_under(path: Path) -> str:
+    """Every data file under `path`, for leak checks. The plugin's own code (copied into each profile) is source, not
+    data the plugin kept, so it is skipped: its words cannot be a leak."""
     out = []
     for p in sorted(path.rglob("*")):
+        if "grok-bot-twin" in p.parts and "plugins" in p.parts:
+            continue
         if p.is_file() and not p.is_symlink():
             out.append(p.read_bytes().decode("utf-8", errors="replace"))
     return "\n".join(out)

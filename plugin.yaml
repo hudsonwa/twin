@@ -23,6 +23,7 @@ provides_hooks:
   - pre_llm_call
   - on_session_start
   - on_session_end
+  - pre_tool_call
 capabilities: []
 requires_env: []
 emits: [synced, secrets_withheld, conflict, changed, created, removed, resolved, restored, instructions, approved,

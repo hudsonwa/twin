@@ -616,6 +616,11 @@ def _twin_from_grok(svc: Any, allowed: list, bot_name: Any, instructions: Any = 
             from . import profile_safety
             got = profile_safety.apply_default(prof, home)
             res["safety"] = got["preset"]
+            from . import access_links  # existing sign-ins on this computer, linked before anything asks the owner
+            try:
+                res["access"] = access_links.note(access_links.link_existing(Path(home))) or ""
+            except OSError:
+                res["access"] = ""
             if got.get("capabilities") and got["preset"] != "open":  # twin#71: the PASS line names them
                 res["capabilities"] = profile_safety.capability_words(got["capabilities"])
             if got.get("headless"):
