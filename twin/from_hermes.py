@@ -410,6 +410,8 @@ def export_one(eng: ge.GrokEngine, bot: dict, force_file: bool = False, timeout_
                            "rename the bot in Grok", **out)
     perm = ge.local_permission(eng.status())
     out["perm"] = perm
+    from . import profile_safety  # twins' approvals follow Grok's setting (Always allow -> yolo)
+    profile_safety.note_grok_permission(perm)
     hist = eng.read(bot["id"], None, HISTORY_LIMIT)
     if hist.exit != ge.DONE:
         return {**out, **_engine_fail(name, hist, "reading the chat")}

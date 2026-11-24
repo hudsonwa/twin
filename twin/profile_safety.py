@@ -285,7 +285,7 @@ def grok_capabilities(home: Optional[Path] = None) -> list:
 
 
 def want(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str] = (),
-         caps: Optional[Iterable[str]] = None) -> dict:
+         caps: Optional[Iterable[str]] = None, grok: str = "ask") -> dict:
     """The config with the preset applied. Every key it does not name is kept (model, memory, display...).
     `allow`: in standard, the WIDENABLE toolsets the owner let the twin keep. `caps`: in parity, the toolsets
     the Grok bot has (grok_capabilities); none of them is disabled, on any platform."""
@@ -295,12 +295,13 @@ def want(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str
         return c
     agent = c.setdefault("agent", {})
     a = c.setdefault("approvals", {})
-    a.update(mode="manual", cron_mode="deny", unattended_mode="deny", single_query_mode="deny")
+    a.update(YOLO_APPROVALS if preset == "parity" and grok == "always" else MANUAL_APPROVALS)
     c.setdefault("cron", {})["allow_agent_scheduling"] = False
     c.setdefault("terminal", {})["env_passthrough"] = []
     if preset == "parity":
-        on = set(PARITY_ON if caps is None else caps)
-        agent["disabled_toolsets"] = sorted((set(agent.get("disabled_toolsets") or []) - on) | set(PARITY_OFF))
+        on = set(PARITY_ON if caps is None else caps) - (set(NEVER_OFF) if grok == "never" else set())
+        agent["disabled_toolsets"] = sorted((set(agent.get("disabled_toolsets") or []) - on) | set(PARITY_OFF)
+                                            | (set(NEVER_OFF) if grok == "never" else set()))
         if isinstance(c.get("toolsets"), list):
             c["toolsets"] = [t for t in c["toolsets"] if t not in PARITY_OFF]
         pt = c.get("platform_toolsets")
@@ -342,21 +343,22 @@ def _own_tg_bot(c: dict) -> bool:
             and sorted((c.get("platform_toolsets") or {}).get("telegram") or []) == sorted(STRICT_ALLOWED))
 
 
-def problems(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str] = ()) -> list:
+def problems(c: dict, preset: str, keep_mcp: Iterable[str] = (), allow: Iterable[str] = (),
+             grok: str = "ask") -> list:
     """Why this config does not hold the preset ([] when it does). "open" always holds."""
     if preset == "open":
         return []
     bad: list = []
     agent = c.get("agent") or {}
     disabled = set(agent.get("disabled_toolsets") or [])
-    if (c.get("approvals") or {}).get("mode") != "manual":
+    if (c.get("approvals") or {}).get("mode") != ("off" if preset == "parity" and grok == "always" else "manual"):
         bad.append("approvals.mode")
     if (c.get("cron") or {}).get("allow_agent_scheduling"):
         bad.append("cron.allow_agent_scheduling")
     if (c.get("terminal") or {}).get("env_passthrough"):
         bad.append("terminal.env_passthrough")
     if preset == "parity":
-        if set(PARITY_OFF) - disabled:
+        if (set(PARITY_OFF) | (set(NEVER_OFF) if grok == "never" else set())) - disabled:
             bad.append("disabled_toolsets")
         on = list(c.get("toolsets") or [])
         for v in (c.get("platform_toolsets") or {}).values():
@@ -425,6 +427,51 @@ def _state_path() -> Path:
     return store.central_dir() / STATE_FILE
 
 
+# ---- Grok's "Execution on Local Computer", mirrored into parity twins (owner's ask, 24 Nov 2026) ----------------
+# always -> Hermes approvals off (yolo: nothing asks first, scheduled and unattended steps approved too);
+# ask -> manual approvals (risky steps ask first); never -> no shell, code, browser or computer use.
+# unknown (Grok's port closed, nothing read yet) -> the last value read, else ask.
+GROK_PERMISSION_FILE = "grok-permission.json"
+YOLO_APPROVALS = {"mode": "off", "cron_mode": "approve", "unattended_mode": "approve", "single_query_mode": "approve"}
+MANUAL_APPROVALS = {"mode": "manual", "cron_mode": "deny", "unattended_mode": "deny", "single_query_mode": "deny"}
+NEVER_OFF = ["terminal", "code_execution", "browser", "computer_use"]
+
+
+def grok_permission() -> str:
+    """The last Grok Execution setting read on this computer: always | ask | never (ask when never read)."""
+    data = store.read_json(store.central_dir() / GROK_PERMISSION_FILE, {})
+    v = data.get("permission") if isinstance(data, dict) else None
+    return v if v in ("always", "ask", "never") else "ask"
+
+
+def note_grok_permission(perm: str) -> bool:
+    """Remember what Grok's setting read (always|ask|never; anything else is ignored). True when it changed."""
+    if perm not in ("always", "ask", "never"):
+        return False
+    changed = perm != grok_permission() or not (store.central_dir() / GROK_PERMISSION_FILE).is_file()
+    store.atomic_write_json(store.central_dir() / GROK_PERMISSION_FILE,
+                            {"permission": perm, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    return changed
+
+
+def mirror_grok_permission(perm: str) -> list:
+    """Record Grok's setting and re-apply every parity twin whose preset the rule chose, so its approvals match.
+    -> the profiles re-applied. A preset the owner chose is left alone."""
+    if not note_grok_permission(perm):
+        return []
+    done = []
+    for prof, rec in records().items():
+        if isinstance(rec, dict) and rec.get("chosen_by") != "owner" and rec.get("preset") in (None, "parity"):
+            try:
+                home = store.profile_home(prof)
+                if (home / "config.yaml").is_file():
+                    apply_default(prof, home)
+                    done.append(prof)
+            except Exception:  # noqa: BLE001  (one twin's problem never stops the others; check reports it)
+                continue
+    return done
+
+
 def records() -> dict:
     data = store.read_json(_state_path(), {})
     return data if isinstance(data, dict) else {}
@@ -486,7 +533,7 @@ def apply_default(profile: str, home: Optional[Path] = None) -> dict:
     if preset != "open":
         before = home / "config.yaml"
         had = before.read_bytes() if before.is_file() else None
-        wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home))
+        wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home), grok_permission())
         from . import gui  # twin#76: no screen in this session -> a headless browser, whose screenshots work
         headless = gui.fit_browser(wanted)
         path = write_config(home, wanted)
@@ -500,20 +547,29 @@ def apply_default(profile: str, home: Optional[Path] = None) -> dict:
         extra["wrote_owned"] = owned_sha(load_config(home))
     record(profile, preset=preset, words=words[:10], chosen_by=by, **extra)
     return {"preset": preset, "words": words, "chosen_by": by, "path": str(path) if path else None,
-            "capabilities": capabilities(load_config(home), preset), "headless": headless}
+            "capabilities": capabilities(load_config(home), preset), "headless": headless,
+            "approvals": approvals_words(load_config(home))}
 
 
 def capabilities(c: dict, preset: str) -> list:
     """[{"toolset", "name", "on", "note"}] for every Grok capability, as this config holds it (twin#71)."""
     disabled = set(((c.get("agent") or {}).get("disabled_toolsets")) or [])
+    yolo = str((c.get("approvals") or {}).get("mode") or "") == "off"
     out = []
     for t, words, note in GROK_CAPABILITIES:
+        note = "nothing asks first (yolo)" if yolo and "ask" in note else note
         on = t not in disabled and preset != "strict"
         why = note if on else ("off: the owner chose " + preset if preset in ("strict", "standard") and
                                t in (STRICT_DISABLED if preset == "strict" else STANDARD_DENIED)
                                else "off in this profile's config.yaml")
         out.append({"toolset": t, "name": words, "on": on, "note": why})
     return out
+
+
+def approvals_words(c: dict) -> str:
+    """"approvals off (yolo ...)" for a PASS line when nothing asks first; "" otherwise (manual is the default)."""
+    mode = str((c.get("approvals") or {}).get("mode") or "manual")
+    return "approvals off (yolo, as Grok's Execution on Local Computer is Always allow)" if mode == "off" else ""
 
 
 def capability_words(caps: list) -> str:
@@ -662,7 +718,7 @@ def set_preset(profile: str, preset: str, home: Optional[Path] = None, allow: It
     home = home or store.profile_home(profile)
     extra, headless = {}, ""
     if preset != "open":
-        wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home))
+        wanted = want(load_config(home), preset, keep_mcp(), allow, grok_capabilities(home), grok_permission())
         from . import gui  # twin#76: no screen in this session -> a headless browser, whose screenshots work
         headless = gui.fit_browser(wanted)
         path = write_config(home, wanted)
@@ -685,7 +741,8 @@ def check(profile: str, home: Optional[Path] = None) -> dict:
     rec = records().get(profile) or {}
     c = load_config(home)
     preset = rec.get("preset") if rec.get("preset") in PRESETS else DEFAULT_PRESET
-    bad = problems(c, preset, keep_mcp(), _allow_of(rec) if rec.get("chosen_by") == "owner" else [])
+    bad = problems(c, preset, keep_mcp(), _allow_of(rec) if rec.get("chosen_by") == "owner" else [],
+                   grok_permission())
     local = model_is_local(c)
     policy = rec.get("model_policy") or "local"
     model = {True: "local", False: "cloud", None: "unknown"}[local]
@@ -694,7 +751,7 @@ def check(profile: str, home: Optional[Path] = None) -> dict:
                    "--model-policy any) or point the twin at a local model")
     return {"ok": not bad, "preset": preset, "chosen_by": rec.get("chosen_by") or "rule", "problems": bad,
             "model": model, "model_policy": policy, "words": list(rec.get("words") or []),
-            "capabilities": capabilities(c, preset)}
+            "capabilities": capabilities(c, preset), "approvals": approvals_words(c)}
 
 
 def line(profile: str, res: dict) -> str:
@@ -702,5 +759,6 @@ def line(profile: str, res: dict) -> str:
     if res["ok"]:
         caps = res.get("capabilities")
         return (f"PASS: twin {who} safety {res['preset']} ({res['chosen_by']}), model {res['model']}"
+                + (f", {res['approvals']}" if res.get("approvals") else "")
                 + (f"; capabilities: {capability_words(caps)}" if caps and res["preset"] != "open" else ""))
     return f"FAIL: twin {who} safety {res['preset']}: " + "; ".join(res["problems"][:6])

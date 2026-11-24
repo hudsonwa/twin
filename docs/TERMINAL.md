@@ -112,8 +112,12 @@ Hermes hands it that answer yet, so a real tap does not finish the twin's bot. D
 
 `hermes twin safety [TWIN] [parity|strict|standard|open]` shows or sets a twin's tool preset. By default every twin
 gets `parity` (twin#71): what its Grok bot can do (browser, web, X search, shell, files, code, image generation,
-computer use) on every platform, Telegram included; approvals manual, so a risky action asks first in its chat
-(Telegram's buttons or `/approve`); agent scheduling, delegation and terminal environment passthrough stay off.
+computer use) on every platform, Telegram included; agent scheduling, delegation and terminal environment
+passthrough stay off. Its approvals follow the Grok app's "Execution on Local Computer" setting (read by `setup --auto`
+and each twinning, never changed): **Always allow** gives the twin Hermes' yolo mode (`approvals.mode: off`; nothing
+asks first, scheduled and unattended steps included, and the PASS line says so); **Ask every time** keeps approvals
+manual, so a risky action asks first in its chat (Telegram's buttons or `/approve`); **Never allow** turns off shell,
+code, browser and computer use. A preset you chose yourself is left as it is.
 The PASS line lists every capability and its state. Words like shell, ssh, servers, trading, brokers, wallets or
 credentials in the bot's text are named, and you narrow with `strict` (knowledge, memory, session search and todo only; approvals manual; no MCP server except those named
 in the `twin_safe_mcp` setting; the twin's own Telegram off) or `standard` (no terminal, code,

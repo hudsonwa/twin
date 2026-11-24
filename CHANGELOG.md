@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.6 (2026-11-24)
+
+Grok Bot Twin 0.5.6 ↔ botport 0.3.5 (unchanged pin).
+
+### Added
+- A parity twin's Hermes approvals now follow the Grok app's "Execution on Local Computer" setting: **Always allow**
+  turns on Hermes' yolo mode for the twin (`approvals.mode: off`, scheduled and unattended steps approved too);
+  **Ask every time** keeps manual approvals; **Never allow** turns off shell, code, browser and computer use.
+  `hermes twin setup --auto` re-applies every twin when the setting changes; the PASS line names yolo when it is on.
+  A preset you chose yourself (`hermes twin safety`) is left alone.
+
 ## 0.5.5 (2026-11-24)
 
 Grok Bot Twin 0.5.5 ↔ botport 0.3.5 (unchanged pin).

@@ -328,6 +328,8 @@ def engine_check(eng: Any, open_port: bool = False, saved: Optional[bool] = None
     after = ge.local_permission(eng.status())
     if before != after:
         raise Stop(f"Grok's Execution setting changed during setup ({before} -> {after})")
+    from . import profile_safety  # twins' approvals follow it: Always allow -> yolo (owner's ask, 24 Nov 2026)
+    profile_safety.mirror_grok_permission(after)
     return {"preset": preset, "set_now": set_now, "port": port, "permission": after}
 
 
