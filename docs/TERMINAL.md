@@ -164,7 +164,7 @@ In a chat, `/twin` shows the same status.
 ## Get botport in the terminal (for your real bots)
 
 The Twins page does this with two buttons. In the terminal, download botport for your computer from its
-[release page](https://github.com/hudsonwa/botport/releases/tag/v0.3.4) (plain `hermes twin setup` prints the
+[release page](https://github.com/hudsonwa/botport/releases/tag/v0.3.5) (plain `hermes twin setup` prints the
 name of the file for your computer), then hand the download to the plugin:
 
 ```sh
@@ -195,7 +195,7 @@ the plugin tries that check by itself. For a botport you built yourself there is
 until you verify a released build. The `gh` and `hermes` commands the plugin runs are resolved to their real
 paths and get the same owner/permission check; doctor shows both paths.
 
-`hermes twin setup` verifies against one release (v0.3.4); to accept another release
+`hermes twin setup` verifies against one release (v0.3.5); to accept another release
 set "botport release to accept" (`botport_release_tag`) or run `hermes twin setup --tag vX.Y.Z` (a release this
 plugin version has no list for is verified with `--with-github`). The plugin also
 refuses to run if any folder from the Hermes root down to its data folder is a symlink, owned by someone else
@@ -267,7 +267,7 @@ nothing more.
 |---|---|
 | `skill-text` | Print the skill to give a Grok bot once. |
 | `from-grok --bot NAME` / `back-to-grok --bot NAME` | Run by the Grok bot itself, with its state as JSON on stdin. You do not run these by hand. |
-| `from-hermes BOT` / `--all` | (A bot whose name, description, routines and last activity read the same as at its last PASS, with its twin still there, is skipped: 0 Grok turns, and the line says so; `--force` exports it anyway.) From Hermes, through botport's Grok engine: the bot exports its instructions, memory and skills with its own tools (no local command, no approval), Hermes checks the export as untrusted data and imports it; history and routines are read by the engine. `--file` asks for the file route, `--shared-skills` also imports skills other bots made, `--route shell` the old route (the bot runs from-grok here; `--wait` for a run left waiting); `--timeout S`; `--json`. Needs botport 0.3.0 or newer (`botport grok`; this version pins 0.3.4) ([ONE-PROMPT.md](ONE-PROMPT.md#from-hermes-and-chat-sync)). |
+| `from-hermes BOT` / `--all` | (A bot whose name, description, routines and last activity read the same as at its last PASS, with its twin still there, is skipped: 0 Grok turns, and the line says so; `--force` exports it anyway.) From Hermes, through botport's Grok engine: the bot exports its instructions, memory and skills with its own tools (no local command, no approval), Hermes checks the export as untrusted data and imports it; history and routines are read by the engine. `--file` asks for the file route, `--shared-skills` also imports skills other bots made, `--route shell` the old route (the bot runs from-grok here; `--wait` for a run left waiting); `--timeout S`; `--json`. Needs botport 0.3.0 or newer (`botport grok`; this version pins 0.3.5) ([ONE-PROMPT.md](ONE-PROMPT.md#from-hermes-and-chat-sync)). |
 | `chat-sync` | Chat sync: `--status` (mode, interval, each twin's last run), `--pull [TWIN\|--all]` (read new messages through the engine now). `--bot NAME` is what the bot's routine runs, with its new messages as JSON on stdin. |
 | `git on\|off\|status [TWIN\|--all]` | Optional git history of a twin (`--remote URL` to push, `--with-history`). |
 | `bot-driven [TWIN]` | Your own step, once, for a twin made on the Twins page before its first one prompt ([below](#bot-driven)); `--dry-run` shows what changes. |

@@ -79,7 +79,7 @@ VALUE_CAP = 1024
 # --source-ref refs/tags/<tag>`; the owner may override it with the botport_release_tag setting or --tag.
 # (Release time: `python3 tools/pin_botport.py --tag vX.Y.Z` downloads and checks a release, writes
 # twin/botport_pins.json and this tag, in one step.)
-EXPECTED_BOTPORT_TAG = "v0.3.4"
+EXPECTED_BOTPORT_TAG = "v0.3.5"
 TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
 ENGINE_MIN_TAG = "v0.3.0"  # the first botport release with the Grok engine (`botport grok`)
 

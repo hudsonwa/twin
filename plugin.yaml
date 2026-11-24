@@ -1,6 +1,6 @@
 name: grok-bot-twin
 label: Grok Bot Twin
-version: "0.5.2"
+version: "0.5.3"
 description: >-
   Gives each bot from the Grok desktop app a twin in Hermes that follows it. Experimental: one prompt in Grok
   twins the bot, keeps it in step, moves it to Hermes and back. It runs botport (your own verified download) and writes mainly in

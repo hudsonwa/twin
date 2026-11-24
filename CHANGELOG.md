@@ -1,6 +1,26 @@
 # Changelog
 
-## 0.5.2 (unreleased, release candidate rc/0.5.2)
+## 0.5.3 (2026-11-24)
+
+Grok Bot Twin 0.5.3 ↔ botport 0.3.5 (twin/botport_pins.json, attestation-checked; botport 0.3.5: Grok Bot 1.2.3 support, no send over an unsent draft).
+
+**What this means for you:** a twin can no longer act on a CAPTCHA or take over another app's browser, even if its
+instructions slip; a Grok app update no longer stops your twins asking their bots; and a new twin uses the Google
+sign-ins you already set up in Hermes instead of asking you again.
+
+### Added
+- A `pre_tool_call` guard in twin profiles: it blocks browser, computer and terminal steps aimed at a CAPTCHA
+  (reCAPTCHA, hCaptcha, Turnstile, "I'm not a robot", image challenges) or at another app's remote-debugging port.
+  It can only block, never run anything, and does nothing outside twin profiles.
+- A new twin links the Google sign-in files already in your Hermes home (`google_token*.json`,
+  `google_client_secret.json`) into its profile: links only, never copied or overwritten.
+
+### Fixed
+- When botport refuses writes on an untested Grok app version, twin runs botport's read-only canary once and retries;
+  if the canary fails nothing is sent and the reply says why.
+- "Browser / computer use" is no longer shown as "Browser [path] computer use".
+
+## 0.5.2 (2026-11-17)
 
 Grok Bot Twin 0.5.2 ↔ botport 0.3.4 (twin/botport_pins.json, attestation-checked; botport 0.3.4: turn ledger and weekly budget, routines audit, `mirror push` from the Mac, botport-explain skill).
 

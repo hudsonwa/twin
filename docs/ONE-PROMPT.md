@@ -153,7 +153,7 @@ one of the bot's own) is skipped and named; it never fails the bot's export. In 
 answer to the Hermes model, skills other bots made are counted, not named.
 A skill in which the bot wrote `[REDACTED]` for a key is held back and named; memories it redacted are left out.
 
-**Without the engine.** This plugin version pins botport 0.3.4, which has the Grok engine. If an older release is
+**Without the engine.** This plugin version pins botport 0.3.5, which has the Grok engine. If an older release is
 chosen with `botport_release_tag`, `from-hermes` with no engine FAILs with "needs botport 0.3.0 or newer (the Grok
 engine); the botport_release_tag setting chooses 0.2.1" and setup is not run; say the prompt in Grok instead. Otherwise
 when botport is missing, too old or not verified, `from-hermes` first runs `hermes twin setup --auto` once by itself (the pinned, SHA-256-checked botport release; no Grok setting changed; the port is
@@ -224,7 +224,7 @@ the Mac has had no keyboard or mouse input for `chat_sync_idle_minutes` (10 by d
 (exit 2) the pull is skipped and tried again 30 minutes later: nobody is interrupted and no turn is cut off. A
 window the pull opened is closed again with `botport grok restore` (botport's TTL guard closes it in any case).
 `chat_sync_window: port` never launches: it pulls only when the port is already open. Needs botport 0.3.0 or newer
-(this plugin version pins 0.3.4). A pull that fails waits a full `chat_sync_minutes` before the
+(this plugin version pins 0.3.5). A pull that fails waits a full `chat_sync_minutes` before the
 next try, and a stopped twin leaves chat sync (and the Telegram route) at once, so neither opens a window again.
 `hermes twin chat-sync --status` shows the last skipped window and why.
 
