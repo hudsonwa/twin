@@ -269,6 +269,16 @@ def test_engine_fails_when_grok_setting_changes():
         auto_setup.engine_check(FakeEngine(port_open=True, perm=("ask", "always")), saved=True)
 
 
+def test_engine_unknown_before_opening_the_port_is_not_a_change(tmp_path, monkeypatch):
+    """Live 24 Nov 2026: the setting reads unknown while the port is closed and "always" once --open-port opened it."""
+    import importlib
+    profile_safety = importlib.import_module(auto_setup.__name__.rsplit(".", 1)[0] + ".profile_safety")
+    monkeypatch.setattr(profile_safety.store, "central_dir", lambda: tmp_path)
+    e = FakeEngine(perm=("unknown", "always"))
+    assert auto_setup.engine_check(e, open_port=True, saved=True)["permission"] == "always"
+    assert profile_safety.grok_permission() == "always"
+
+
 def test_engine_missing_is_named():
     class NoEngine:
         def status(self):

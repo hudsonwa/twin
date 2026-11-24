@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.7 (2026-11-24)
+
+### Fixed
+- `hermes twin setup --auto --open-port` no longer FAILs with "Execution setting changed (unknown -> always)": the
+  setting reads unknown only because the Grok port was closed until setup opened it.
+
 ## 0.5.6 (2026-11-24)
 
 Grok Bot Twin 0.5.6 ↔ botport 0.3.5 (unchanged pin).

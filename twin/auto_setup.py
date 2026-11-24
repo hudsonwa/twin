@@ -326,7 +326,7 @@ def engine_check(eng: Any, open_port: bool = False, saved: Optional[bool] = None
         raise Stop(f"the Grok port is closed and preset {safe.clean_name(preset, 20)} does not open it on demand; "
                    "run hermes twin setup --auto --open-port")
     after = ge.local_permission(eng.status())
-    if before != after:
+    if before != after and before != "unknown":  # unknown: the port was closed until this setup opened it
         raise Stop(f"Grok's Execution setting changed during setup ({before} -> {after})")
     from . import profile_safety  # twins' approvals follow it: Always allow -> yolo (owner's ask, 24 Nov 2026)
     profile_safety.mirror_grok_permission(after)
