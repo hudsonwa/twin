@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `hermes twin setup` ends with an opt-in offer: twins on a local or smaller model can get the reliability recipe
+  and its operating pack, from one pinned release (`twin/recipe_offer.py`: tag v0.3.0, commit pinned at release;
+  until then the offer says it is not released and installs nothing). Nothing installs without a yes or
+  `--with-recipe`; `--no-recipe` turns the offer off. Twin and fleet SOUL blocks are now always kept before the
+  recipe's blocks.
+
 ## 0.5.7 (2026-11-24)
 
 ### Fixed

@@ -1517,6 +1517,7 @@ def cmd_setup(a) -> int:
             rc = _setup_botport(a, svc, tail=not twins)
             if rc == 0 and twins:
                 _left_for_you(onboard, svc)
+                rc = _recipe_offer(svc, a)
             return rc
         for line in onboard.lines(plan, "idle"):  # a computer that links: linked already, or the code is missing
             _out(line)
@@ -1543,7 +1544,17 @@ def cmd_setup(a) -> int:
             _err("Setup stopped at this step; the steps before it are done. " + onboard.RUN_AGAIN)
             return rc
     _left_for_you(onboard, svc)
-    return 0
+    return _recipe_offer(svc, a)
+
+
+def _recipe_offer(svc, a) -> int:
+    """Final step: offer the reliability recipe to twins on a local or smaller model (opt-in). See recipe_offer.py."""
+    from . import recipe_offer
+    try:
+        return recipe_offer.offer(svc, a, _out, _confirm)
+    except Exception as e:  # never let the optional step break a finished setup
+        _err(f"Reliability recipe offer skipped: {e}")
+        return 0
 
 
 def _left_for_you(onboard, svc) -> None:
@@ -2028,6 +2039,12 @@ def setup(parser: argparse.ArgumentParser) -> None:
     p.add_argument("--bot", action="append", metavar="NAME",
                    help="Also give this Grok bot a twin (repeatable; nothing changes in Grok)")
     p.add_argument("--all", action="store_true", help="Also give every Grok bot without a twin one")
+    p.add_argument("--with-recipe", dest="with_recipe", action="store_true",
+                   help="Install the reliability recipe into twins on a local or smaller model without asking")
+    p.add_argument("--no-recipe", dest="no_recipe", action="store_true", help="Do not offer the reliability recipe")
+    p.add_argument("--recipe-owner", dest="recipe_owner", metavar="NAME", help=argparse.SUPPRESS)
+    p.add_argument("--recipe-workdir", dest="recipe_workdir", metavar="DIR", help=argparse.SUPPRESS)
+    p.add_argument("--recipe-captcha", dest="recipe_captcha", choices=("handoff", "tick"), help=argparse.SUPPRESS)
     p.add_argument("--share", action="store_true",
                    help="Also share your twins with your other computers; prints a link code")
     p.add_argument("--link", metavar="CODE",

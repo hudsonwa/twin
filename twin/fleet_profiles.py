@@ -34,6 +34,7 @@ from . import hermes_side as hs
 from . import config, routines_jobs, store
 from .model import PLUGIN_ID
 
+RECIPE_MARKERS = ("<!-- hrr:begin operating-pack", "# Reliability (hermes-reliability-recipe)")
 TWIN_BEGIN = "<!-- grok-bot-twin:begin twin -->"
 TWIN_END = "<!-- grok-bot-twin:end twin -->"
 FLEET_BEGIN = "<!-- grok-bot-twin:begin fleet -->"
@@ -547,6 +548,13 @@ def set_block(text: str, begin: str, end: str, body: Optional[str]) -> str:
         return out
     if block is None:
         return text
+    # keep twin/fleet blocks before the reliability recipe's blocks (the recipe appends at the end)
+    cut = min((i for i in (text.find(mk) for mk in RECIPE_MARKERS) if i >= 0), default=-1)
+    if cut >= 0:
+        head = text[:cut]
+        if head and not head.endswith("\n"):
+            head += "\n"
+        return head + block + "\n" + text[cut:]
     if text and not text.endswith("\n"):
         text += "\n"
     return text + block
