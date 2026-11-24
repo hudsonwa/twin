@@ -1,6 +1,14 @@
 """The twin's tool-level veto (field audit 24 Nov 2026): CAPTCHAs and remote-debugging attach are blocked in a twin
 profile whatever the model decides; nothing else is touched, and other profiles are never guarded."""
 from twin import tool_guard as g
+import pytest
+
+_REAL_ENABLED = g.enabled
+
+
+@pytest.fixture(autouse=True)
+def _guard_on(monkeypatch):
+    monkeypatch.setattr(g, "enabled", lambda: True)
 
 
 def test_captcha_steps_are_blocked():
@@ -43,3 +51,21 @@ def test_gateway_profile_comes_from_hermes_not_the_env(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "hermes_home", lambda: str(twin))
     assert g.hook("browser_exec", {"code": "new_tab('https://www.google.com/recaptcha/api2/demo')"}) == {
         "action": "block", "message": g.CAPTCHA_STOP}
+
+
+def test_off_by_default_blocks_nothing(tmp_path, monkeypatch):
+    from twin import config
+    assert config.DEFAULTS["captcha_guard"] is False
+    monkeypatch.setattr(g, "enabled", _REAL_ENABLED)
+    twin = tmp_path / "profiles" / "acme"
+    (twin / "botport").mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(twin))
+    monkeypatch.setattr(config, "hermes_home", lambda: str(twin))
+    bad = {"description": "tick the captcha"}
+    try:
+        config.set_override({})
+        assert g.hook("browser_exec", bad) is None
+        config.set_override({"captcha_guard": True})
+        assert g.hook("browser_exec", bad) == {"action": "block", "message": g.CAPTCHA_STOP}
+    finally:
+        config.set_override(None)

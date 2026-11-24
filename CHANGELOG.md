@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.5 (2026-11-24)
+
+Grok Bot Twin 0.5.5 ↔ botport 0.3.5 (unchanged pin).
+
+### Changed
+- The CAPTCHA and remote-debugging guard is now opt-in, off by default: set `captcha_guard: true` in the plugin
+  settings to turn it on. Off, its hook returns at once and blocks nothing; twins rely on their written rules.
+
 ## 0.5.4 (2026-11-24)
 
 Grok Bot Twin 0.5.4 ↔ botport 0.3.5 (unchanged pin).

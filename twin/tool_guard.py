@@ -8,7 +8,8 @@ talk past. It runs only in a twin's own profile (the folder botport keeps there)
 Blocked, with a message that becomes the tool's result:
 - browser, computer-use and shell calls aimed at a CAPTCHA or "are you human" check: the owner does those;
 - attaching to another program's DevTools / remote-debugging port (the owner's browser or apps).
-Pure functions; `hook` is what Hermes calls (``pre_tool_call``)."""
+Off by default: set `captcha_guard: true` in the plugin settings to turn it on. Pure functions; `hook` is what Hermes
+calls (``pre_tool_call``); with the setting off it returns at once and blocks nothing."""
 from __future__ import annotations
 
 import json
@@ -66,8 +67,17 @@ def in_twin_profile(home: Optional[str] = None) -> bool:
     return bool(str(root)) and (root / "botport").is_dir() and root.parent.name == "profiles"
 
 
+def enabled() -> bool:
+    """Opt-in (`captcha_guard`, off by default): the owner turns it on per profile."""
+    try:
+        from . import config
+        return bool(config.get("captcha_guard"))
+    except Exception:
+        return False
+
+
 def hook(tool_name: str = "", args: Any = None, **_kw: Any) -> Optional[dict]:
-    if not in_twin_profile():
+    if not enabled() or not in_twin_profile():
         return None
     why = check(tool_name, args)
     return {"action": "block", "message": why} if why else None

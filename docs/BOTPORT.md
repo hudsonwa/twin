@@ -24,7 +24,8 @@ Each plugin version accepts exactly the botport release it was tested with (list
 
 | Grok Bot Twin | botport |
 |---|---|
-| 0.5.4 (this version) | 0.3.5 |
+| 0.5.5 (this version) | 0.3.5 |
+| 0.5.4 | 0.3.5 |
 | 0.5.3 | 0.3.5 |
 | 0.5.2 | 0.3.4 |
 | 0.5.0, 0.5.1 | 0.3.3 |
