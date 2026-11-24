@@ -32,3 +32,14 @@ def test_only_a_twin_profile_is_guarded(tmp_path, monkeypatch):
     assert g.hook("browser_exec", bad) == {"action": "block", "message": g.CAPTCHA_STOP}
     monkeypatch.setenv("HERMES_HOME", str(other))
     assert g.hook("browser_exec", bad) is None
+
+
+def test_gateway_profile_comes_from_hermes_not_the_env(tmp_path, monkeypatch):
+    """In the shared gateway HERMES_HOME is the Hermes root; the call's own profile comes from Hermes' context."""
+    twin = tmp_path / "profiles" / "acme"
+    (twin / "botport").mkdir(parents=True)
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    from twin import config
+    monkeypatch.setattr(config, "hermes_home", lambda: str(twin))
+    assert g.hook("browser_exec", {"code": "new_tab('https://www.google.com/recaptcha/api2/demo')"}) == {
+        "action": "block", "message": g.CAPTCHA_STOP}

@@ -8,7 +8,7 @@ from typing import Any, Optional
 from . import safe
 
 PLUGIN_ID = "grok-bot-twin"
-PLUGIN_VERSION = "0.5.3"  # the same as plugin.yaml's version (a test checks it)
+PLUGIN_VERSION = "0.5.4"  # the same as plugin.yaml's version (a test checks it)
 SCHEMA = "botport.twin.v1"
 
 STATES = ("in_step", "changes_waiting", "needs_you", "grok_missing", "error")

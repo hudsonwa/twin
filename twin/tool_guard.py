@@ -48,9 +48,21 @@ def check(tool_name: str, args: Any) -> Optional[str]:
     return None
 
 
+def _active_home() -> str:
+    """The profile this tool call runs in. The shared gateway serves many profiles in one process with HERMES_HOME
+    set to the Hermes root, so ask Hermes for the call's own (context-local) home first; the env var is the fallback
+    for a standalone process. Live 24 Nov 2026: reading only the env var let a twin chat in the gateway past the guard."""
+    try:
+        from . import config
+        home = config.hermes_home()
+    except Exception:  # outside Hermes (tests, tools)
+        home = None
+    return home or os.environ.get("HERMES_HOME") or ""
+
+
 def in_twin_profile(home: Optional[str] = None) -> bool:
     """True in a twin's own Hermes profile: botport keeps its folder there."""
-    root = Path(home or os.environ.get("HERMES_HOME") or "")
+    root = Path(home or _active_home() or "")
     return bool(str(root)) and (root / "botport").is_dir() and root.parent.name == "profiles"
 
 

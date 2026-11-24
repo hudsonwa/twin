@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4 (2026-11-24)
+
+Grok Bot Twin 0.5.4 ↔ botport 0.3.5 (unchanged pin).
+
+### Fixed
+- The CAPTCHA and remote-debugging guard from 0.5.3 never fired in chats served by the shared Hermes gateway: there
+  `HERMES_HOME` is the Hermes root, so the guard decided it was not in a twin profile. It now asks Hermes for the
+  chat's own profile. Verified live: a twin's attempts to load a reCAPTCHA page are blocked; ordinary pages load.
+
 ## 0.5.3 (2026-11-24)
 
 Grok Bot Twin 0.5.3 ↔ botport 0.3.5 (twin/botport_pins.json, attestation-checked; botport 0.3.5: Grok Bot 1.2.3 support, no send over an unsent draft).
