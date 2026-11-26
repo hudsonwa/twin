@@ -13,7 +13,7 @@ from typing import Any, Callable, Optional
 
 RECIPE_REPO = "https://github.com/hudsonwa/hermes-reliability-recipe.git"
 RECIPE_TAG = "v0.3.0"
-RECIPE_COMMIT = ""  # filled at release: the full commit id of RECIPE_TAG. Empty = not released, offer says so.
+RECIPE_COMMIT = "e973da0f3b09eb077dc0eb0c6e9edf3878c4c7e9"  # the full commit id of RECIPE_TAG on GitHub
 RECIPE_MARKERS = ("<!-- hrr:begin operating-pack", "# Reliability (hermes-reliability-recipe)")
 _SIZE = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*b\b", re.I)
 SMALL_B = 40  # a model name that says it has fewer billion parameters than this counts as weaker

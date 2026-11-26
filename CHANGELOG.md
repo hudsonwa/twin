@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.8 (2026-11-26)
+
+Grok Bot Twin 0.5.8 ↔ botport 0.3.5 (unchanged pin).
 
 ### Added
 - `hermes twin setup` ends with an opt-in offer: twins on a local or smaller model can get the reliability recipe
-  and its operating pack, from one pinned release (`twin/recipe_offer.py`: tag v0.3.0, commit pinned at release;
-  until then the offer says it is not released and installs nothing). Nothing installs without a yes or
+  and its operating pack, from one pinned release (`twin/recipe_offer.py`: tag v0.3.0, pinned to its commit). Nothing installs without a yes or
   `--with-recipe`; `--no-recipe` turns the offer off. Twin and fleet SOUL blocks are now always kept before the
   recipe's blocks.
 
